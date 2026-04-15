@@ -172,9 +172,11 @@ All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivale
 See [docs/alignment-principles.md](docs/alignment-principles.md) for the complete alignment specification, including:
 
 - Generous alignment philosophy
+- Three-state model: aligned / NEQ (non-equivalent) / unrecorded
 - Primary vs. secondary link types
 - Discontiguous token alignment
 - Article alignment rules (Greek definite article vs. English "the"/"a")
 - Idiom handling
+- Grammatical construction cases (§9): finite verbs, participials, infinitivals, adjectives/adverbs, pronouns, prepositions, conjunctions/particles, discourse restructuring
 - Mounce Reverse Interlinear guidelines reference cases
 - Automated → LLM sharpening workflow

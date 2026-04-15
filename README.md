@@ -155,8 +155,9 @@ The base [Scripture Burrito alignment spec v0.4](https://github.com/bible-techno
 | `meta.secondary.source` | `string[]` | Source token IDs that are secondary (grammatically implied, not direct lexical equivalent) |
 | `meta.secondary.target` | `string[]` | Target token IDs that are secondary |
 | `meta.is_idiom` | `bool` | Marks a phrase-to-phrase idiomatic alignment |
+| `meta.rel` | `string` | `"NEQ"` — positively asserts a token has no correspondent; one of `source`/`target` will be an empty array |
 
-All tokens not listed in `meta.secondary` are assumed primary. See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
+All tokens not listed in `meta.secondary` are assumed primary. NEQ records are distinct from simply leaving a token unrecorded — they represent a positive determination of non-equivalence. See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
 
 ## Alignment principles
 

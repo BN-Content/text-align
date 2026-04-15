@@ -67,8 +67,9 @@ A condensed rendering of `alignment-principles.md` covering:
   verbs, supplied pronouns, articles)
 - Article rules: all four cases from §6
 - Idiom flag (`meta.is_idiom`)
-- Instructions: may split/merge/restructure records, may add records for unaligned tokens
-  if justified; must only use token IDs present in the verse's token lists
+- Instructions: may split/merge/restructure records, may add NEQ records for tokens
+  definitively determined to have no correspondent; must only use token IDs present
+  in the verse's token lists
 
 ### Per-verse block format (inside a batch message)
 
@@ -121,7 +122,7 @@ a single call regardless of provider.
 
 | Provider | Key | Example models |
 |---|---|---|
-| OpenAI | `openai` | `gpt-4o`, `gpt-4.1-mini`, `o4-mini` |
+| OpenAI | `openai` | `gpt-5.2`, `gpt-5.4-mini` |
 | Anthropic | `anthropic` | `claude-opus-4-6`, `claude-sonnet-4-6` |
 
 Provider API keys are read from environment variables:
@@ -148,14 +149,17 @@ naturally to parallel tool calls (OpenAI) and multi-tool-use blocks (Anthropic).
           "source": ["<id>", "..."],
           "target": ["<id>", "..."]
         },
-        "is_idiom": true
+        "is_idiom": true,
+        "rel": "NEQ"
       }
     }
   ]
 }
 ```
 
-`meta` is optional. `meta.secondary` subkeys are optional. `meta.is_idiom` is optional.
+`meta` is optional. `meta.secondary` subkeys are optional. `meta.is_idiom` is optional. `meta.rel` is optional; the only current value is `"NEQ"`.
+
+**NEQ records:** when `meta.rel` is `"NEQ"`, exactly one of `source` or `target` is a single-element list and the other is an empty list. `meta.secondary` is not applicable on NEQ records.
 
 ### Tool schema differences by provider
 
@@ -171,7 +175,8 @@ After each batch response, every verse's records are validated:
 - All `target` IDs must exist in the verse's target token set
 - `meta.secondary.source` IDs must be a subset of `source`
 - `meta.secondary.target` IDs must be a subset of `target`
-- A record with neither `source` nor `target` is dropped
+- NEQ records (`meta.rel: "NEQ"`) must have exactly one non-empty array and one empty array; a NEQ record with two non-empty or two empty arrays is invalid and dropped
+- A non-NEQ record with neither `source` nor `target` is dropped
 
 Invalid records are removed from that verse's result. If a verse has *any* invalid records
 the whole verse is flagged for retry.
@@ -294,7 +299,7 @@ SB 0.4 `groups` structure (same as ACAI output), written via `write_alignment_js
 ```yaml
 # LLM provider and model — configurable per alignment project
 llm_provider: openai
-llm_model: gpt-4o
+llm_model: gpt-5.4-mini
 
 # Refinement settings
 batch_size: 5

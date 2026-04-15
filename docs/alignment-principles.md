@@ -459,7 +459,35 @@ A substantive participle functions as a noun. Alignment depends on whether a def
 
 **"to" before an infinitive** → **secondary** to the infinitive. See §8.4.
 
-### 9.6 Negation and Emphatic Negation
+### 9.6 Conjunctions and Particles
+
+Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μέν, γε, οὖν, ἄρα, etc.) are handled pragmatically. Align content words first; conjunctions and particles are residual — assessed after the main lexical correspondences are settled.
+
+**Tier 1 — obvious direct associations.** When a Greek conjunction or particle has a clear English correspondent in context, encode it directly as a primary 1:1 link. Do not overthink evident associations:
+
+| Greek | Typical English rendering |
+|---|---|
+| καί | "and," "also," "even" |
+| δέ | "but," "and," "now" |
+| γάρ | "for" (explanatory) |
+| οὖν | "therefore," "so," "then" |
+| ἀλλά | "but," "rather" |
+
+**Tier 2 — non-obvious cases.** When the clause-to-clause transition does not map cleanly — particularly in dynamic translations — assess the leftover unaligned tokens on both sides after content words are settled. Then determine whether a justifiable link exists or whether the item is better left unaligned. Both outcomes are valid and require the same quality of judgment.
+
+**The alignment threshold.** There is an intuitive threshold between "justifiable" and "not justifiable" that cannot be reduced to a formula. The guiding question is: *does this link reflect a genuine correspondence, or would it mislead more than it helps?* Neither aligning nor not aligning is a default — both are deliberate decisions.
+
+**Asyndeton cases:**
+- Greek asyndeton + translator-supplied English conjunction → English conjunction **unaligned** (no source token)
+- Greek conjunction + English asyndeton → Greek conjunction **unaligned**
+
+**Competing claims.** When a target word could plausibly align to either a conjunction/particle *or* a content word, the content word has priority. Conjunctions and particles are generally the *less likely* alignment option when there are competing choices. For example, a clause beginning with "After" where the Greek has a temporal circumstantial participle and δέ: "After" belongs with the participle (§9.1); δέ is left unaligned.
+
+**Stacked conjunctions** (e.g. ἀλλὰ μενοῦνγε καί, Phil 3:8 — sometimes parsed as ἀλλά + μέν + οὖν + γε + καί): apply the overall guiding principles to whatever the translation provides and distribute against leftover bits where justifiable. `meta.is_idiom` is available as a last resort when the combination is genuinely non-compositional, but the pragmatic approach applies first.
+
+**Not aligning is valid.** For conjunctions and particles especially, leaving a token unaligned is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
+
+### 9.7 Negation and Emphatic Negation
 
 **Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
 
@@ -479,9 +507,6 @@ This follows the general guideline of preferring smaller alignment units (§7): 
 
 The following areas require further specification before alignment work on them can proceed consistently:
 
-- **Greek definite article** — remaining edge cases: anaphoric articles (likely covered by Cases 1–2 in §6.1; confirm when examples arise)
-- **Conjunctions** — when to align Greek conjunctions (καί, δέ, γάρ, etc.) to English conjunctions vs. treat as secondary or unaligned
-- **Particles** — alignment of Greek particles (μέν, οὖν, ἄρα, etc.) which often have no direct English equivalent
 - **Hebrew-specific rules** — construct chains, definiteness via prefix ה, word-part identifiers (BCVWP part field), pronominal suffixes
 
 ---

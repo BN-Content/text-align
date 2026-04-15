@@ -269,6 +269,10 @@ Idiom records:
 
 **Example:** A Greek idiomatic expression that is rendered by a multi-word English phrase where the individual word-level mappings would be misleading.
 
+**Prefer smaller alignment units.** `meta.is_idiom` is a last resort — use it only when word-level mapping genuinely breaks down and would be misleading, not merely when mappings are counterintuitive or involve unexpected polarity or form shifts. Where individual token mappings are workable, even if surprising, prefer them over a larger phrasal idiom record.
+
+**Frequency varies by translation type.** More literal translations tend to preserve word-level correspondence, so idiom records will be rare. More dynamic or paraphrase translations restructure content more heavily, and genuine idiom records will be correspondingly more frequent. In both cases `meta.is_idiom` remains a last resort — the threshold does not change, only how often that threshold is reached.
+
 ---
 
 ## 8. Mounce Reverse Interlinear Reference Cases
@@ -431,6 +435,20 @@ A substantive participle functions as a noun. Alignment depends on whether a def
 ```
 
 **"to" before an infinitive** → **secondary** to the infinitive. See §8.4.
+
+### 9.6 Negation and Emphatic Negation
+
+**Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
+
+**Emphatic negation** (οὐ μή + subjunctive → "will never," "certainly not," "by no means"): both particles are **primary** source tokens in a single record against the English emphatic expression. English auxiliaries ("will") are **secondary** to the main verb, not part of the negation record.
+
+**Double negative with οὐδείς/μηδείς** (e.g. οὐδείς … οὐ μή → "nobody will ever"): accept the counterintuitive link. Greek double negation is emphatic, not canceling; the translation absorbs the extra negation into English "ever." The polarity shift is real but the mapping is clean — alignment documents what the translation did, not semantic equivalence.
+
+- οὐδείς → "nobody" / "no one" — **primary**
+- οὐ + μή → "ever" — both **primary** in a single record
+- "will" → **secondary** to the main verb
+
+This follows the general guideline of preferring smaller alignment units (§7): the individual token mappings are workable even though they are counterintuitive, so an idiom record is not warranted.
 
 ---
 

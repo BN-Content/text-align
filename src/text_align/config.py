@@ -111,9 +111,17 @@ def derive_paths(
 
     src_lang = config.get("source_language")
     src_ed   = config.get("source_edition")
-    # render-alignment uses alignment_lang / alignment_edition instead
+    # render-alignment uses alignment_lang / alignment_edition instead of
+    # target_language / target_edition — resolve both and write both back so
+    # set_defaults works regardless of which key the YAML uses.
     trg_lang = config.get("target_language") or config.get("alignment_lang")
     trg_ed   = config.get("target_edition")  or config.get("alignment_edition")
+    if trg_lang:
+        result.setdefault("alignment_lang", trg_lang)
+        result.setdefault("target_language", trg_lang)
+    if trg_ed:
+        result.setdefault("alignment_edition", trg_ed)
+        result.setdefault("target_edition", trg_ed)
 
     if src_lang and src_ed:
         src_repo = root / f"alignments-{src_lang}"

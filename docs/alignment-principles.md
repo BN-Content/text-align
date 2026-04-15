@@ -517,19 +517,94 @@ Everything else in a conditional sentence follows existing guidelines: supplied 
 
 This follows the general guideline of preferring smaller alignment units (§7): the individual token mappings are workable even though they are counterintuitive, so an idiom record is not warranted.
 
+### 9.9 Ellipsis of εἶναι (Supplied Copula)
+
+Greek frequently omits the copula in nominal sentences — predicate nouns and predicate adjectives often appear with no εἶναι/εἰμί form. English requires an explicit copula. The general guideline:
+
+**Supplied copula** ("is," "are," "was," "were," "am") with no corresponding Greek token → **unaligned**. The copula is required by English grammar but is not implied by any single Greek word; it reflects the predicative structure of the sentence as a whole.
+
+- ὁ θεὸς ἀγάπη (1 John 4:8) → "God is love": "is" **unaligned**
+- τὸ ἐν σοί (cf. §6.3) → "what is in you": "is" **unaligned**
+
+**When εἶναι is explicitly present**, ellipsis does not apply — handle per the relevant construction (periphrastic §9.1, articular infinitive §6.3, modal e.g. δεῖ εἶναι → "must be" as two separate primary records).
+
+**Future and other inflected forms** (ἔσται → "will be"): not ellipsis — ἔσται → "will be" with "will" secondary and "be" primary.
+
+### 9.10 Comparative and Superlative Forms
+
+Comparatives and superlatives follow directly from existing principles; examples are included here for clarity.
+
+**Synthetic comparative** (Greek comparative suffix → English "-er" or suppletive form): primary 1:1.
+- μείζων → "greater"; κρείσσων → "better"; πλείων → "more"
+
+**Analytic comparative** (μᾶλλον + adjective → "more [adj]"): two separate primary records.
+- μᾶλλον → "more" — **primary**
+- adjective → English adjective — **primary**
+
+**Superlative** (Greek superlative form → English "-est" or "first/last/least"): primary 1:1.
+- πρῶτος → "first"; ἔσχατος → "last"; ἐλάχιστος → "least"
+
+**Elative superlative** (superlative form used as intensive → "very [adj]" / "most [adj]"): single record; both the intensifier and the adjective are **primary** to the superlative form — the superlative morphology licenses both English words.
+- ἁγιώτατος → "most holy": "most" and "holy" both **primary**
+
+**English "more"/"most" with no Greek comparative token**: unaligned — this should rarely arise in a well-formed translation.
+
+### 9.11 Impersonal Verbs
+
+Impersonal verbs (δεῖ, ἔξεστιν, δοκεῖ, etc.) take no expressed subject in Greek. English renderings often supply "it" as a dummy subject and a copula.
+
+- Impersonal verb → English equivalent ("must," "is necessary," "is lawful," "seems") — **primary**
+- English "it" → **unaligned** (no Greek token)
+- English copula ("is") → **unaligned** per §9.9
+- Complementary infinitive → per §8.4
+
+Example — δεῖ αὐτὸν ἐλθεῖν → "it is necessary for him to come" / "he must come":
+- δεῖ → "is necessary" or "must" — **primary**
+- "it" → **unaligned**
+- αὐτόν → "him" / "he" — **primary**
+- ἐλθεῖν → "come" — **primary**; "to" **secondary** per §8.4
+
+### 9.12 ὅτι — Causal, Content Clause, and Recitative
+
+ὅτι has three uses with distinct alignment outcomes.
+
+**Causal** ("because," "for"): primary 1:1 — ὅτι → "because" / "for."
+
+**Content clause / indirect discourse** ("that" — "he said that…"): primary 1:1 — ὅτι → "that."
+
+**Recitative** (introduces direct speech): the translation renders it with quotation marks, a colon, or a dash — no corresponding word token. ὅτι → **unaligned**.
+
+The alignment decision follows what the translator did: if "that" is present, align to it; if only punctuation introduces the quotation, ὅτι is unaligned.
+
+> **Note:** Some alignment schemas permit aligning a source token to target punctuation. This project does not. Punctuation is not a valid alignment target; ὅτι recitative is simply unaligned when the translation uses only punctuation to introduce the quotation.
+
+### 9.13 αὐτός — Pronoun, Intensive, and "Same"
+
+αὐτός has three alignment-relevant uses, all handled by the practical test (§3.4).
+
+**Third-person pronoun** ("he," "she," "him," "her," "it," "them"): primary 1:1.
+
+**Intensive** ("himself," "herself," "themselves," "the very"): αὐτός → English intensifier — **primary**. The noun it intensifies gets its own separate primary record.
+- αὐτὸς ὁ Ἰησοῦς → "Jesus himself": αὐτός → "himself" (primary); Ἰησοῦς → "Jesus" (primary); ὁ secondary per §6.1 Case 2
+
+**"Same"** (αὐτὸς λόγος → "the same word"): αὐτός → "same" — **primary**; noun → its English equivalent in a separate primary record.
+
+### 9.14 Discourse Restructuring and Manual Alignment Strategy
+
+**Discourse restructuring** — Greek frequently strings clauses participially or with καί where English uses subordination, punctuation, or paragraph breaks, and vice versa. Syntactic restructuring between source and target does not change the alignment task. Tokens still align to their correspondents via the practical test (§3.4) regardless of how sentence structure differs. The restructuring is the translator's work; the aligner's job is to find token-level correspondences despite it.
+
+- Do not leave tokens unaligned merely because the syntax was restructured — the correspondence may still be present
+- Do not force artificial alignments to compensate for restructuring — if no genuine correspondence exists, leave it unaligned
+- Conjunctions and particles added or dropped as part of restructuring follow §9.6
+
+**Manual alignment strategy for complex verses** — when manually aligning a complicated verse, start from the beginning and work forward token by token. If you reach a point where the alignment is unclear or ambiguous, move to the end of the verse and work backwards. This bidirectional approach frequently clarifies the sticky or ambiguous spots in the middle and makes alignment decisions more evident.
+
 ---
 
 ## 10. Pending Specifications
 
 The following areas require further specification before alignment work on them can proceed consistently:
 
-- **Ellipsis of εἶναι** — general principle for supplied copula ("is," "are," "was," "were") across all constructions
-- **Impersonal verbs** — δεῖ ("must," "it is necessary"), ἔξεστιν ("it is lawful"), δοκεῖ ("it seems"); handling of English "it" with no Greek token
-- **Middle voice** — reflexive rendering ("himself," "themselves") with no separate Greek token; secondary to verb or unaligned?
-- **Comparative and superlative forms** — Greek comparative adjective vs. English "more X" or "X-er"; handling of "more"/"most" added with no direct Greek equivalent
-- **αὐτός** — intensive use ("he himself," "the very") vs. ordinary pronoun; treatment of the English intensifier
-- **ὅτι recitative** — introduces direct speech; typically rendered with quotation marks only, leaving ὅτι unaligned
-- **Discourse restructuring** — Greek participial/coordinate chains restructured as English subordinate clauses; note that restructuring does not create new alignment obligations
 - **Hebrew-specific rules** — construct chains, definiteness via prefix ה, word-part identifiers (BCVWP part field), pronominal suffixes
 
 ---

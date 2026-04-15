@@ -487,7 +487,19 @@ Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μ�
 
 **Not aligning is valid.** For conjunctions and particles especially, leaving a token unaligned is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
 
-### 9.7 Negation and Emphatic Negation
+### 9.7 Conditional Sentences
+
+Conditional sentences in Greek follow a protasis ("if" clause) + apodosis ("then" clause) structure. Four classical types are distinguished by mood and tense; for alignment purposes the distinctions matter less than the token-level correspondences.
+
+**Condition marker** εἰ / ἐάν → "if": **primary** 1:1.
+
+**Translator-supplied "then"** in the apodosis: Greek frequently omits an explicit apodotic marker. When the translation supplies "then" (or "so") with no corresponding Greek token, it is **unaligned**.
+
+Everything else in a conditional sentence follows existing guidelines: supplied pronouns, helping verbs, conjunctions, and particles are handled per §9.1, §9.6, and §8.4.
+
+> For a detailed analysis of conditional structures in the Greek NT, including clause typing and annotation, see the [Clear-Bible nt-conditionals](https://github.com/Clear-Bible/nt-conditionals) repository, particularly the `/docs` folder.
+
+### 9.8 Negation and Emphatic Negation
 
 **Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
 
@@ -507,6 +519,14 @@ This follows the general guideline of preferring smaller alignment units (§7): 
 
 The following areas require further specification before alignment work on them can proceed consistently:
 
+- **Ellipsis of εἶναι** — general principle for supplied copula ("is," "are," "was," "were") across all constructions
+- **Impersonal verbs** — δεῖ ("must," "it is necessary"), ἔξεστιν ("it is lawful"), δοκεῖ ("it seems"); handling of English "it" with no Greek token
+- **Middle voice** — reflexive rendering ("himself," "themselves") with no separate Greek token; secondary to verb or unaligned?
+- **μὴ γένοιτο and fixed expressions** — "May it never be!" / "God forbid!" / "By no means!"; near-idiomatic but individual pieces may be alignable
+- **Comparative and superlative forms** — Greek comparative adjective vs. English "more X" or "X-er"; handling of "more"/"most" added with no direct Greek equivalent
+- **αὐτός** — intensive use ("he himself," "the very") vs. ordinary pronoun; treatment of the English intensifier
+- **ὅτι recitative** — introduces direct speech; typically rendered with quotation marks only, leaving ὅτι unaligned
+- **Discourse restructuring** — Greek participial/coordinate chains restructured as English subordinate clauses; note that restructuring does not create new alignment obligations
 - **Hebrew-specific rules** — construct chains, definiteness via prefix ה, word-part identifiers (BCVWP part field), pronominal suffixes
 
 ---

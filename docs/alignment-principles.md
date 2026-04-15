@@ -255,6 +255,29 @@ English "a" present, no Greek article ("a" secondary to noun):
 }
 ```
 
+### 6.3 Substantival Article Constructions
+
+The Greek article can nominalize adjectives, infinitives, and prepositional phrases. Each construction follows the general article guidelines with the additions below.
+
+**Article + adjective** (ὁ ἀγαθός → "the good one" / "the good man"):
+- Article → "the" — **primary**
+- Adjective → "good one" / "good man" — the supplied nominal ("one," "man") is **secondary** to the adjective; the adjective carries the lexical content
+
+**Articular infinitive** (τὸ πιστεύειν):
+
+When rendered as a single word or compact phrase without an explicit article ("believing," "faith"): τό is **secondary** to the infinitive — same as Case 3 in §6.1.
+
+When rendered with explicit nominalization ("the act of believing"): two records reflecting the nominalizing and verbal roles separately.
+- τό → "the act": "the" **primary**, "act" **secondary** (τό nominalizes the infinitive; "act" is the English nominalizer it supplies)
+- πιστεύειν → "of believing": "believing" **primary**, "of" **secondary** (grammatical connector, same pattern as case-driven prepositions)
+
+**Article + prepositional phrase** (τὸ ἐν σοί → "what is in you"):
+Individual token mappings are available, so align them rather than treating the construction as an idiom.
+- τό → "what" — **primary**
+- ἐν → "in" — **primary**
+- σοί → "you" — **primary**
+- Supplied copula ("is") → unaligned (no source token; not implied by any single Greek word)
+
 ---
 
 ## 7. Idioms
@@ -456,7 +479,7 @@ This follows the general guideline of preferring smaller alignment units (§7): 
 
 The following areas require further specification before alignment work on them can proceed consistently:
 
-- **Greek definite article** — edge cases beyond §6: substantival articles, anaphoric articles, Granville Sharp constructions, article with participles
+- **Greek definite article** — remaining edge cases: anaphoric articles (likely covered by Cases 1–2 in §6.1; confirm when examples arise)
 - **Conjunctions** — when to align Greek conjunctions (καί, δέ, γάρ, etc.) to English conjunctions vs. treat as secondary or unaligned
 - **Particles** — alignment of Greek particles (μέν, οὖν, ἄρα, etc.) which often have no direct English equivalent
 - **Hebrew-specific rules** — construct chains, definiteness via prefix ה, word-part identifiers (BCVWP part field), pronominal suffixes

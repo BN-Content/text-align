@@ -27,6 +27,8 @@ Alignments are intentionally **generous** rather than strictly literal. When a t
 
 **Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. It does not mean forcing every token into some record. If no evident reason exists for a token's presence (it is not implied by grammar, not a lexical equivalent, and not contextually motivated), it is acceptable — and preferable — to leave it unaligned.
 
+**Surface form differences:** Morphological differences between source and target tokens — tense, voice, number, aspect — do not prevent alignment. A Greek historical present rendered as a past tense in English (see §9.3) is a valid alignment despite the tense difference. The question is whether there is lexical and semantic correspondence, not whether the surface forms match.
+
 ### 2.2 Alignment Direction
 
 Alignments express the relationship **translation → source**. The source text is always Greek (NT) or Hebrew (OT). There is no reverse alignment direction in this data model.
@@ -53,13 +55,26 @@ A **secondary** link connects a translation token to a source token where the tr
 - English helping verbs required to render a Greek verbal form ("has been," "will have," "is being")
 - English pronouns supplied from a Greek verb's person/number ending ("they" from a 3pl verb form)
 - English articles ("the" or "a") when no separate article token exists in the source (see §6)
-- Conjunctions and particles that do not have a direct lexical equivalent (rules TBD, §9)
+- Supplied subjects (pronoun or reinstated proper name) when no explicit source subject token is present — subject implied by the finite verb's person/number and discourse context (see §9.1, §9.2)
+- Conjunctions and particles that do not have a direct lexical equivalent (rules TBD, §10)
 
 ### 3.3 Default Assumption
 
 **All tokens in a record are assumed primary unless explicitly listed as secondary.** Secondary tokens are listed in the record's `meta.secondary` object (see §5.2). This minimizes overhead: only exceptions need to be marked.
 
-### 3.4 Multiple Primaries
+### 3.4 Practical Test for Primary vs Secondary
+
+When determining whether a target token is primary or secondary, ask:
+
+> **"What Greek (or Hebrew) word, in this context, is the reason this English word exists?"**
+
+If a specific source token directly explains the English word's presence — lexically or semantically — that source token carries a **primary** link for that target token. If the English word exists because of grammar (case, person/number, verbal aspect, tense system) rather than a specific source word's meaning, it is **secondary**.
+
+Multiple target tokens may each be primary to the same source token, and multiple source tokens may each carry primary links in the same record — the test is applied per token, not per record.
+
+**Prefer explicit over implied alignment.** When a target token could either be aligned to an explicit source token *or* treated as grammatically implied (secondary), choose the explicit alignment. For example: φιλαδελφία → "brotherly love" — both "brotherly" and "love" are primary, each corresponding to a semantic component of the compound. If rendered "love of a brother or sister" — "love," "brother," and "sister" are primary; "of," "a," and "or" are secondary. Grammatical/implied alignment is a fallback only when no explicit token is available.
+
+### 3.5 Multiple Primaries
 
 A single record may have multiple primary tokens on either or both sides:
 
@@ -165,7 +180,7 @@ Token IDs use the BCVWP scheme: an 11–12 character string encoding book, chapt
 
 ---
 
-## 6. Article Alignment Rules
+## 6. Article Alignment Guidelines
 
 ### 6.1 Greek Definite Article (ὁ/ἡ/τό and declined forms)
 
@@ -314,7 +329,110 @@ When there is no reliable word-level correspondence between source and target to
 
 ---
 
-## 9. Pending Specifications
+## 9. Grammatical Construction Cases
+
+The following guidelines address specific Greek grammatical constructions that commonly require careful alignment decisions.
+
+### 9.1 Circumstantial Participles
+
+A circumstantial participle modifies the main verb by expressing time, manner, means, cause, condition, or concession. It has no explicit subject token — the subject is shared with or implied from the main clause.
+
+**Subordinating conjunction or connective "and"** added to express the circumstantial relationship → **secondary** to the participle.
+
+- ἀπελθὼν εἶπεν → "After he went away, he said": "after" secondary to ἀπελθών; "he" secondary to εἶπεν
+- ἀπελθὼν εἶπεν → "he went away and said": "and" secondary to ἀπελθών; "he" secondary to εἶπεν
+
+**Supplied subject** (pronoun or reinstated proper name) → **secondary** to the finite/main verb, based on that verb's person/number and the contextually active referent. The subject is implied by the finite verb, not by the participle.
+
+- If an explicit article is present on the participle, see §9.4 (Substantive Participles).
+
+Example — Luke 3:11, ἀποκριθεὶς δὲ ἔλεγεν αὐτοῖς → "And he answered and said to them":
+
+| Source | Target | Note |
+|---|---|---|
+| δέ | "And" | primary |
+| ἀποκριθείς | "answered and" | "and" secondary |
+| ἔλεγεν | "he … said" | "he" secondary — from verb's person/number |
+| αὐτοῖς | "to them" | "to" secondary |
+
+Alternative rendering "Answering, he said to them" (δέ untranslated): δέ is unaligned; ἀποκριθείς → "Answering" (primary); ἔλεγεν → "he said" ("he" secondary); αὐτοῖς → "to them" ("to" secondary).
+
+**Redundant/pleonastic participle** (εἶπεν λέγων → "he said"): both the participle and the finite verb are **primary** source tokens in a single record; supplied pronoun is **secondary**.
+
+```json
+{
+  "source": ["eipenId", "legonId"],
+  "target": ["heId", "saidId"],
+  "meta": { "secondary": { "target": ["heId"] } }
+}
+```
+
+**Periphrastic construction** (εἶναι form + participle → compound English tense): two separate primary records.
+- The εἶναι form → English auxiliary ("was," "had been," "is being") — **primary**
+- The participle → English main verbal element ("going," "written," "saying") — **primary**
+
+### 9.2 Genitive Absolute
+
+A genitive absolute is a participial phrase with its own subject in the genitive case, syntactically independent from the main clause. The subject is an **explicit** genitive noun or pronoun — a real source token.
+
+**Genitive subject** → English subject of the subordinate clause: **primary** (explicit token, not grammatically implied).
+
+**Genitive participle** → English verbal element: **primary**. Subordinating conjunction ("while," "when," "after") and helping verbs → **secondary**, same as circumstantial participles.
+
+**If the genitive subject is untranslated**: implied subject falls back to **secondary** alignment with the nearest finite verb.
+
+Example — ταῦτα αὐτοῦ λαλοῦντος → "while he was saying these things":
+
+| Source | Target | Note |
+|---|---|---|
+| αὐτοῦ | "he" | primary — explicit genitive subject |
+| λαλοῦντος | "was saying" | "was" and "while" secondary |
+| ταῦτα | "these things" | primary |
+
+### 9.3 Historical Present
+
+Greek uses the present tense to narrate past events for vividness. English translations typically render it as a simple past. The tense difference does not affect alignment — the link is valid and primary.
+
+This follows directly from the surface-form principle (§2.1): morphological differences between source and target do not prevent alignment. No additional alignment guidelines are required for the historical present beyond those already in place.
+
+### 9.4 Substantive Participles
+
+A substantive participle functions as a noun. Alignment depends on whether a definite article is present.
+
+**Articular substantive participle** (ὁ πιστεύων → "he who believes"):
+- Article → English relativizer ("who," "the one," "those who") — **primary**
+- Participle → English verbal element ("believes") — **primary**
+- English head pronoun ("he," "those") → **secondary** to the finite verb of the clause (grammatically implied subject)
+
+**Anarthrous substantive participle** (πιστεύων → "the one who believes" / "whoever believes"):
+- No article token available; single record
+- Core verbal element ("believes") → **primary** to the participle
+- All English nominalizing elements ("the," "one," "who," "whoever") → **secondary** to the participle (fallback — no explicit token available)
+- If the English rendering is a single lexicalized noun ("believers"), that noun is **primary** with no secondary tokens needed
+
+### 9.5 Prepositional Phrases
+
+**Explicit Greek preposition** (ἐν, εἰς, ἐκ, πρός, etc.) → English preposition: **primary** 1:1 record. Standard prepositional phrases (ἐν τῇ ὁδῷ → "in the road") yield three separate records — preposition, article, and noun each get their own record. The preposition is not grouped with its object.
+
+**Case-driven English preposition** (no Greek preposition token — genitive "of," dative "to/for"): **secondary** to the noun. See also §6 and §8.4.
+
+**Multi-word English compound preposition** rendering a single Greek preposition (ἀντί → "in place of," κατά → "in accordance with"): single record; principal preposition word **primary**, grammatical filler words **secondary**.
+
+**Greek prepositional phrase → single English adverb or preposition** (ἐν ταχεῖ → "quickly," ἐν μέσῳ → "among"): not an idiom. Single record; the content noun is **primary**, the Greek preposition is a **secondary** source token.
+
+```json
+{
+  "source": ["enId", "tacheiId"],
+  "target": ["quicklyId"],
+  "meta": { "secondary": { "source": ["enId"] } }
+}
+```
+
+**"to" before an infinitive** → **secondary** to the infinitive. See §8.4.
+
+---
+
+## 10. Pending Specifications
 
 The following areas require further specification before alignment work on them can proceed consistently:
 
@@ -325,7 +443,7 @@ The following areas require further specification before alignment work on them 
 
 ---
 
-## 10. Workflow Overview
+## 11. Workflow Overview
 
 Alignments are produced through a two-stage process:
 
@@ -346,5 +464,5 @@ Automated alignments are refined through linguistically-informed prompting (LLM-
 - Resolve primary/secondary relationships
 - Identify and flag idiomatic constructions
 - Handle discontiguous token cases
-- Apply the article, conjunction, and particle rules (§6, §9)
+- Apply the article, conjunction, and particle guidelines (§6, §10)
 - Expand 1:1 links to appropriate N:N links where the grammar requires it

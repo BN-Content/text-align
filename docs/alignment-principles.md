@@ -27,7 +27,7 @@ Alignments are intentionally **generous** rather than strictly literal. When a t
 
 **Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. It does not mean forcing every token into some record. If no evident reason exists for a token's presence (it is not implied by grammar, not a lexical equivalent, and not contextually motivated), it is acceptable — and preferable — to mark it NEQ (if the absence of correspondence is certain) or leave it unrecorded (if undetermined). See §3.5.
 
-**Surface form differences:** Morphological differences between source and target tokens — tense, voice, number, aspect — do not prevent alignment. A Greek historical present rendered as a past tense in English (see §9.3) is a valid alignment despite the tense difference. The question is whether there is lexical and semantic correspondence, not whether the surface forms match.
+**Surface form differences:** Morphological differences between source and target tokens — tense, voice, number, aspect — do not prevent alignment. A Greek historical present rendered as a past tense in English (see §9.1.2) is a valid alignment despite the tense difference. The question is whether there is lexical and semantic correspondence, not whether the surface forms match.
 
 ### 2.2 Alignment Direction
 
@@ -55,7 +55,7 @@ A **secondary** link connects a translation token to a source token where the tr
 - English helping verbs required to render a Greek verbal form ("has been," "will have," "is being")
 - English pronouns supplied from a Greek verb's person/number ending ("they" from a 3pl verb form)
 - English articles ("the" or "a") when no separate article token exists in the source (see §6)
-- Supplied subjects (pronoun or reinstated proper name) when no explicit source subject token is present — subject implied by the finite verb's person/number and discourse context (see §9.1, §9.2)
+- Supplied subjects (pronoun or reinstated proper name) when no explicit source subject token is present — subject implied by the finite verb's person/number and discourse context (see §9.2.1, §9.2.2)
 - Conjunctions and particles that do not have a direct lexical equivalent (rules TBD, §10)
 
 ### 3.3 Default Assumption
@@ -317,7 +317,7 @@ Individual token mappings are available, so align them rather than treating the 
 - τό → "what" — **primary**
 - ἐν → "in" — **primary**
 - σοί → "you" — **primary**
-- Supplied copula ("is") → **NEQ** (no source token; not implied by any single Greek word — see §9.9)
+- Supplied copula ("is") → **NEQ** (no source token; not implied by any single Greek word — see §9.1.5)
 
 ---
 
@@ -392,8 +392,8 @@ English translations regularly supply words not present in the Greek. These foll
 | Generic noun ("person," "one") supplied from verb | Secondary target token linked to the verb |
 | Helping verbs (is, can, will, have, do, may) | Secondary target tokens linked to the main verb |
 | Case-implied prepositions (of, to, for, on) | Secondary target tokens linked to the noun |
-| Dummy subject "it" (impersonal verbs — see §9.11) | **NEQ** |
-| Supplied copula with no Greek εἶναι (see §9.9) | **NEQ** |
+| Dummy subject "it" (impersonal verbs — see §9.1.4) | **NEQ** |
+| Supplied copula with no Greek εἶναι (see §9.1.5) | **NEQ** |
 
 ### 8.5 Greek Words with No English Equivalent
 
@@ -409,7 +409,96 @@ When there is no reliable word-level correspondence between source and target to
 
 The following guidelines address specific Greek grammatical constructions that commonly require careful alignment decisions.
 
-### 9.1 Circumstantial Participles
+### 9.1 Finite Verb Constructions
+
+#### 9.1.1 Passive Voice Constructions
+
+Greek passive verbs are rendered in English with a "be" auxiliary + past participle. The "be" auxiliary is **secondary** to the participle (main verbal element), following the same pattern as other compound verbal renderings (§8.1).
+
+**Simple passive:**
+- ἐγράφη → "was written" — "written" primary, "was" secondary
+- γέγραπται → "has been written" — "written" primary, "has been" secondary; or "it is written" — "written" primary, "it" and "is" both secondary ("it" is the implied subject of the passive, treated as secondary like other supplied pronouns — contrast the impersonal "it" of §9.1.4 which is NEQ)
+
+**Passive with explicit agent** (ὑπό + genitive): ὑπό → "by" — primary 1:1. Agent noun → English agent — primary. Passive verb → English passive construction as above.
+
+Example — Mark 1:9, ἐβαπτίσθη ὑπὸ Ἰωάννου → "was baptized by John":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐβαπτίσθη | "was baptized" | "baptized" primary; "was" secondary |
+| ὑπό | "by" | primary 1:1 |
+| Ἰωάννου | "John" | primary |
+
+**Voice conversion** (passive → active or vice versa): translators sometimes convert voice for naturalness. The alignment is still valid — surface form differences including voice do not prevent alignment (§2.1).
+
+**Divine passive (theological passive):** Greek uses the passive to imply God as agent without stating it explicitly. When a translation makes the divine agent explicit by supplying "God" or converting to active:
+- Supplied "God" with no Greek token → **NEQ** (§8.4 — context-supplied proper noun)
+- The passive verb aligns normally to its English correspondent
+
+Example — Matt 5:4, αὐτοὶ παρακληθήσονται:
+- Literal: "they will be comforted" — παρακληθήσονται → "will be comforted" ("comforted" primary, "will be" secondary)
+- Dynamic: "God will comfort them" — παρακληθήσονται → "will comfort" ("will" secondary, "comfort" primary); "God" → **NEQ**
+
+#### 9.1.2 Historical Present
+
+Greek uses the present tense to narrate past events for vividness. English translations typically render it as a simple past. The tense difference does not affect alignment — the link is valid and primary.
+
+This follows directly from the surface-form principle (§2.1): morphological differences between source and target do not prevent alignment. No additional alignment guidelines are required for the historical present beyond those already in place.
+
+#### 9.1.3 Verbal Aspect — Iterative, Conative, and Ingressive Renderings
+
+Greek verbal aspect is encoded morphologically, not by a separate token. When translators render the aspect explicitly in English through auxiliaries or modal expressions, the aspect-expressing element and the main verbal element are both **primary** to the single Greek verb — the Greek token carries the combined meaning; English distributes it across words. This is the reverse of the adverb + verb → single Greek verb case (§9.4.2).
+
+**Iterative / habitual imperfect** — repeated or habitual action:
+- ἔλεγεν → "he would say" — "would" and "say" both primary
+- ἔλεγεν → "he kept saying" — "kept" and "saying" both primary
+- ἔλεγεν → "he used to say" — "used" and "say" both primary; "to" secondary
+
+**Conative imperfect** — attempted but uncompleted action. When rendered with "tried to": "tried" and the main verb are both **primary**; "to" secondary.
+
+Example — Mark 15:23 (NASB), ἐδίδουν αὐτῷ ἐσμυρνισμένον οἶνον → "they tried to give Him wine mixed with myrrh":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐδίδουν | "tried to give" | "tried" and "give" primary; "to" secondary |
+| αὐτῷ | "Him" | primary; "to" secondary per dative case |
+| ἐσμυρνισμένον οἶνον | "wine mixed with myrrh" | "wine" and "myrrh" primary; "mixed with" secondary |
+
+**Ingressive aorist** — the onset or beginning of an action. When the translation makes the ingressive force explicit with "began to": "began" and the main verb are both **primary**; "to" secondary.
+
+This differs from explicit ἄρχομαι + infinitive, where ἄρχομαι is its own source token that aligns to "began" / "started" directly, and the infinitive aligns separately.
+
+#### 9.1.4 Impersonal Verbs
+
+Impersonal verbs (δεῖ, ἔξεστιν, δοκεῖ, etc.) take no expressed subject in Greek. English renderings often supply "it" as a dummy subject and a copula.
+
+- Impersonal verb → English equivalent ("must," "is necessary," "is lawful," "seems") — **primary**
+- English "it" → **NEQ** (no Greek token)
+- English copula ("is") → **NEQ** per §9.1.5
+- Complementary infinitive → per §8.4
+
+Example — δεῖ αὐτὸν ἐλθεῖν → "it is necessary for him to come" / "he must come":
+- δεῖ → "is necessary" or "must" — **primary**
+- "it" → **NEQ**
+- αὐτόν → "him" / "he" — **primary**
+- ἐλθεῖν → "come" — **primary**; "to" **secondary** per §8.4
+
+#### 9.1.5 Ellipsis of εἶναι (Supplied Copula)
+
+Greek frequently omits the copula in nominal sentences — predicate nouns and predicate adjectives often appear with no εἶναι/εἰμί form. English requires an explicit copula. The general guideline:
+
+**Supplied copula** ("is," "are," "was," "were," "am") with no corresponding Greek token → **NEQ**. The copula is required by English grammar but is not implied by any single Greek word; it reflects the predicative structure of the sentence as a whole.
+
+- ὁ θεὸς ἀγάπη (1 John 4:8) → "God is love": "is" → **NEQ**
+- τὸ ἐν σοί (cf. §6.3) → "what is in you": "is" → **NEQ**
+
+**When εἶναι is explicitly present**, ellipsis does not apply — handle per the relevant construction (periphrastic §9.2.1, articular infinitive §6.3, modal e.g. δεῖ εἶναι → "must be" as two separate primary records).
+
+**Future and other inflected forms** (ἔσται → "will be"): not ellipsis — ἔσται → "will be" with "will" secondary and "be" primary.
+
+### 9.2 Participial Constructions
+
+#### 9.2.1 Circumstantial Participles
 
 A circumstantial participle modifies the main verb by expressing time, manner, means, cause, condition, or concession. It has no explicit subject token — the subject is shared with or implied from the main clause.
 
@@ -420,7 +509,7 @@ A circumstantial participle modifies the main verb by expressing time, manner, m
 
 **Supplied subject** (pronoun or reinstated proper name) → **secondary** to the finite/main verb, based on that verb's person/number and the contextually active referent. The subject is implied by the finite verb, not by the participle.
 
-- If an explicit article is present on the participle, see §9.4 (Substantive Participles).
+- If an explicit article is present on the participle, see §9.2.3 (Substantive Participles).
 
 Example — Luke 3:11, ἀποκριθεὶς δὲ ἔλεγεν αὐτοῖς → "And he answered and said to them":
 
@@ -447,7 +536,7 @@ Alternative rendering "Answering, he said to them" (δέ untranslated): δέ →
 - The εἶναι form → English auxiliary ("was," "had been," "is being") — **primary**
 - The participle → English main verbal element ("going," "written," "saying") — **primary**
 
-### 9.2 Genitive Absolute
+#### 9.2.2 Genitive Absolute
 
 A genitive absolute is a participial phrase with its own subject in the genitive case, syntactically independent from the main clause. The subject is an **explicit** genitive noun or pronoun — a real source token.
 
@@ -465,13 +554,7 @@ Example — ταῦτα αὐτοῦ λαλοῦντος → "while he was sayin
 | λαλοῦντος | "was saying" | "was" and "while" secondary |
 | ταῦτα | "these things" | primary |
 
-### 9.3 Historical Present
-
-Greek uses the present tense to narrate past events for vividness. English translations typically render it as a simple past. The tense difference does not affect alignment — the link is valid and primary.
-
-This follows directly from the surface-form principle (§2.1): morphological differences between source and target do not prevent alignment. No additional alignment guidelines are required for the historical present beyond those already in place.
-
-### 9.4 Substantive Participles
+#### 9.2.3 Substantive Participles
 
 A substantive participle functions as a noun. Alignment depends on whether a definite article is present.
 
@@ -486,94 +569,63 @@ A substantive participle functions as a noun. Alignment depends on whether a def
 - All English nominalizing elements ("the," "one," "who," "whoever") → **secondary** to the participle (fallback — no explicit token available)
 - If the English rendering is a single lexicalized noun ("believers"), that noun is **primary** with no secondary tokens needed
 
-### 9.5 Prepositional Phrases
+### 9.3 Infinitival Constructions
 
-**Explicit Greek preposition** (ἐν, εἰς, ἐκ, πρός, etc.) → English preposition: **primary** 1:1 record. Standard prepositional phrases (ἐν τῇ ὁδῷ → "in the road") yield three separate records — preposition, article, and noun each get their own record. The preposition is not grouped with its object.
+#### 9.3.1 Infinitives
 
-**Case-driven English preposition** (no Greek preposition token — genitive "of," dative "to/for"): **secondary** to the noun. See also §6 and §8.4.
+"to" before an infinitive is secondary to the infinitive verb in most constructions (§8.1, §8.4). The cases below address constructions where additional alignment decisions arise.
 
-**Multi-word English compound preposition** rendering a single Greek preposition (ἀντί → "in place of," κατά → "in accordance with"): single record; principal preposition word **primary**, grammatical filler words **secondary**.
+**Complementary infinitive** (after δεῖ, θέλω, δύναμαι, etc.): covered in §9.1.4. The infinitive is primary; "to" is secondary.
 
-**Greek prepositional phrase → single English adverb or preposition** (ἐν ταχεῖ → "quickly," ἐν μέσῳ → "among"): not an idiom. Single record; the content noun is **primary**, the Greek preposition is a **secondary** source token.
+**Purpose infinitive — bare Greek infinitive of purpose → English "to" + infinitive:** the infinitive verb is primary; "to" is secondary (no ἵνα token present to claim it). "In order to" similarly: "in order" and "to" are both secondary to the infinitive.
 
-```json
-{
-  "source": ["enId", "tacheiId"],
-  "target": ["quicklyId"],
-  "meta": { "secondary": { "source": ["enId"] } }
-}
-```
+**Purpose clause — ἵνα rendered as bare "to" + infinitive:** when ἵνα is rendered as a bare "to" before an infinitive (see §9.3.2), "to" is **primary** to ἵνα — not secondary to the infinitive. The practical test: this "to" exists because of ἵνα's purpose force, not merely as an infinitive marker.
 
-**"to" before an infinitive** → **secondary** to the infinitive. See §8.4.
+**Accusative + infinitive indirect discourse:** Greek uses an accusative noun/pronoun + infinitive to express indirect discourse after verbs of speaking, knowing, and thinking. English renders this as a finite "that" clause.
+- Accusative subject → English subject of the subordinate clause — **primary**
+- Infinitive → English finite verb in the subordinate clause — **primary** (voice/tense adjustment per §2.1)
+- Supplied "that" → **secondary** to the infinitive (no Greek word corresponds to it; it is the English complementizer for the indirect discourse structure)
 
-### 9.6 Conjunctions and Particles
+Example — Mark 8:27, τίνα με λέγουσιν οἱ ἄνθρωποι εἶναι → "Who do people say I am?":
 
-Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μέν, γε, οὖν, ἄρα, etc.) are handled pragmatically. Align content words first; conjunctions and particles are residual — assessed after the main lexical correspondences are settled.
+| Source | Target | Note |
+|---|---|---|
+| τίνα | "Who" | primary |
+| λέγουσιν | "say" | primary |
+| οἱ ἄνθρωποι | "people" | primary |
+| με | "I" | primary — accusative subject rendered as nominative in English |
+| εἶναι | "am" | primary — infinitive rendered as finite verb in English question structure |
 
-**Tier 1 — obvious direct associations.** When a Greek conjunction or particle has a clear English correspondent in context, encode it directly as a primary 1:1 link. Do not overthink evident associations:
+#### 9.3.2 ἵνα and Purpose/Result Clauses
 
-| Greek | Typical English rendering |
-|---|---|
-| καί | "and," "also," "even" |
-| δέ | "but," "and," "now" |
-| γάρ | "for" (explanatory) |
-| οὖν | "therefore," "so," "then" |
-| ἀλλά | "but," "rather" |
+ἵνα + subjunctive is the primary Greek marker of purpose and result. The alignment follows what the translator did with it.
 
-**Tier 2 — non-obvious cases.** When the clause-to-clause transition does not map cleanly — particularly in dynamic translations — assess the leftover tokens (not yet in any record) on both sides after content words are settled. Then determine whether a justifiable link exists or whether the item should be marked NEQ. Both outcomes are valid and require the same quality of judgment.
+**ἵνα → "that":** primary 1:1.
 
-**The alignment threshold.** There is an intuitive threshold between "justifiable" and "not justifiable" that cannot be reduced to a formula. The guiding question is: *does this link reflect a genuine correspondence, or would it mislead more than it helps?* Neither aligning nor not aligning is a default — both are deliberate decisions.
+**ἵνα → "so that":** "so" and "that" together are both **primary** to ἵνα — both words exist because of ἵνα.
 
-**Asyndeton cases:**
-- Greek asyndeton + translator-supplied English conjunction → English conjunction → **NEQ** (no source token)
-- Greek conjunction + English asyndeton → Greek conjunction → **NEQ**
+**ἵνα → "in order that" / "in order to" + infinitive:** all words of the English purpose phrase are **primary** to ἵνα. When rendered "in order to" + infinitive, "to" belongs with ἵνα (primary), not with the infinitive verb as secondary — the practical test: this "to" exists because of ἵνα's purpose force.
 
-**Competing claims.** When a target word could plausibly align to either a conjunction/particle *or* a content word, the content word has priority. Conjunctions and particles are generally the *less likely* alignment option when there are competing choices. For example, a clause beginning with "After" where the Greek has a temporal circumstantial participle and δέ: "After" belongs with the participle (§9.1); δέ → **NEQ**.
+**ἵνα → bare "to" + infinitive:** "to" is **primary** to ἵνα; the subjunctive verb → English infinitive verb, primary.
 
-**Stacked conjunctions** (e.g. ἀλλὰ μενοῦνγε καί, Phil 3:8 — sometimes parsed as ἀλλά + μέν + οὖν + γε + καί): apply the overall guiding principles to whatever the translation provides and distribute against leftover bits where justifiable. `meta.is_idiom` is available as a last resort when the combination is genuinely non-compositional, but the pragmatic approach applies first.
+Example — Luke 4:3, εἰπὲ τῷ λίθῳ τούτῳ ἵνα γένηται ἄρτος → "tell this stone to become bread":
 
-**NEQ is valid.** For conjunctions and particles especially, a NEQ determination is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
+| Source | Target | Note |
+|---|---|---|
+| εἰπέ | "tell" | primary |
+| τῷ λίθῳ | "stone" | "stone" primary; τῷ secondary per §6.1 Case 2 |
+| τούτῳ | "this" | primary |
+| ἵνα | "to" | primary — purpose marker |
+| γένηται | "become" | primary |
+| ἄρτος | "bread" | primary |
 
-### 9.7 Conditional Sentences
+**ἵνα with no corresponding English purpose marker** (purpose expressed through clause structure or word order): ἵνα → **NEQ**.
 
-Conditional sentences in Greek follow a protasis ("if" clause) + apodosis ("then" clause) structure. Four classical types are distinguished by mood and tense; for alignment purposes the distinctions matter less than the token-level correspondences.
+**ὥστε** (result clauses) follows the same pattern: ὥστε → "so that," "with the result that," "that," or bare "to" + infinitive. Apply the same principles as ἵνα above.
 
-**Condition marker** εἰ / ἐάν → "if": **primary** 1:1.
+### 9.4 Adjectives and Adverbs
 
-**Translator-supplied "then"** in the apodosis: Greek frequently omits an explicit apodotic marker. When the translation supplies "then" (or "so") with no corresponding Greek token, it is **NEQ**.
-
-Everything else in a conditional sentence follows existing guidelines: supplied pronouns, helping verbs, conjunctions, and particles are handled per §9.1, §9.6, and §8.4.
-
-> For a detailed analysis of conditional structures in the Greek NT, including clause typing and annotation, see the [Clear-Bible nt-conditionals](https://github.com/Clear-Bible/nt-conditionals) repository, particularly the `/docs` folder.
-
-### 9.8 Negation and Emphatic Negation
-
-**Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
-
-**Emphatic negation** (οὐ μή + subjunctive → "will never," "certainly not," "by no means"): both particles are **primary** source tokens in a single record against the English emphatic expression. English auxiliaries ("will") are **secondary** to the main verb, not part of the negation record.
-
-**Double negative with οὐδείς/μηδείς** (e.g. οὐδείς … οὐ μή → "nobody will ever"): accept the counterintuitive link. Greek double negation is emphatic, not canceling; the translation absorbs the extra negation into English "ever." The polarity shift is real but the mapping is clean — alignment documents what the translation did, not semantic equivalence.
-
-- οὐδείς → "nobody" / "no one" — **primary**
-- οὐ + μή → "ever" — both **primary** in a single record
-- "will" → **secondary** to the main verb
-
-This follows the general guideline of preferring smaller alignment units (§7): the individual token mappings are workable even though they are counterintuitive, so an idiom record is not warranted.
-
-### 9.9 Ellipsis of εἶναι (Supplied Copula)
-
-Greek frequently omits the copula in nominal sentences — predicate nouns and predicate adjectives often appear with no εἶναι/εἰμί form. English requires an explicit copula. The general guideline:
-
-**Supplied copula** ("is," "are," "was," "were," "am") with no corresponding Greek token → **NEQ**. The copula is required by English grammar but is not implied by any single Greek word; it reflects the predicative structure of the sentence as a whole.
-
-- ὁ θεὸς ἀγάπη (1 John 4:8) → "God is love": "is" → **NEQ**
-- τὸ ἐν σοί (cf. §6.3) → "what is in you": "is" → **NEQ**
-
-**When εἶναι is explicitly present**, ellipsis does not apply — handle per the relevant construction (periphrastic §9.1, articular infinitive §6.3, modal e.g. δεῖ εἶναι → "must be" as two separate primary records).
-
-**Future and other inflected forms** (ἔσται → "will be"): not ellipsis — ἔσται → "will be" with "will" secondary and "be" primary.
-
-### 9.10 Comparative and Superlative Forms
+#### 9.4.1 Comparative and Superlative Forms
 
 Comparatives and superlatives follow directly from existing principles; examples are included here for clarity.
 
@@ -592,57 +644,7 @@ Comparatives and superlatives follow directly from existing principles; examples
 
 **English "more"/"most" with no Greek comparative token**: **NEQ** — this should rarely arise in a well-formed translation.
 
-### 9.11 Impersonal Verbs
-
-Impersonal verbs (δεῖ, ἔξεστιν, δοκεῖ, etc.) take no expressed subject in Greek. English renderings often supply "it" as a dummy subject and a copula.
-
-- Impersonal verb → English equivalent ("must," "is necessary," "is lawful," "seems") — **primary**
-- English "it" → **NEQ** (no Greek token)
-- English copula ("is") → **NEQ** per §9.9
-- Complementary infinitive → per §8.4
-
-Example — δεῖ αὐτὸν ἐλθεῖν → "it is necessary for him to come" / "he must come":
-- δεῖ → "is necessary" or "must" — **primary**
-- "it" → **NEQ**
-- αὐτόν → "him" / "he" — **primary**
-- ἐλθεῖν → "come" — **primary**; "to" **secondary** per §8.4
-
-### 9.12 ὅτι — Causal, Content Clause, and Recitative
-
-ὅτι has three uses with distinct alignment outcomes.
-
-**Causal** ("because," "for"): primary 1:1 — ὅτι → "because" / "for."
-
-**Content clause / indirect discourse** ("that" — "he said that…"): primary 1:1 — ὅτι → "that."
-
-**Recitative** (introduces direct speech): the translation renders it with quotation marks, a colon, or a dash — no corresponding word token. ὅτι → **NEQ**.
-
-The alignment decision follows what the translator did: if "that" is present, align to it; if only punctuation introduces the quotation, ὅτι → **NEQ**.
-
-> **Note:** Some alignment schemas permit aligning a source token to target punctuation. This project does not. Punctuation is not a valid alignment target; ὅτι recitative is NEQ when the translation uses only punctuation to introduce the quotation.
-
-### 9.13 αὐτός — Pronoun, Intensive, and "Same"
-
-αὐτός has three alignment-relevant uses, all handled by the practical test (§3.4).
-
-**Third-person pronoun** ("he," "she," "him," "her," "it," "them"): primary 1:1.
-
-**Intensive** ("himself," "herself," "themselves," "the very"): αὐτός → English intensifier — **primary**. The noun it intensifies gets its own separate primary record.
-- αὐτὸς ὁ Ἰησοῦς → "Jesus himself": αὐτός → "himself" (primary); Ἰησοῦς → "Jesus" (primary); ὁ secondary per §6.1 Case 2
-
-**"Same"** (αὐτὸς λόγος → "the same word"): αὐτός → "same" — **primary**; noun → its English equivalent in a separate primary record.
-
-### 9.14 Discourse Restructuring and Manual Alignment Strategy
-
-**Discourse restructuring** — Greek frequently strings clauses participially or with καί where English uses subordination, punctuation, or paragraph breaks, and vice versa. Syntactic restructuring between source and target does not change the alignment task. Tokens still align to their correspondents via the practical test (§3.4) regardless of how sentence structure differs. The restructuring is the translator's work; the aligner's job is to find token-level correspondences despite it.
-
-- Do not mark tokens NEQ merely because the syntax was restructured — the correspondence may still be present
-- Do not force artificial alignments to compensate for restructuring — if no genuine correspondence exists, mark it NEQ
-- Conjunctions and particles added or dropped as part of restructuring follow §9.6
-
-**Manual alignment strategy for complex verses** — when manually aligning a complicated verse, start from the beginning and work forward token by token. If you reach a point where the alignment is unclear or ambiguous, move to the end of the verse and work backwards. This bidirectional approach frequently clarifies the sticky or ambiguous spots in the middle and makes alignment decisions more evident.
-
-### 9.15 Adverbs and Compound Verbs
+#### 9.4.2 Adverbs and Compound Verbs
 
 **Explicit Greek adverb → English adverb:** primary 1:1. Syntactic position may differ between source and target without affecting alignment.
 
@@ -699,108 +701,122 @@ Here the clean distribution is universal: "out" belongs to the compound verb, "o
 
 **When no English particle is available** (translation uses a single lexical verb such as "entered" or "descended"), the explicit preposition has no English correspondent to claim and is **secondary** to the compound verb.
 
-### 9.16 Passive Voice Constructions
+### 9.5 Pronouns
 
-Greek passive verbs are rendered in English with a "be" auxiliary + past participle. The "be" auxiliary is **secondary** to the participle (main verbal element), following the same pattern as other compound verbal renderings (§8.1).
+#### 9.5.1 αὐτός — Pronoun, Intensive, and "Same"
 
-**Simple passive:**
-- ἐγράφη → "was written" — "written" primary, "was" secondary
-- γέγραπται → "has been written" — "written" primary, "has been" secondary; or "it is written" — "written" primary, "it" and "is" both secondary ("it" is the implied subject of the passive, treated as secondary like other supplied pronouns — contrast the impersonal "it" of §9.11 which is NEQ)
+αὐτός has three alignment-relevant uses, all handled by the practical test (§3.4).
 
-**Passive with explicit agent** (ὑπό + genitive): ὑπό → "by" — primary 1:1. Agent noun → English agent — primary. Passive verb → English passive construction as above.
+**Third-person pronoun** ("he," "she," "him," "her," "it," "them"): primary 1:1.
 
-Example — Mark 1:9, ἐβαπτίσθη ὑπὸ Ἰωάννου → "was baptized by John":
+**Intensive** ("himself," "herself," "themselves," "the very"): αὐτός → English intensifier — **primary**. The noun it intensifies gets its own separate primary record.
+- αὐτὸς ὁ Ἰησοῦς → "Jesus himself": αὐτός → "himself" (primary); Ἰησοῦς → "Jesus" (primary); ὁ secondary per §6.1 Case 2
 
-| Source | Target | Note |
-|---|---|---|
-| ἐβαπτίσθη | "was baptized" | "baptized" primary; "was" secondary |
-| ὑπό | "by" | primary 1:1 |
-| Ἰωάννου | "John" | primary |
+**"Same"** (αὐτὸς λόγος → "the same word"): αὐτός → "same" — **primary**; noun → its English equivalent in a separate primary record.
 
-**Voice conversion** (passive → active or vice versa): translators sometimes convert voice for naturalness. The alignment is still valid — surface form differences including voice do not prevent alignment (§2.1).
+### 9.6 Prepositions
 
-**Divine passive (theological passive):** Greek uses the passive to imply God as agent without stating it explicitly. When a translation makes the divine agent explicit by supplying "God" or converting to active:
-- Supplied "God" with no Greek token → **NEQ** (§8.4 — context-supplied proper noun)
-- The passive verb aligns normally to its English correspondent
+#### 9.6.1 Prepositional Phrases
 
-Example — Matt 5:4, αὐτοὶ παρακληθήσονται:
-- Literal: "they will be comforted" — παρακληθήσονται → "will be comforted" ("comforted" primary, "will be" secondary)
-- Dynamic: "God will comfort them" — παρακληθήσονται → "will comfort" ("will" secondary, "comfort" primary); "God" → **NEQ**
+**Explicit Greek preposition** (ἐν, εἰς, ἐκ, πρός, etc.) → English preposition: **primary** 1:1 record. Standard prepositional phrases (ἐν τῇ ὁδῷ → "in the road") yield three separate records — preposition, article, and noun each get their own record. The preposition is not grouped with its object.
 
-### 9.17 Infinitives
+**Case-driven English preposition** (no Greek preposition token — genitive "of," dative "to/for"): **secondary** to the noun. See also §6 and §8.4.
 
-"to" before an infinitive is secondary to the infinitive verb in most constructions (§8.1, §8.4). The cases below address constructions where additional alignment decisions arise.
+**Multi-word English compound preposition** rendering a single Greek preposition (ἀντί → "in place of," κατά → "in accordance with"): single record; principal preposition word **primary**, grammatical filler words **secondary**.
 
-**Complementary infinitive** (after δεῖ, θέλω, δύναμαι, etc.): covered in §9.11. The infinitive is primary; "to" is secondary.
+**Greek prepositional phrase → single English adverb or preposition** (ἐν ταχεῖ → "quickly," ἐν μέσῳ → "among"): not an idiom. Single record; the content noun is **primary**, the Greek preposition is a **secondary** source token.
 
-**Purpose infinitive — bare Greek infinitive of purpose → English "to" + infinitive:** the infinitive verb is primary; "to" is secondary (no ἵνα token present to claim it). "In order to" similarly: "in order" and "to" are both secondary to the infinitive.
+```json
+{
+  "source": ["enId", "tacheiId"],
+  "target": ["quicklyId"],
+  "meta": { "secondary": { "source": ["enId"] } }
+}
+```
 
-**Purpose clause — ἵνα rendered as bare "to" + infinitive:** when ἵνα is rendered as a bare "to" before an infinitive (see §9.18), "to" is **primary** to ἵνα — not secondary to the infinitive. The practical test: this "to" exists because of ἵνα's purpose force, not merely as an infinitive marker.
+**"to" before an infinitive** → **secondary** to the infinitive. See §8.4.
 
-**Accusative + infinitive indirect discourse:** Greek uses an accusative noun/pronoun + infinitive to express indirect discourse after verbs of speaking, knowing, and thinking. English renders this as a finite "that" clause.
-- Accusative subject → English subject of the subordinate clause — **primary**
-- Infinitive → English finite verb in the subordinate clause — **primary** (voice/tense adjustment per §2.1)
-- Supplied "that" → **secondary** to the infinitive (no Greek word corresponds to it; it is the English complementizer for the indirect discourse structure)
+### 9.7 Conjunctions, Particles, and Discourse Markers
 
-Example — Mark 8:27, τίνα με λέγουσιν οἱ ἄνθρωποι εἶναι → "Who do people say I am?":
+#### 9.7.1 Conjunctions and Particles
 
-| Source | Target | Note |
-|---|---|---|
-| τίνα | "Who" | primary |
-| λέγουσιν | "say" | primary |
-| οἱ ἄνθρωποι | "people" | primary |
-| με | "I" | primary — accusative subject rendered as nominative in English |
-| εἶναι | "am" | primary — infinitive rendered as finite verb in English question structure |
+Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μέν, γε, οὖν, ἄρα, etc.) are handled pragmatically. Align content words first; conjunctions and particles are residual — assessed after the main lexical correspondences are settled.
 
-### 9.18 ἵνα and Purpose/Result Clauses
+**Tier 1 — obvious direct associations.** When a Greek conjunction or particle has a clear English correspondent in context, encode it directly as a primary 1:1 link. Do not overthink evident associations:
 
-ἵνα + subjunctive is the primary Greek marker of purpose and result. The alignment follows what the translator did with it.
+| Greek | Typical English rendering |
+|---|---|
+| καί | "and," "also," "even" |
+| δέ | "but," "and," "now" |
+| γάρ | "for" (explanatory) |
+| οὖν | "therefore," "so," "then" |
+| ἀλλά | "but," "rather" |
 
-**ἵνα → "that":** primary 1:1.
+**Tier 2 — non-obvious cases.** When the clause-to-clause transition does not map cleanly — particularly in dynamic translations — assess the leftover tokens (not yet in any record) on both sides after content words are settled. Then determine whether a justifiable link exists or whether the item should be marked NEQ. Both outcomes are valid and require the same quality of judgment.
 
-**ἵνα → "so that":** "so" and "that" together are both **primary** to ἵνα — both words exist because of ἵνα.
+**The alignment threshold.** There is an intuitive threshold between "justifiable" and "not justifiable" that cannot be reduced to a formula. The guiding question is: *does this link reflect a genuine correspondence, or would it mislead more than it helps?* Neither aligning nor not aligning is a default — both are deliberate decisions.
 
-**ἵνα → "in order that" / "in order to" + infinitive:** all words of the English purpose phrase are **primary** to ἵνα. When rendered "in order to" + infinitive, "to" belongs with ἵνα (primary), not with the infinitive verb as secondary — the practical test: this "to" exists because of ἵνα's purpose force.
+**Asyndeton cases:**
+- Greek asyndeton + translator-supplied English conjunction → English conjunction → **NEQ** (no source token)
+- Greek conjunction + English asyndeton → Greek conjunction → **NEQ**
 
-**ἵνα → bare "to" + infinitive:** "to" is **primary** to ἵνα; the subjunctive verb → English infinitive verb, primary.
+**Competing claims.** When a target word could plausibly align to either a conjunction/particle *or* a content word, the content word has priority. Conjunctions and particles are generally the *less likely* alignment option when there are competing choices. For example, a clause beginning with "After" where the Greek has a temporal circumstantial participle and δέ: "After" belongs with the participle (§9.2.1); δέ → **NEQ**.
 
-Example — Luke 4:3, εἰπὲ τῷ λίθῳ τούτῳ ἵνα γένηται ἄρτος → "tell this stone to become bread":
+**Stacked conjunctions** (e.g. ἀλλὰ μενοῦνγε καί, Phil 3:8 — sometimes parsed as ἀλλά + μέν + οὖν + γε + καί): apply the overall guiding principles to whatever the translation provides and distribute against leftover bits where justifiable. `meta.is_idiom` is available as a last resort when the combination is genuinely non-compositional, but the pragmatic approach applies first.
 
-| Source | Target | Note |
-|---|---|---|
-| εἰπέ | "tell" | primary |
-| τῷ λίθῳ | "stone" | "stone" primary; τῷ secondary per §6.1 Case 2 |
-| τούτῳ | "this" | primary |
-| ἵνα | "to" | primary — purpose marker |
-| γένηται | "become" | primary |
-| ἄρτος | "bread" | primary |
+**NEQ is valid.** For conjunctions and particles especially, a NEQ determination is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
 
-**ἵνα with no corresponding English purpose marker** (purpose expressed through clause structure or word order): ἵνα → **NEQ**.
+#### 9.7.2 Negation and Emphatic Negation
 
-**ὥστε** (result clauses) follows the same pattern: ὥστε → "so that," "with the result that," "that," or bare "to" + infinitive. Apply the same principles as ἵνα above.
+**Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
 
-### 9.19 Verbal Aspect — Iterative, Conative, and Ingressive Renderings
+**Emphatic negation** (οὐ μή + subjunctive → "will never," "certainly not," "by no means"): both particles are **primary** source tokens in a single record against the English emphatic expression. English auxiliaries ("will") are **secondary** to the main verb, not part of the negation record.
 
-Greek verbal aspect is encoded morphologically, not by a separate token. When translators render the aspect explicitly in English through auxiliaries or modal expressions, the aspect-expressing element and the main verbal element are both **primary** to the single Greek verb — the Greek token carries the combined meaning; English distributes it across words. This is the reverse of the adverb + verb → single Greek verb case (§9.15).
+**Double negative with οὐδείς/μηδείς** (e.g. οὐδείς … οὐ μή → "nobody will ever"): accept the counterintuitive link. Greek double negation is emphatic, not canceling; the translation absorbs the extra negation into English "ever." The polarity shift is real but the mapping is clean — alignment documents what the translation did, not semantic equivalence.
 
-**Iterative / habitual imperfect** — repeated or habitual action:
-- ἔλεγεν → "he would say" — "would" and "say" both primary
-- ἔλεγεν → "he kept saying" — "kept" and "saying" both primary
-- ἔλεγεν → "he used to say" — "used" and "say" both primary; "to" secondary
+- οὐδείς → "nobody" / "no one" — **primary**
+- οὐ + μή → "ever" — both **primary** in a single record
+- "will" → **secondary** to the main verb
 
-**Conative imperfect** — attempted but uncompleted action. When rendered with "tried to": "tried" and the main verb are both **primary**; "to" secondary.
+This follows the general guideline of preferring smaller alignment units (§7): the individual token mappings are workable even though they are counterintuitive, so an idiom record is not warranted.
 
-Example — Mark 15:23 (NASB), ἐδίδουν αὐτῷ ἐσμυρνισμένον οἶνον → "they tried to give Him wine mixed with myrrh":
+#### 9.7.3 ὅτι — Causal, Content Clause, and Recitative
 
-| Source | Target | Note |
-|---|---|---|
-| ἐδίδουν | "tried to give" | "tried" and "give" primary; "to" secondary |
-| αὐτῷ | "Him" | primary; "to" secondary per dative case |
-| ἐσμυρνισμένον οἶνον | "wine mixed with myrrh" | "wine" and "myrrh" primary; "mixed with" secondary |
+ὅτι has three uses with distinct alignment outcomes.
 
-**Ingressive aorist** — the onset or beginning of an action. When the translation makes the ingressive force explicit with "began to": "began" and the main verb are both **primary**; "to" secondary.
+**Causal** ("because," "for"): primary 1:1 — ὅτι → "because" / "for."
 
-This differs from explicit ἄρχομαι + infinitive, where ἄρχομαι is its own source token that aligns to "began" / "started" directly, and the infinitive aligns separately.
+**Content clause / indirect discourse** ("that" — "he said that…"): primary 1:1 — ὅτι → "that."
+
+**Recitative** (introduces direct speech): the translation renders it with quotation marks, a colon, or a dash — no corresponding word token. ὅτι → **NEQ**.
+
+The alignment decision follows what the translator did: if "that" is present, align to it; if only punctuation introduces the quotation, ὅτι → **NEQ**.
+
+> **Note:** Some alignment schemas permit aligning a source token to target punctuation. This project does not. Punctuation is not a valid alignment target; ὅτι recitative is NEQ when the translation uses only punctuation to introduce the quotation.
+
+#### 9.7.4 Conditional Sentences
+
+Conditional sentences in Greek follow a protasis ("if" clause) + apodosis ("then" clause) structure. Four classical types are distinguished by mood and tense; for alignment purposes the distinctions matter less than the token-level correspondences.
+
+**Condition marker** εἰ / ἐάν → "if": **primary** 1:1.
+
+**Translator-supplied "then"** in the apodosis: Greek frequently omits an explicit apodotic marker. When the translation supplies "then" (or "so") with no corresponding Greek token, it is **NEQ**.
+
+Everything else in a conditional sentence follows existing guidelines: supplied pronouns, helping verbs, conjunctions, and particles are handled per §9.2.1, §9.7.1, and §8.4.
+
+> For a detailed analysis of conditional structures in the Greek NT, including clause typing and annotation, see the [Clear-Bible nt-conditionals](https://github.com/Clear-Bible/nt-conditionals) repository, particularly the `/docs` folder.
+
+### 9.8 Discourse-Level
+
+#### 9.8.1 Discourse Restructuring and Manual Alignment Strategy
+
+**Discourse restructuring** — Greek frequently strings clauses participially or with καί where English uses subordination, punctuation, or paragraph breaks, and vice versa. Syntactic restructuring between source and target does not change the alignment task. Tokens still align to their correspondents via the practical test (§3.4) regardless of how sentence structure differs. The restructuring is the translator's work; the aligner's job is to find token-level correspondences despite it.
+
+- Do not mark tokens NEQ merely because the syntax was restructured — the correspondence may still be present
+- Do not force artificial alignments to compensate for restructuring — if no genuine correspondence exists, mark it NEQ
+- Conjunctions and particles added or dropped as part of restructuring follow §9.7.1
+
+**Manual alignment strategy for complex verses** — when manually aligning a complicated verse, start from the beginning and work forward token by token. If you reach a point where the alignment is unclear or ambiguous, move to the end of the verse and work backwards. This bidirectional approach frequently clarifies the sticky or ambiguous spots in the middle and makes alignment decisions more evident.
 
 ---
 
@@ -833,5 +849,5 @@ Automated alignments are refined through linguistically-informed prompting (LLM-
 - Resolve primary/secondary relationships
 - Identify and flag idiomatic constructions
 - Handle discontiguous token cases
-- Apply the article, conjunction, and particle guidelines (§6, §10)
+- Apply the article, conjunction, and particle guidelines (§6, §9.7.1)
 - Expand 1:1 links to appropriate N:N links where the grammar requires it

@@ -150,14 +150,22 @@ Source TSVs (`SBLGNT.tsv`, `WLCM.tsv`) live in `data/sources/`.
 
 The base [Scripture Burrito alignment spec v0.4](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) is used without modification for the core `source`/`target` token lists. Project extensions live in the `meta` object (which the spec explicitly leaves open):
 
+Record-level extensions (in `meta` on each record):
+
 | Field | Type | Meaning |
 |-------|------|---------|
 | `meta.secondary.source` | `string[]` | Source token IDs that are secondary (grammatically implied, not direct lexical equivalent) |
 | `meta.secondary.target` | `string[]` | Target token IDs that are secondary |
 | `meta.is_idiom` | `bool` | Marks a phrase-to-phrase idiomatic alignment |
-| `meta.rel` | `string` | `"NEQ"` — positively asserts a token has no correspondent; one of `source`/`target` will be an empty array |
 
-All tokens not listed in `meta.secondary` are assumed primary. NEQ records are distinct from simply leaving a token unrecorded — they represent a positive determination of non-equivalence. See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
+Group-level extension (in `meta` on the group, alongside `creator` and `conformsTo`):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `meta.nonEquivalent.source` | `string[]` | Source token IDs positively determined to have no translation equivalent |
+| `meta.nonEquivalent.target` | `string[]` | Target token IDs positively determined to have no source correspondent |
+
+All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivalent` tokens are distinct from simply unrecorded tokens — they represent a positive determination of non-equivalence (see §3.5 of alignment-principles). See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
 
 ## Alignment principles
 

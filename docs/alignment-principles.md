@@ -82,7 +82,7 @@ Every token in the source and target has one of three alignment states:
 
 1. **Aligned** — the token participates in a record with a genuine correspondence (primary or secondary) to one or more tokens on the other side.
 
-2. **NEQ (Non-Equivalent)** — the aligner has positively determined that the token has no correspondent on the other side. This is recorded explicitly as an alignment record with an empty list on the correspondent side and `meta.rel: "NEQ"` (see §5.2.4). NEQ is a positive assertion of known non-equivalence.
+2. **NEQ (Non-Equivalent)** — the aligner has positively determined that the token has no correspondent on the other side. This is recorded by listing the token ID in the group's `meta.nonEquivalent` object (see §5.2.4). NEQ is a positive assertion of known non-equivalence.
 
 3. **Unknown (not recorded)** — the alignment state has not been determined. The token simply does not appear in any record.
 
@@ -190,32 +190,31 @@ The SB spec defines `meta` as explicitly open and extensible. All extensions are
 }
 ```
 
-#### 5.2.4 Non-Equivalent links (NEQ)
+#### 5.2.4 Non-Equivalent tokens (NEQ)
 
-A NEQ record declares that a specific token definitively has no correspondent on the other side (see §3.5). Exactly one array is non-empty; the other is empty.
-
-**Source-side NEQ** — a Greek or Hebrew token definitively untranslated (e.g. ὅτι recitative, an untranslated conjunction, a Greek article with no English correspondent):
+NEQ token IDs are stored in the group's `meta` object (which the SB spec leaves explicitly open), keeping all `records` entries as genuine correspondences and maintaining spec compliance.
 
 ```json
 {
-  "source": ["<source_token_id>"],
-  "target": [],
-  "meta": { "rel": "NEQ" }
+  "type": "translation",
+  "meta": {
+    "creator": "text-align",
+    "conformsTo": "0.4",
+    "nonEquivalent": {
+      "source": ["<source_token_id>", "..."],
+      "target": ["<target_token_id>", "..."]
+    }
+  },
+  "documents": [ ... ],
+  "roles": ["source", "target"],
+  "records": [ /* genuine correspondences only */ ]
 }
 ```
 
-**Target-side NEQ** — a target token definitively supplied by the translator with no source correspondent (e.g. a dummy "it," a supplied copula, an apodotic "then"):
-
-```json
-{
-  "source": [],
-  "target": ["<target_token_id>"],
-  "meta": { "rel": "NEQ" }
-}
-```
-
-- `meta.rel: "NEQ"` is the only current value of `meta.rel`. Absence of `meta.rel` means the record is a standard aligned correspondence.
-- `meta.secondary` is not applicable on NEQ records — a NEQ record has no correspondence to classify.
+- `meta.nonEquivalent.source`: source token IDs definitively untranslated (e.g. ὅτι recitative, an untranslated conjunction)
+- `meta.nonEquivalent.target`: target token IDs definitively supplied with no source correspondent (e.g. a dummy "it," a supplied copula, an apodotic "then")
+- BCVWP token IDs encode book/chapter/verse, so no per-verse scoping is needed within the lists
+- Either subkey may be absent if there are no NEQ tokens on that side
 - NEQ is distinct from leaving a token out of all records (unknown state). See §3.5.
 
 ### 5.3 Token ID Scheme

@@ -161,6 +161,8 @@ naturally to parallel tool calls (OpenAI) and multi-tool-use blocks (Anthropic).
 
 **NEQ records:** when `meta.rel` is `"NEQ"`, exactly one of `source` or `target` is a single-element list and the other is an empty list. `meta.secondary` is not applicable on NEQ records.
 
+> **Internal representation only.** The per-record `meta.rel: "NEQ"` format is used within the tool schema and processing pipeline for convenience — the model emits a uniform list of records and some may be NEQ. Before writing the output file, NEQ records are separated out and their token IDs are written into `meta.nonEquivalent` at the group level (see Output format). The output file contains no `meta.rel` fields.
+
 ### Tool schema differences by provider
 
 OpenAI wraps the schema in `{"type": "function", "function": {..., "parameters": ...}}`;
@@ -265,15 +267,19 @@ for each corpus (ot, nt):
         call LLM → N tool-call responses
         validate each verse's records
         retry failed verses (up to max_retries)
-        collect valid records
+        collect valid records (regular + NEQ)
 
+    separate NEQ records (meta.rel: "NEQ") from regular records
+    collect NEQ source/target token IDs → nonEquivalent lists
     write output alignment JSON
-    print summary (total records, validation errors, retries)
+        records = regular records only
+        meta.nonEquivalent = accumulated NEQ token ID lists
+    print summary (total records, NEQ tokens, validation errors, retries)
 ```
 
 ### Output format
 
-SB 0.4 `groups` structure (same as ACAI output), written via `write_alignment_json`:
+SB 0.4 `groups` structure, written via `write_alignment_json`. NEQ token IDs are stored in `meta.nonEquivalent` at the group level; `records` contains genuine correspondences only.
 
 ```json
 {
@@ -281,7 +287,14 @@ SB 0.4 `groups` structure (same as ACAI output), written via `write_alignment_js
   "version": "0.4",
   "groups": [{
     "type": "translation",
-    "meta": { "creator": "text-align", "conformsTo": "0.4" },
+    "meta": {
+      "creator": "text-align",
+      "conformsTo": "0.4",
+      "nonEquivalent": {
+        "source": ["<source_token_id>", "..."],
+        "target": ["<target_token_id>", "..."]
+      }
+    },
     "documents": [
       { "scheme": "BCVWP", "docid": "SBLGNT" },
       { "scheme": "BCVWP", "docid": "NIV11" }
@@ -291,6 +304,8 @@ SB 0.4 `groups` structure (same as ACAI output), written via `write_alignment_js
   }]
 }
 ```
+
+`meta.nonEquivalent` is omitted if no NEQ tokens were identified. Either subkey (`source`, `target`) may be omitted if empty.
 
 ---
 

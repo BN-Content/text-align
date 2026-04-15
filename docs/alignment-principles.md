@@ -290,7 +290,11 @@ Idiom records:
 - Are marked with `meta.is_idiom: true`
 - Do **not** use `meta.secondary`
 
-**Example:** A Greek idiomatic expression that is rendered by a multi-word English phrase where the individual word-level mappings would be misleading.
+**Examples:**
+
+- Matt 1:18 — ἐν γαστρὶ ἔχουσα → "pregnant" / "with child." Literally "in womb having" — the individual tokens (preposition, noun, participle) do not map to "pregnant" in any meaningful way. The phrase as a whole corresponds to the English expression as a whole.
+
+- μὴ γένοιτο → "May it never be!" / "God forbid!" / "By no means!" — a fixed Pauline expression. The individual tokens (negation particle + optative of γίνομαι) do not map reliably to any specific English words. The phrase as a whole maps to the English expression as a whole.
 
 **Prefer smaller alignment units.** `meta.is_idiom` is a last resort — use it only when word-level mapping genuinely breaks down and would be misleading, not merely when mappings are counterintuitive or involve unexpected polarity or form shifts. Where individual token mappings are workable, even if surprising, prefer them over a larger phrasal idiom record.
 
@@ -522,7 +526,6 @@ The following areas require further specification before alignment work on them 
 - **Ellipsis of εἶναι** — general principle for supplied copula ("is," "are," "was," "were") across all constructions
 - **Impersonal verbs** — δεῖ ("must," "it is necessary"), ἔξεστιν ("it is lawful"), δοκεῖ ("it seems"); handling of English "it" with no Greek token
 - **Middle voice** — reflexive rendering ("himself," "themselves") with no separate Greek token; secondary to verb or unaligned?
-- **μὴ γένοιτο and fixed expressions** — "May it never be!" / "God forbid!" / "By no means!"; near-idiomatic but individual pieces may be alignable
 - **Comparative and superlative forms** — Greek comparative adjective vs. English "more X" or "X-er"; handling of "more"/"most" added with no direct Greek equivalent
 - **αὐτός** — intensive use ("he himself," "the very") vs. ordinary pronoun; treatment of the English intensifier
 - **ὅτι recitative** — introduces direct speech; typically rendered with quotation marks only, leaving ὅτι unaligned

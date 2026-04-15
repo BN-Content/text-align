@@ -1,5 +1,6 @@
 """TSV reading utilities for alignment migration."""
 
+import csv
 from pathlib import Path
 
 import pandas as pd
@@ -25,7 +26,7 @@ def process_usfm_tsv(target_data_dir: Path | str, edition: str) -> dict[str, Mig
             print(f"TSV not found, skipping: {tsv_path}")
             continue
         print(f"Processing {tsv_path.name}")
-        df = pd.read_csv(tsv_path, sep="\t", header=0, dtype=str, encoding="utf-8", keep_default_na=False)
+        df = pd.read_csv(tsv_path, sep="\t", header=0, dtype=str, encoding="utf-8", keep_default_na=False, quoting=csv.QUOTE_NONE)
         for row in df.index:
             source_verse = BCVWPID(df["id"][row]).to_bcvid
             if source_verse not in verses:

@@ -1,0 +1,31 @@
+# JFA11.yaml — config for Portuguese João Ferreira de Almeida 2011 (JFA11)
+# migrated from English LEB source.
+#
+# Invoke any tool with:  --config JFA11
+
+alignments_root: C:/git/Clear
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+target_language: por
+target_edition: JFA11
+
+source_edition: LEB
+source_language: eng
+
+# ---------------------------------------------------------------------------
+# ACAI and trabina
+# ---------------------------------------------------------------------------
+
+acai_data_dir: C:/git/BibleAquifer/ACAI
+trabina_dir: C:/git/BN-Content/trabina/data/weighted
+
+# ---------------------------------------------------------------------------
+# sim-migrate settings
+# ---------------------------------------------------------------------------
+
+model: sentence-transformers/LaBSE
+min_similarity: 0.7
+max_word_distance: 8

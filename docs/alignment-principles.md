@@ -1,0 +1,350 @@
+# Alignment Principles
+
+*Working document — subject to revision and enhancement.*
+
+---
+
+## 1. Purpose and Scope
+
+A **textual alignment** maps the word tokens of a Bible translation to the word tokens of the source text from which it was translated. Alignments in this project are always in the direction **translation → source**:
+
+- **Source texts** (the alignment target): Greek New Testament (SBLGNT) and Hebrew Old Testament (Westminster Leningrad Codex as represented in the MACULA Hebrew syntactic annotation from Clear-Bible/Biblica)
+- **Target translations**: any language, with a particular focus on minority languages
+
+The goal is to provide linguistically faithful, maximally useful alignment data — not merely a mechanical mapping of tokens.
+
+---
+
+## 2. Core Principles
+
+### 2.1 Generous Alignments
+
+Alignments are intentionally **generous** rather than strictly literal. When a translation word exists *because of* a grammatical feature of the source (e.g., a preposition implied by a noun's case, a helping verb required by the target language's tense system), that word is included in the alignment record rather than left unaligned.
+
+**Example (preposition from case):** In English "of the word" translating Greek λόγου (genitive noun), the preposition "of" exists because of the Greek case — it has no corresponding Greek word. A strict alignment would leave "of" unaligned; a generous alignment includes it in the same record as "word" → λόγου, with a secondary role (see §3).
+
+**Example (preposition + article, no Greek article):** If the Greek is λόγου *without* the article τοῦ, but the translation reads "of the word," then *both* "of" and "the" are secondary tokens aligned to λόγου — "of" because of the genitive case, and "the" because it is a grammatically natural English rendering of a definite noun even when no separate Greek article token is present (see §6, Case 3).
+
+**Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. It does not mean forcing every token into some record. If no evident reason exists for a token's presence (it is not implied by grammar, not a lexical equivalent, and not contextually motivated), it is acceptable — and preferable — to leave it unaligned.
+
+### 2.2 Alignment Direction
+
+Alignments express the relationship **translation → source**. The source text is always Greek (NT) or Hebrew (OT). There is no reverse alignment direction in this data model.
+
+### 2.3 Both OT and NT
+
+All alignment principles apply across both testaments. Hebrew-specific rules (construct chains, definiteness, word-part identifiers) will require their own treatment, to be developed as a separate annex to this document.
+
+---
+
+## 3. Link Types: Primary and Secondary
+
+Every token participating in an alignment record is classified as either **primary** or **secondary**.
+
+### 3.1 Primary Links
+
+A **primary** link connects a translation token to a source token with a direct lexical or semantic correspondence — the token is "there" because of what the source word *means*.
+
+### 3.2 Secondary Links
+
+A **secondary** link connects a translation token to a source token where the translation token exists *because of the grammar* of the source, not because of the source word's lexical content. Common secondary tokens include:
+
+- Prepositions implied by a Greek or Hebrew noun's grammatical case
+- English helping verbs required to render a Greek verbal form ("has been," "will have," "is being")
+- English pronouns supplied from a Greek verb's person/number ending ("they" from a 3pl verb form)
+- English articles ("the" or "a") when no separate article token exists in the source (see §6)
+- Conjunctions and particles that do not have a direct lexical equivalent (rules TBD, §9)
+
+### 3.3 Default Assumption
+
+**All tokens in a record are assumed primary unless explicitly listed as secondary.** Secondary tokens are listed in the record's `meta.secondary` object (see §5.2). This minimizes overhead: only exceptions need to be marked.
+
+### 3.4 Multiple Primaries
+
+A single record may have multiple primary tokens on either or both sides:
+
+- **Multiple primary target tokens, single source:** "most excellent" → κράτιστε (Luke 1:3) — both English words are primary; neither is a grammatical helper
+- **Multiple primary source tokens, single target:** a single translation word rendering two closely bound Greek words
+- **Multiple secondary with single primary:** "that have been fulfilled" → πεπληροφορημένων (Luke 1:1) — "fulfilled" is primary; "that," "have," and "been" are secondary helpers
+
+---
+
+## 4. Discontiguous Tokens
+
+The tokens in an alignment record need not be adjacent in the text. The Scripture Burrito alignment spec explicitly supports non-contiguous reference units.
+
+**Example:** "of \[the\] word" → λόγου, where "the" in the middle belongs to a *different* alignment record (aligning with the Greek article). The record for λόγου contains "of" and "word" as non-adjacent target token IDs, with "of" marked secondary.
+
+When representing discontiguous tokens, serialize token IDs in document order.
+
+---
+
+## 5. Data Format
+
+### 5.1 Base Format
+
+Alignments use the [Scripture Burrito alignment specification](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) (currently v0.4) as the base format. The top-level structure is:
+
+```json
+{
+  "format": "alignment",
+  "version": "0.4",
+  "groups": [ ... ]
+}
+```
+
+Each group contains:
+
+```json
+{
+  "type": "translation",
+  "meta": { "creator": "...", "conformsTo": "0.4" },
+  "documents": [
+    { "scheme": "BCVWP", "docid": "SBLGNT" },
+    { "scheme": "BCVWP", "docid": "<edition>" }
+  ],
+  "roles": ["source", "target"],
+  "records": [ ... ]
+}
+```
+
+Each record:
+
+```json
+{
+  "source": ["<source_token_id>", ...],
+  "target": ["<target_token_id>", ...],
+  "meta": { ... }
+}
+```
+
+### 5.2 Extensions to the Base Format
+
+The SB spec defines `meta` as explicitly open and extensible. All extensions are additive and placed in `meta` at the record level; they do not break spec conformance.
+
+#### 5.2.1 Secondary tokens
+
+```json
+"meta": {
+  "secondary": {
+    "source": ["<source_token_id>"],
+    "target": ["<target_token_id>", "<target_token_id>"]
+  }
+}
+```
+
+- `meta.secondary.source`: list of source token IDs in this record that are secondary
+- `meta.secondary.target`: list of target token IDs in this record that are secondary
+- Absence of `meta.secondary` (or either subkey) means all tokens on that side are primary
+
+#### 5.2.2 Idioms
+
+```json
+"meta": {
+  "is_idiom": true
+}
+```
+
+- `meta.is_idiom`: marks the record as an idiomatic phrase-to-phrase alignment
+- All tokens in an idiom record are implicitly primary at the phrase level
+- `meta.secondary` is not applicable on idiom records
+
+#### 5.2.3 Record metadata (existing, carried forward)
+
+```json
+"meta": {
+  "id": "400040030001.1",
+  "origin": "manual",
+  "status": "created"
+}
+```
+
+### 5.3 Token ID Scheme
+
+Token IDs use the BCVWP scheme: an 11–12 character string encoding book, chapter, verse, word, and (for Hebrew) word-part. Example: `410040030011` = Mark 4:3, word 1.
+
+---
+
+## 6. Article Alignment Rules
+
+### 6.1 Greek Definite Article (ὁ/ἡ/τό and declined forms)
+
+**Baseline — all Greek tokens present (e.g., ἐκ τοῦ λόγου → "of the word"):**
+When a preposition, article, and noun are all present in the Greek, each English word maps individually to its Greek counterpart as a **primary** link — typically three separate one-to-one records: ἐκ → "of", τοῦ → "the", λόγου → "word". Nothing is secondary; every English word has a direct Greek correspondent. The cases below address situations where one or more Greek tokens are *absent*.
+
+**Case 1 — English "the" is present in the translation:**
+Align "the" directly with the corresponding Greek article token. Both the article token and the "the" token are **primary**.
+
+**Case 2 — Greek article is present but English "the" is absent:**
+The Greek article is **secondary** to its noun. Include the article token in the noun's alignment record as a secondary source token.
+
+*Exceptions — the Greek article receives its own alignment record with a **primary** link when it is rendered as:*
+- An English **pronoun** (substantival use of the article)
+- An English **proper name or place name**
+
+**Case 3 — English "the" is present, no Greek article token:**
+When a Greek noun is definite by context but carries no separate article token, and the translation supplies "the," the English "the" is **secondary** to the noun. Include it in the noun's alignment record as a secondary target token. If a case-driven preposition is also present (e.g., "of the word" → λόγου), both the preposition and "the" are secondary tokens in the same record.
+
+**Case 4 — English "a" is present, no Greek article:**
+Greek has no indefinite article. English "a" is grammatically supplied. "a" is **secondary** to the noun it modifies; include it in the noun's alignment record as a secondary target token.
+
+### 6.2 Examples
+
+All Greek tokens present (ἐκ τοῦ λόγου → "of the word") — three separate primary records:
+```json
+{ "source": ["grkEkId"],    "target": ["engOfId"]   }
+{ "source": ["grkTouId"],   "target": ["engTheId"]  }
+{ "source": ["grkLogouId"], "target": ["engWordId"] }
+```
+
+Greek article present, "the" present in English:
+```json
+{ "source": ["grkArticleId"], "target": ["engTheId"] }
+```
+
+Greek article present, no "the" in English (article secondary to noun):
+```json
+{
+  "source": ["grkArticleId", "grkNounId"],
+  "target": ["engNounId"],
+  "meta": { "secondary": { "source": ["grkArticleId"] } }
+}
+```
+
+English "the" present, no Greek article ("the" secondary to noun):
+```json
+{
+  "source": ["grkNounId"],
+  "target": ["engTheId", "engNounId"],
+  "meta": { "secondary": { "target": ["engTheId"] } }
+}
+```
+
+English "of the word" → λόγου (no article; both "of" and "the" secondary):
+```json
+{
+  "source": ["grkNounId"],
+  "target": ["engOfId", "engTheId", "engNounId"],
+  "meta": { "secondary": { "target": ["engOfId", "engTheId"] } }
+}
+```
+
+English "a" present, no Greek article ("a" secondary to noun):
+```json
+{
+  "source": ["grkNounId"],
+  "target": ["engAId", "engNounId"],
+  "meta": { "secondary": { "target": ["engAId"] } }
+}
+```
+
+---
+
+## 7. Idioms
+
+An **idiom** is a multi-token expression in the source (or target, or both) whose meaning is not compositional — the phrase as a whole corresponds to the phrase as a whole, but the individual tokens do not map to each other in any reliable way.
+
+Idiom records:
+- May have any number of source and target tokens
+- All tokens are implicitly **primary** at the phrase level
+- Are marked with `meta.is_idiom: true`
+- Do **not** use `meta.secondary`
+
+**Example:** A Greek idiomatic expression that is rendered by a multi-word English phrase where the individual word-level mappings would be misleading.
+
+---
+
+## 8. Mounce Reverse Interlinear Reference Cases
+
+The following cases are drawn from the *Mounce Reverse Interlinear* (IRU) alignment layout guidelines and serve as concrete reference points for the alignment data model. In the IRU, alignment is communicated via typographic conventions (arrows, brackets, italics); below each is translated into data model terms.
+
+> **Note:** Further specifications from Mounce or other sources regarding the Greek definite article, conjunctions, and particles are forthcoming and will supplement this section.
+
+### 8.1 Multiple English Words → Single Greek Word (N:1)
+
+One alignment record, multiple target tokens, single source token. The primary token is the one carrying the core lexical content; all others are secondary.
+
+| Situation | Example | Secondary token(s) |
+|---|---|---|
+| Infinitive requires "to" | "to live" → μένειν | "to" |
+| Compound lexical meaning | "atoning sacrifice" → ἱλασμός | none — both primary |
+| Helping verbs for Greek tense | "is made complete" → τετελείωται | "is," "made" |
+| Subject pronoun from verb ending | "they went out" → ἐξῆλθαν | "they" |
+| "this/there is/was" expressions | "There was" → ἐγένετο | "There" |
+| Case-driven preposition | "of God" → θεοῦ (genitive) | "of" |
+| Case-driven preposition | "of the word" → λόγου | "of" |
+
+### 8.2 Single English Word → Multiple Greek Words (1:N)
+
+One alignment record, multiple source tokens, single target token. Common when a Greek article + noun together are rendered by a single English word or phrase.
+
+| Situation | Example | Notes |
+|---|---|---|
+| Article + noun → English noun | "sins" → ⌈τὰς ἁμαρτίας⌉ | Article secondary in source |
+| Prepositional phrase → English word | "pregnant" → ⌈ἐν γαστρί⌉ | Idiom or phrase-level primary |
+
+### 8.3 Discontiguous English Words → Single Greek Word
+
+One alignment record, non-adjacent target token IDs, single source token. Target IDs listed in document order.
+
+| Situation | Example |
+|---|---|
+| Interrupted phrase | "Do \[not\] love" → ἀγαπᾶτε, where "not" belongs to a separate record |
+| Separated helpers | "of \[the\] word" → λόγου, where "the" is in a separate article record |
+
+### 8.4 Supplied Words with No Greek Equivalent
+
+English translations regularly supply words not present in the Greek. These follow the generous alignment principle — include them in the nearest appropriate record as secondary tokens.
+
+| Supplied word type | Treatment |
+|---|---|
+| Personal pronoun from verb ending | Secondary target token linked to the verb |
+| Specific noun supplied from context ("Jesus replied") | Usually no alignment — noun derives from context, not a token |
+| Generic noun ("person," "one") supplied from verb | Secondary target token linked to the verb |
+| Helping verbs (is, can, will, have, do, may) | Secondary target tokens linked to the main verb |
+| Case-implied prepositions (of, to, for, on) | Secondary target tokens linked to the noun |
+
+### 8.5 Greek Words with No English Equivalent
+
+Greek sometimes includes words (especially indirect objects, articles, particles) that English omits. These appear as source tokens in a record with no corresponding primary target token, or as secondary source tokens in the nearest noun/verb record.
+
+### 8.6 Untranslatable / Idiomatic Constructions
+
+When there is no reliable word-level correspondence between source and target tokens (Greek idioms, restructured syntax), use an idiom record (`meta.is_idiom: true`). Do not attempt word-level mapping within the record.
+
+---
+
+## 9. Pending Specifications
+
+The following areas require further specification before alignment work on them can proceed consistently:
+
+- **Greek definite article** — edge cases beyond §6: substantival articles, anaphoric articles, Granville Sharp constructions, article with participles
+- **Conjunctions** — when to align Greek conjunctions (καί, δέ, γάρ, etc.) to English conjunctions vs. treat as secondary or unaligned
+- **Particles** — alignment of Greek particles (μέν, οὖν, ἄρα, etc.) which often have no direct English equivalent
+- **Hebrew-specific rules** — construct chains, definiteness via prefix ה, word-part identifiers (BCVWP part field), pronominal suffixes
+
+---
+
+## 10. Workflow Overview
+
+Alignments are produced through a two-stage process:
+
+### Stage 1 — Automated Alignment
+
+Initial alignments are generated by one or more automated methods:
+
+- **Diff-based migration** (`diff-migrate`): given an existing aligned translation and a similar/related unaligned text, use text-diff to migrate alignments across identical or near-identical token sequences
+- **Similarity-based migration** (`sim-migrate`): use multilingual sentence embeddings (LaBSE or SONAR-200) to match tokens across translations, enabling cross-language migration
+- **Entity alignment** (`acai-align`): use ACAI person/place/entity data to align named entities across source and translation
+
+Stage 1 produces initial 1:1 or simple N:N records. Secondary classification and idiom flagging are not expected at this stage.
+
+### Stage 2 — Linguistically-Informed Refinement
+
+Automated alignments are refined through linguistically-informed prompting (LLM-assisted) to:
+
+- Resolve primary/secondary relationships
+- Identify and flag idiomatic constructions
+- Handle discontiguous token cases
+- Apply the article, conjunction, and particle rules (§6, §9)
+- Expand 1:1 links to appropriate N:N links where the grammar requires it

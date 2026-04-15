@@ -1,0 +1,82 @@
+# example.yaml — annotated reference config for text-align tools.
+#
+# Copy this file and rename it for your project, e.g. bonbv.yaml.
+# Invoke any tool with:  --config bonbv   (extension is assumed)
+#
+# CLI args always override values set here.
+# Keys use underscores to match argparse dest names.
+# Path values are resolved as-is (use absolute paths or paths relative to CWD).
+
+# ---------------------------------------------------------------------------
+# Root path — enables automatic path derivation
+# ---------------------------------------------------------------------------
+
+# Set alignments_root to the directory that contains your alignments-<lang>/
+# repos.  When set, all paths below are derived automatically and you only
+# need to provide the identity keys (language codes + edition IDs).
+#
+# Derived paths (only fill these in to override the derived values):
+#   source_tsv_dir       → <root>/alignments-<src_lang>/data/targets/<src_ed>
+#   source_alignment_dir → <root>/alignments-<src_lang>/data/alignments/<src_ed>
+#   target_tsv_dir       → <root>/alignments-<trg_lang>/data/targets/<trg_ed>
+#   targets_dir          → <root>/alignments-<trg_lang>/data/targets/<trg_ed>
+#   lang_data_path       → <root>/alignments-<trg_lang>/data
+#   output_dir           → <root>/alignments-<trg_lang>/exp/<trg_ed>/<TOOL-SUFFIX>
+#                          (render-alignment uses <root>/alignments-<trg_lang>/viz)
+
+alignments_root: C:/git/alignments
+
+# ---------------------------------------------------------------------------
+# Identity — used by all four tools
+# ---------------------------------------------------------------------------
+
+# ISO 639-3 language code for the target translation
+target_language: spa
+
+# Edition identifier for the target translation
+target_edition: BONBV
+
+# ---------------------------------------------------------------------------
+# Source (reference) translation — used by diff-migrate and sim-migrate
+# ---------------------------------------------------------------------------
+
+source_edition: NIV11
+source_language: eng
+
+# ---------------------------------------------------------------------------
+# ACAI and trabina — used by acai-align and render-alignment
+# ---------------------------------------------------------------------------
+
+acai_data_dir: C:/git/BibleAquifer/ACAI
+trabina_dir: C:/git/BN-Content/trabina/data/weighted
+
+# ---------------------------------------------------------------------------
+# Source/corpus settings — used by diff-migrate, sim-migrate, acai-align
+# ---------------------------------------------------------------------------
+
+ot_corpus: WLCM
+nt_corpus: SBLGNT
+
+# Creator string written into alignment meta
+creator: text-align
+
+# ---------------------------------------------------------------------------
+# sim-migrate settings
+# ---------------------------------------------------------------------------
+
+# sentence-transformers/LaBSE  (default, broad coverage)
+# cointegrated/SONAR_200_text_encoder  (for languages LaBSE doesn't cover)
+model: sentence-transformers/LaBSE
+
+min_similarity: 0.7
+max_word_distance: 8
+
+# Set to false to disable stopword filtering (equivalent to --no-stopword-filter)
+# remove_stopwords: true
+
+# ---------------------------------------------------------------------------
+# render-alignment settings
+# ---------------------------------------------------------------------------
+
+# Set to true for right-to-left languages (Arabic, Hebrew, etc.)
+# r2l: false

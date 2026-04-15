@@ -25,7 +25,7 @@ Alignments are intentionally **generous** rather than strictly literal. When a t
 
 **Example (preposition + article, no Greek article):** If the Greek is λόγου *without* the article τοῦ, but the translation reads "of the word," then *both* "of" and "the" are secondary tokens aligned to λόγου — "of" because of the genitive case, and "the" because it is a grammatically natural English rendering of a definite noun even when no separate Greek article token is present (see §6, Case 3).
 
-**Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. It does not mean forcing every token into some record. If no evident reason exists for a token's presence (it is not implied by grammar, not a lexical equivalent, and not contextually motivated), it is acceptable — and preferable — to leave it unaligned.
+**Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. It does not mean forcing every token into some record. If no evident reason exists for a token's presence (it is not implied by grammar, not a lexical equivalent, and not contextually motivated), it is acceptable — and preferable — to mark it NEQ (if the absence of correspondence is certain) or leave it unrecorded (if undetermined). See §3.5.
 
 **Surface form differences:** Morphological differences between source and target tokens — tense, voice, number, aspect — do not prevent alignment. A Greek historical present rendered as a past tense in English (see §9.3) is a valid alignment despite the tense difference. The question is whether there is lexical and semantic correspondence, not whether the surface forms match.
 
@@ -76,7 +76,21 @@ Multiple target tokens may each be primary to the same source token, and multipl
 
 **Prefer explicit over implied alignment.** When a target token could either be aligned to an explicit source token *or* treated as grammatically implied (secondary), choose the explicit alignment. For example: φιλαδελφία → "brotherly love" — both "brotherly" and "love" are primary, each corresponding to a semantic component of the compound. If rendered "love of a brother or sister" — "love," "brother," and "sister" are primary; "of," "a," and "or" are secondary. Grammatical/implied alignment is a fallback only when no explicit token is available.
 
-### 3.5 Multiple Primaries
+### 3.5 Alignment States
+
+Every token in the source and target has one of three alignment states:
+
+1. **Aligned** — the token participates in a record with a genuine correspondence (primary or secondary) to one or more tokens on the other side.
+
+2. **NEQ (Non-Equivalent)** — the aligner has positively determined that the token has no correspondent on the other side. This is recorded explicitly as an alignment record with an empty list on the correspondent side and `meta.rel: "NEQ"` (see §5.2.4). NEQ is a positive assertion of known non-equivalence.
+
+3. **Unknown (not recorded)** — the alignment state has not been determined. The token simply does not appear in any record.
+
+**NEQ is not the same as unknown.** A token left out of all records could mean "not yet aligned" or "genuinely uncertain." A NEQ record means "we have determined there is no correspondent." This distinction makes alignment data far more useful to downstream consumers.
+
+Tokens that should be marked NEQ include: source tokens definitively untranslated (e.g. an untranslated conjunction), target tokens definitively supplied by the translator with no source correspondence (e.g. a dummy "it," a supplied copula, an apodotic "then"). See §5.2.4 and §9 for specific cases.
+
+### 3.6 Multiple Primaries
 
 A single record may have multiple primary tokens on either or both sides:
 
@@ -175,6 +189,34 @@ The SB spec defines `meta` as explicitly open and extensible. All extensions are
   "status": "created"
 }
 ```
+
+#### 5.2.4 Non-Equivalent links (NEQ)
+
+A NEQ record declares that a specific token definitively has no correspondent on the other side (see §3.5). Exactly one array is non-empty; the other is empty.
+
+**Source-side NEQ** — a Greek or Hebrew token definitively untranslated (e.g. ὅτι recitative, an untranslated conjunction, a Greek article with no English correspondent):
+
+```json
+{
+  "source": ["<source_token_id>"],
+  "target": [],
+  "meta": { "rel": "NEQ" }
+}
+```
+
+**Target-side NEQ** — a target token definitively supplied by the translator with no source correspondent (e.g. a dummy "it," a supplied copula, an apodotic "then"):
+
+```json
+{
+  "source": [],
+  "target": ["<target_token_id>"],
+  "meta": { "rel": "NEQ" }
+}
+```
+
+- `meta.rel: "NEQ"` is the only current value of `meta.rel`. Absence of `meta.rel` means the record is a standard aligned correspondence.
+- `meta.secondary` is not applicable on NEQ records — a NEQ record has no correspondence to classify.
+- NEQ is distinct from leaving a token out of all records (unknown state). See §3.5.
 
 ### 5.3 Token ID Scheme
 
@@ -276,7 +318,7 @@ Individual token mappings are available, so align them rather than treating the 
 - τό → "what" — **primary**
 - ἐν → "in" — **primary**
 - σοί → "you" — **primary**
-- Supplied copula ("is") → unaligned (no source token; not implied by any single Greek word)
+- Supplied copula ("is") → **NEQ** (no source token; not implied by any single Greek word — see §9.9)
 
 ---
 
@@ -342,19 +384,21 @@ One alignment record, non-adjacent target token IDs, single source token. Target
 
 ### 8.4 Supplied Words with No Greek Equivalent
 
-English translations regularly supply words not present in the Greek. These follow the generous alignment principle — include them in the nearest appropriate record as secondary tokens.
+English translations regularly supply words not present in the Greek. These follow the generous alignment principle — include them in the nearest appropriate record as secondary tokens. When a supplied word cannot be linked to any source token (even as secondary), it is **NEQ**.
 
 | Supplied word type | Treatment |
 |---|---|
 | Personal pronoun from verb ending | Secondary target token linked to the verb |
-| Specific noun supplied from context ("Jesus replied") | Usually no alignment — noun derives from context, not a token |
+| Specific noun supplied from context ("Jesus replied") | **NEQ** — noun derives from discourse context, not a token |
 | Generic noun ("person," "one") supplied from verb | Secondary target token linked to the verb |
 | Helping verbs (is, can, will, have, do, may) | Secondary target tokens linked to the main verb |
 | Case-implied prepositions (of, to, for, on) | Secondary target tokens linked to the noun |
+| Dummy subject "it" (impersonal verbs — see §9.11) | **NEQ** |
+| Supplied copula with no Greek εἶναι (see §9.9) | **NEQ** |
 
 ### 8.5 Greek Words with No English Equivalent
 
-Greek sometimes includes words (especially indirect objects, articles, particles) that English omits. These appear as source tokens in a record with no corresponding primary target token, or as secondary source tokens in the nearest noun/verb record.
+Greek sometimes includes words (especially indirect objects, articles, particles) that English omits. These appear as secondary source tokens in the nearest noun/verb record — or, when no corresponding record exists and the omission is definitive, as a **NEQ** source-side record (see §5.2.4).
 
 ### 8.6 Untranslatable / Idiomatic Constructions
 
@@ -388,7 +432,7 @@ Example — Luke 3:11, ἀποκριθεὶς δὲ ἔλεγεν αὐτοῖς
 | ἔλεγεν | "he … said" | "he" secondary — from verb's person/number |
 | αὐτοῖς | "to them" | "to" secondary |
 
-Alternative rendering "Answering, he said to them" (δέ untranslated): δέ is unaligned; ἀποκριθείς → "Answering" (primary); ἔλεγεν → "he said" ("he" secondary); αὐτοῖς → "to them" ("to" secondary).
+Alternative rendering "Answering, he said to them" (δέ untranslated): δέ → **NEQ**; ἀποκριθείς → "Answering" (primary); ἔλεγεν → "he said" ("he" secondary); αὐτοῖς → "to them" ("to" secondary).
 
 **Redundant/pleonastic participle** (εἶπεν λέγων → "he said"): both the participle and the finite verb are **primary** source tokens in a single record; supplied pronoun is **secondary**.
 
@@ -477,19 +521,19 @@ Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μ�
 | οὖν | "therefore," "so," "then" |
 | ἀλλά | "but," "rather" |
 
-**Tier 2 — non-obvious cases.** When the clause-to-clause transition does not map cleanly — particularly in dynamic translations — assess the leftover unaligned tokens on both sides after content words are settled. Then determine whether a justifiable link exists or whether the item is better left unaligned. Both outcomes are valid and require the same quality of judgment.
+**Tier 2 — non-obvious cases.** When the clause-to-clause transition does not map cleanly — particularly in dynamic translations — assess the leftover tokens (not yet in any record) on both sides after content words are settled. Then determine whether a justifiable link exists or whether the item should be marked NEQ. Both outcomes are valid and require the same quality of judgment.
 
 **The alignment threshold.** There is an intuitive threshold between "justifiable" and "not justifiable" that cannot be reduced to a formula. The guiding question is: *does this link reflect a genuine correspondence, or would it mislead more than it helps?* Neither aligning nor not aligning is a default — both are deliberate decisions.
 
 **Asyndeton cases:**
-- Greek asyndeton + translator-supplied English conjunction → English conjunction **unaligned** (no source token)
-- Greek conjunction + English asyndeton → Greek conjunction **unaligned**
+- Greek asyndeton + translator-supplied English conjunction → English conjunction → **NEQ** (no source token)
+- Greek conjunction + English asyndeton → Greek conjunction → **NEQ**
 
-**Competing claims.** When a target word could plausibly align to either a conjunction/particle *or* a content word, the content word has priority. Conjunctions and particles are generally the *less likely* alignment option when there are competing choices. For example, a clause beginning with "After" where the Greek has a temporal circumstantial participle and δέ: "After" belongs with the participle (§9.1); δέ is left unaligned.
+**Competing claims.** When a target word could plausibly align to either a conjunction/particle *or* a content word, the content word has priority. Conjunctions and particles are generally the *less likely* alignment option when there are competing choices. For example, a clause beginning with "After" where the Greek has a temporal circumstantial participle and δέ: "After" belongs with the participle (§9.1); δέ → **NEQ**.
 
 **Stacked conjunctions** (e.g. ἀλλὰ μενοῦνγε καί, Phil 3:8 — sometimes parsed as ἀλλά + μέν + οὖν + γε + καί): apply the overall guiding principles to whatever the translation provides and distribute against leftover bits where justifiable. `meta.is_idiom` is available as a last resort when the combination is genuinely non-compositional, but the pragmatic approach applies first.
 
-**Not aligning is valid.** For conjunctions and particles especially, leaving a token unaligned is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
+**NEQ is valid.** For conjunctions and particles especially, a NEQ determination is a legitimate and often correct outcome. Forcing an alignment where none is clearly justified produces misleading data.
 
 ### 9.7 Conditional Sentences
 
@@ -497,7 +541,7 @@ Conditional sentences in Greek follow a protasis ("if" clause) + apodosis ("then
 
 **Condition marker** εἰ / ἐάν → "if": **primary** 1:1.
 
-**Translator-supplied "then"** in the apodosis: Greek frequently omits an explicit apodotic marker. When the translation supplies "then" (or "so") with no corresponding Greek token, it is **unaligned**.
+**Translator-supplied "then"** in the apodosis: Greek frequently omits an explicit apodotic marker. When the translation supplies "then" (or "so") with no corresponding Greek token, it is **NEQ**.
 
 Everything else in a conditional sentence follows existing guidelines: supplied pronouns, helping verbs, conjunctions, and particles are handled per §9.1, §9.6, and §8.4.
 
@@ -521,10 +565,10 @@ This follows the general guideline of preferring smaller alignment units (§7): 
 
 Greek frequently omits the copula in nominal sentences — predicate nouns and predicate adjectives often appear with no εἶναι/εἰμί form. English requires an explicit copula. The general guideline:
 
-**Supplied copula** ("is," "are," "was," "were," "am") with no corresponding Greek token → **unaligned**. The copula is required by English grammar but is not implied by any single Greek word; it reflects the predicative structure of the sentence as a whole.
+**Supplied copula** ("is," "are," "was," "were," "am") with no corresponding Greek token → **NEQ**. The copula is required by English grammar but is not implied by any single Greek word; it reflects the predicative structure of the sentence as a whole.
 
-- ὁ θεὸς ἀγάπη (1 John 4:8) → "God is love": "is" **unaligned**
-- τὸ ἐν σοί (cf. §6.3) → "what is in you": "is" **unaligned**
+- ὁ θεὸς ἀγάπη (1 John 4:8) → "God is love": "is" → **NEQ**
+- τὸ ἐν σοί (cf. §6.3) → "what is in you": "is" → **NEQ**
 
 **When εἶναι is explicitly present**, ellipsis does not apply — handle per the relevant construction (periphrastic §9.1, articular infinitive §6.3, modal e.g. δεῖ εἶναι → "must be" as two separate primary records).
 
@@ -547,20 +591,20 @@ Comparatives and superlatives follow directly from existing principles; examples
 **Elative superlative** (superlative form used as intensive → "very [adj]" / "most [adj]"): single record; both the intensifier and the adjective are **primary** to the superlative form — the superlative morphology licenses both English words.
 - ἁγιώτατος → "most holy": "most" and "holy" both **primary**
 
-**English "more"/"most" with no Greek comparative token**: unaligned — this should rarely arise in a well-formed translation.
+**English "more"/"most" with no Greek comparative token**: **NEQ** — this should rarely arise in a well-formed translation.
 
 ### 9.11 Impersonal Verbs
 
 Impersonal verbs (δεῖ, ἔξεστιν, δοκεῖ, etc.) take no expressed subject in Greek. English renderings often supply "it" as a dummy subject and a copula.
 
 - Impersonal verb → English equivalent ("must," "is necessary," "is lawful," "seems") — **primary**
-- English "it" → **unaligned** (no Greek token)
-- English copula ("is") → **unaligned** per §9.9
+- English "it" → **NEQ** (no Greek token)
+- English copula ("is") → **NEQ** per §9.9
 - Complementary infinitive → per §8.4
 
 Example — δεῖ αὐτὸν ἐλθεῖν → "it is necessary for him to come" / "he must come":
 - δεῖ → "is necessary" or "must" — **primary**
-- "it" → **unaligned**
+- "it" → **NEQ**
 - αὐτόν → "him" / "he" — **primary**
 - ἐλθεῖν → "come" — **primary**; "to" **secondary** per §8.4
 
@@ -572,11 +616,11 @@ Example — δεῖ αὐτὸν ἐλθεῖν → "it is necessary for him to 
 
 **Content clause / indirect discourse** ("that" — "he said that…"): primary 1:1 — ὅτι → "that."
 
-**Recitative** (introduces direct speech): the translation renders it with quotation marks, a colon, or a dash — no corresponding word token. ὅτι → **unaligned**.
+**Recitative** (introduces direct speech): the translation renders it with quotation marks, a colon, or a dash — no corresponding word token. ὅτι → **NEQ**.
 
-The alignment decision follows what the translator did: if "that" is present, align to it; if only punctuation introduces the quotation, ὅτι is unaligned.
+The alignment decision follows what the translator did: if "that" is present, align to it; if only punctuation introduces the quotation, ὅτι → **NEQ**.
 
-> **Note:** Some alignment schemas permit aligning a source token to target punctuation. This project does not. Punctuation is not a valid alignment target; ὅτι recitative is simply unaligned when the translation uses only punctuation to introduce the quotation.
+> **Note:** Some alignment schemas permit aligning a source token to target punctuation. This project does not. Punctuation is not a valid alignment target; ὅτι recitative is NEQ when the translation uses only punctuation to introduce the quotation.
 
 ### 9.13 αὐτός — Pronoun, Intensive, and "Same"
 
@@ -593,8 +637,8 @@ The alignment decision follows what the translator did: if "that" is present, al
 
 **Discourse restructuring** — Greek frequently strings clauses participially or with καί where English uses subordination, punctuation, or paragraph breaks, and vice versa. Syntactic restructuring between source and target does not change the alignment task. Tokens still align to their correspondents via the practical test (§3.4) regardless of how sentence structure differs. The restructuring is the translator's work; the aligner's job is to find token-level correspondences despite it.
 
-- Do not leave tokens unaligned merely because the syntax was restructured — the correspondence may still be present
-- Do not force artificial alignments to compensate for restructuring — if no genuine correspondence exists, leave it unaligned
+- Do not mark tokens NEQ merely because the syntax was restructured — the correspondence may still be present
+- Do not force artificial alignments to compensate for restructuring — if no genuine correspondence exists, mark it NEQ
 - Conjunctions and particles added or dropped as part of restructuring follow §9.6
 
 **Manual alignment strategy for complex verses** — when manually aligning a complicated verse, start from the beginning and work forward token by token. If you reach a point where the alignment is unclear or ambiguous, move to the end of the verse and work backwards. This bidirectional approach frequently clarifies the sticky or ambiguous spots in the middle and makes alignment decisions more evident.

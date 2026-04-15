@@ -62,6 +62,8 @@ A **secondary** link connects a translation token to a source token where the tr
 
 **All tokens in a record are assumed primary unless explicitly listed as secondary.** Secondary tokens are listed in the record's `meta.secondary` object (see §5.2). This minimizes overhead: only exceptions need to be marked.
 
+**Every record must have at least one primary token on each side.** A valid alignment record requires a minimum of one primary source token and one primary target token. A record consisting entirely of secondary tokens on either side is not valid — if there is no primary correspondence, there is no alignment.
+
 ### 3.4 Practical Test for Primary vs Secondary
 
 When determining whether a target token is primary or secondary, ask:

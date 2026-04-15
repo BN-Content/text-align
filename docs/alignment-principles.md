@@ -642,6 +642,166 @@ The alignment decision follows what the translator did: if "that" is present, al
 
 **Manual alignment strategy for complex verses** — when manually aligning a complicated verse, start from the beginning and work forward token by token. If you reach a point where the alignment is unclear or ambiguous, move to the end of the verse and work backwards. This bidirectional approach frequently clarifies the sticky or ambiguous spots in the middle and makes alignment decisions more evident.
 
+### 9.15 Adverbs and Compound Verbs
+
+**Explicit Greek adverb → English adverb:** primary 1:1. Syntactic position may differ between source and target without affecting alignment.
+
+- εὐθύς / εὐθέως → "immediately," "at once" — primary 1:1
+- ταχέως → "quickly" — primary 1:1
+
+**Greek verb + adverb → single English verb (lexical capture):** when the translator renders a Greek verb + adverb combination with a single English verb capturing the combined meaning (e.g., ταχέως + motion verb → "hurried"), both the Greek verb and the Greek adverb are **primary** source tokens in a single record against the English verb. The English word exists because of both.
+
+```json
+{ "source": ["verbId", "adverbId"], "target": ["engVerbId"] }
+```
+
+**Compound Greek verb → English phrasal verb:** Greek compound verbs with a prepositional prefix frequently correspond to English phrasal verbs (verb + adverbial particle). Both English elements are **primary** to the single Greek token. When the English uses a single lexicalized verb instead, that verb is primary 1:1.
+
+- ἐξέρχομαι → "come out" / "go out" — "come"/"go" and "out" both primary; or "exit" — single primary
+- εἰσέρχομαι → "go in" / "come in" — both primary; or "enter" — single primary
+- καταβαίνω → "come down" — both primary; or "descend" — single primary
+
+**Compound verb with redundant explicit preposition:** Greek frequently reinforces a compound verb's prepositional prefix with an explicit same-root prepositional phrase (εἰσέρχομαι εἰς, ἐξέρχομαι ἐκ, ἀναβαίνω εἰς, etc.). The explicit preposition and the prefix encode the same directional semantics; the English must distribute against both source tokens.
+
+**Principle:** the explicit preposition token has first claim on whatever English preposition or particle corresponds to it (§3.4 — prefer explicit over implied). The compound verb aligns to the remaining English verbal elements.
+
+**John 16:28** — ἐξῆλθον ἐκ τοῦ πατρός — two translation strategies:
+
+NASB/KJV "came forth from the Father":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐξῆλθον | "came forth" | both primary — verb root + directional particle |
+| ἐκ | "from" | primary 1:1 |
+| τοῦ | "the" | per §6.1 Case 1 |
+| πατρός | "Father" | primary |
+
+NIV/ESV "came from the Father":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐξῆλθον | "came" | primary — prefix absorbed; ἐκ has already claimed "from" |
+| ἐκ | "from" | primary 1:1 |
+| τοῦ | "the" | per §6.1 Case 1 |
+| πατρός | "Father" | primary |
+
+The explicit ἐκ claims "from" in both renderings. What changes is whether the ἐξ- prefix finds an English correspondent ("forth") or is absorbed into the verb.
+
+**Mark 1:26** — ἐξῆλθεν ἐξ αὐτοῦ — all major translations: "came out of him"
+
+| Source | Target | Note |
+|---|---|---|
+| ἐξῆλθεν | "came out" | both primary — verb root + directional particle |
+| ἐξ | "of" | primary 1:1 — ἐξ expresses separation/source; "of" in "out of" carries that relationship |
+| αὐτοῦ | "him" | primary |
+
+Here the clean distribution is universal: "out" belongs to the compound verb, "of" to the explicit preposition.
+
+**When no English particle is available** (translation uses a single lexical verb such as "entered" or "descended"), the explicit preposition has no English correspondent to claim and is **secondary** to the compound verb.
+
+### 9.16 Passive Voice Constructions
+
+Greek passive verbs are rendered in English with a "be" auxiliary + past participle. The "be" auxiliary is **secondary** to the participle (main verbal element), following the same pattern as other compound verbal renderings (§8.1).
+
+**Simple passive:**
+- ἐγράφη → "was written" — "written" primary, "was" secondary
+- γέγραπται → "has been written" — "written" primary, "has been" secondary; or "it is written" — "written" primary, "it" and "is" both secondary ("it" is the implied subject of the passive, treated as secondary like other supplied pronouns — contrast the impersonal "it" of §9.11 which is NEQ)
+
+**Passive with explicit agent** (ὑπό + genitive): ὑπό → "by" — primary 1:1. Agent noun → English agent — primary. Passive verb → English passive construction as above.
+
+Example — Mark 1:9, ἐβαπτίσθη ὑπὸ Ἰωάννου → "was baptized by John":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐβαπτίσθη | "was baptized" | "baptized" primary; "was" secondary |
+| ὑπό | "by" | primary 1:1 |
+| Ἰωάννου | "John" | primary |
+
+**Voice conversion** (passive → active or vice versa): translators sometimes convert voice for naturalness. The alignment is still valid — surface form differences including voice do not prevent alignment (§2.1).
+
+**Divine passive (theological passive):** Greek uses the passive to imply God as agent without stating it explicitly. When a translation makes the divine agent explicit by supplying "God" or converting to active:
+- Supplied "God" with no Greek token → **NEQ** (§8.4 — context-supplied proper noun)
+- The passive verb aligns normally to its English correspondent
+
+Example — Matt 5:4, αὐτοὶ παρακληθήσονται:
+- Literal: "they will be comforted" — παρακληθήσονται → "will be comforted" ("comforted" primary, "will be" secondary)
+- Dynamic: "God will comfort them" — παρακληθήσονται → "will comfort" ("will" secondary, "comfort" primary); "God" → **NEQ**
+
+### 9.17 Infinitives
+
+"to" before an infinitive is secondary to the infinitive verb in most constructions (§8.1, §8.4). The cases below address constructions where additional alignment decisions arise.
+
+**Complementary infinitive** (after δεῖ, θέλω, δύναμαι, etc.): covered in §9.11. The infinitive is primary; "to" is secondary.
+
+**Purpose infinitive — bare Greek infinitive of purpose → English "to" + infinitive:** the infinitive verb is primary; "to" is secondary (no ἵνα token present to claim it). "In order to" similarly: "in order" and "to" are both secondary to the infinitive.
+
+**Purpose clause — ἵνα rendered as bare "to" + infinitive:** when ἵνα is rendered as a bare "to" before an infinitive (see §9.18), "to" is **primary** to ἵνα — not secondary to the infinitive. The practical test: this "to" exists because of ἵνα's purpose force, not merely as an infinitive marker.
+
+**Accusative + infinitive indirect discourse:** Greek uses an accusative noun/pronoun + infinitive to express indirect discourse after verbs of speaking, knowing, and thinking. English renders this as a finite "that" clause.
+- Accusative subject → English subject of the subordinate clause — **primary**
+- Infinitive → English finite verb in the subordinate clause — **primary** (voice/tense adjustment per §2.1)
+- Supplied "that" → **secondary** to the infinitive (no Greek word corresponds to it; it is the English complementizer for the indirect discourse structure)
+
+Example — Mark 8:27, τίνα με λέγουσιν οἱ ἄνθρωποι εἶναι → "Who do people say I am?":
+
+| Source | Target | Note |
+|---|---|---|
+| τίνα | "Who" | primary |
+| λέγουσιν | "say" | primary |
+| οἱ ἄνθρωποι | "people" | primary |
+| με | "I" | primary — accusative subject rendered as nominative in English |
+| εἶναι | "am" | primary — infinitive rendered as finite verb in English question structure |
+
+### 9.18 ἵνα and Purpose/Result Clauses
+
+ἵνα + subjunctive is the primary Greek marker of purpose and result. The alignment follows what the translator did with it.
+
+**ἵνα → "that":** primary 1:1.
+
+**ἵνα → "so that":** "so" and "that" together are both **primary** to ἵνα — both words exist because of ἵνα.
+
+**ἵνα → "in order that" / "in order to" + infinitive:** all words of the English purpose phrase are **primary** to ἵνα. When rendered "in order to" + infinitive, "to" belongs with ἵνα (primary), not with the infinitive verb as secondary — the practical test: this "to" exists because of ἵνα's purpose force.
+
+**ἵνα → bare "to" + infinitive:** "to" is **primary** to ἵνα; the subjunctive verb → English infinitive verb, primary.
+
+Example — Luke 4:3, εἰπὲ τῷ λίθῳ τούτῳ ἵνα γένηται ἄρτος → "tell this stone to become bread":
+
+| Source | Target | Note |
+|---|---|---|
+| εἰπέ | "tell" | primary |
+| τῷ λίθῳ | "stone" | "stone" primary; τῷ secondary per §6.1 Case 2 |
+| τούτῳ | "this" | primary |
+| ἵνα | "to" | primary — purpose marker |
+| γένηται | "become" | primary |
+| ἄρτος | "bread" | primary |
+
+**ἵνα with no corresponding English purpose marker** (purpose expressed through clause structure or word order): ἵνα → **NEQ**.
+
+**ὥστε** (result clauses) follows the same pattern: ὥστε → "so that," "with the result that," "that," or bare "to" + infinitive. Apply the same principles as ἵνα above.
+
+### 9.19 Verbal Aspect — Iterative, Conative, and Ingressive Renderings
+
+Greek verbal aspect is encoded morphologically, not by a separate token. When translators render the aspect explicitly in English through auxiliaries or modal expressions, the aspect-expressing element and the main verbal element are both **primary** to the single Greek verb — the Greek token carries the combined meaning; English distributes it across words. This is the reverse of the adverb + verb → single Greek verb case (§9.15).
+
+**Iterative / habitual imperfect** — repeated or habitual action:
+- ἔλεγεν → "he would say" — "would" and "say" both primary
+- ἔλεγεν → "he kept saying" — "kept" and "saying" both primary
+- ἔλεγεν → "he used to say" — "used" and "say" both primary; "to" secondary
+
+**Conative imperfect** — attempted but uncompleted action. When rendered with "tried to": "tried" and the main verb are both **primary**; "to" secondary.
+
+Example — Mark 15:23 (NASB), ἐδίδουν αὐτῷ ἐσμυρνισμένον οἶνον → "they tried to give Him wine mixed with myrrh":
+
+| Source | Target | Note |
+|---|---|---|
+| ἐδίδουν | "tried to give" | "tried" and "give" primary; "to" secondary |
+| αὐτῷ | "Him" | primary; "to" secondary per dative case |
+| ἐσμυρνισμένον οἶνον | "wine mixed with myrrh" | "wine" and "myrrh" primary; "mixed with" secondary |
+
+**Ingressive aorist** — the onset or beginning of an action. When the translation makes the ingressive force explicit with "began to": "began" and the main verb are both **primary**; "to" secondary.
+
+This differs from explicit ἄρχομαι + infinitive, where ἄρχομαι is its own source token that aligns to "began" / "started" directly, and the infinitive aligns separately.
+
 ---
 
 ## 10. Pending Specifications

@@ -147,7 +147,7 @@ def main() -> None:
         )
         out_path = args.output_dir / f"{corpus}-{args.target_edition}-manual.json"
         write_alignment_json(new_alignments, out_path)
-        print(f"  → {out_path}  ({len(new_alignments['records'])} records)")
+        print(f"  → {out_path}  ({len(new_alignments['groups'][0]['records'])} records)")
 
 
 if __name__ == "__main__":

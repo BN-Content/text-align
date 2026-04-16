@@ -153,6 +153,7 @@ def process_corpus(
     max_retries: int,
     creator: str,
     single_verse: str | None = None,
+    verse_range: tuple[str, str] | None = None,
 ) -> None:
     """Process one corpus (``"nt"`` or ``"ot"``) and write its output JSON."""
     corpus_id = "SBLGNT" if corpus == "nt" else "WLCM"
@@ -188,6 +189,12 @@ def process_corpus(
         verse_ids = [single_verse] if single_verse in verse_ids else []
         if not verse_ids:
             print(f"Verse {single_verse} not found in candidate set — skipping.")
+            return
+    elif verse_range:
+        start, end = verse_range
+        verse_ids = [v for v in verse_ids if start <= v <= end]
+        if not verse_ids:
+            print(f"No verses found in range {start}–{end} — skipping.")
             return
 
     total_batches = (len(verse_ids) + batch_size - 1) // batch_size
@@ -311,6 +318,8 @@ def parse_args() -> argparse.Namespace:
                    help="Retry attempts on validation failure (default: 2)")
     p.add_argument("--verse", default=None, metavar="BCV",
                    help="Process a single verse BCV for testing, e.g. 41004003")
+    p.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
+                   help="Process a BCV range, e.g. --verse-range 41004001 41004020")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
 
@@ -320,6 +329,9 @@ def parse_args() -> argparse.Namespace:
 
     if args.alignment_sources is None:
         args.alignment_sources = ALIGNMENT_SOURCE_TYPES
+
+    if args.verse and args.verse_range:
+        raise SystemExit("error: --verse and --verse-range are mutually exclusive")
 
     return args
 
@@ -336,6 +348,8 @@ def main() -> None:
     print(f"  Output:    {args.output_dir}")
     if args.verse:
         print(f"  Verse:     {args.verse} (single-verse mode)")
+    elif args.verse_range:
+        print(f"  Range:     {args.verse_range[0]}–{args.verse_range[1]}")
 
     llm_client = LLMClient(provider=args.llm_provider, model=args.llm_model)
 
@@ -354,6 +368,7 @@ def main() -> None:
             max_retries=args.max_retries,
             creator=args.creator,
             single_verse=args.verse,
+            verse_range=tuple(args.verse_range) if args.verse_range else None,
         )
 
 

@@ -196,6 +196,10 @@ def main() -> None:
         )
         print(f"Loaded {len(acai_entities)} ACAI entities.")
 
+        tsv_path = args.targets_dir / f"{corpus}_{args.target_edition}.tsv"
+        if not tsv_path.exists():
+            print(f"Target TSV not found, skipping: {tsv_path}")
+            continue
         target_verses, target_source_map = load_target_verses(
             args.targets_dir, args.target_edition, corpus, args.target_language
         )

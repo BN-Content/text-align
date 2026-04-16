@@ -107,6 +107,20 @@ tools. They contain no secondary classification, no idiom flags, and some will b
 wrong. Restructure, split, merge, or discard them freely. Use them as a rough starting
 point, not as a framework to preserve.
 
+## GLOSS FIELDS
+
+Source token lines may include two gloss fields:
+
+- **gloss**: contextual meaning, including grammatical role words the English requires
+  (prepositions, articles, case markers). Example: "of [the] genealogy".
+- **lexeme**: the bare lexeme meaning, stripped of role words. Example: "genealogy".
+  For Hebrew tokens, the lexeme may include morphologically implied words separated by
+  spaces (e.g. "he created" for a verb whose subject is encoded in its form).
+
+When **lexeme** is present, it identifies the primary token: the English word that
+directly translates the source lexeme. Words in **gloss** that do not appear in
+**lexeme** are candidates for secondary classification.
+
 ## SBLGNT MORPH CODES
 
 Format: POS-TENSE_VOICE_MOOD-CASE_NUMBER_GENDER
@@ -739,6 +753,10 @@ def _format_source_token(token: Source, show_gloss: bool) -> str:
     parts = [f"  {token.id:<16}", token.text, f"  {token.pos:<6}", token.morph or ""]
     if show_gloss and token.gloss:
         parts.append(f'  gloss:"{token.gloss}"')
+        if token.gloss2 and token.gloss2 != token.gloss:
+            # WLCM uses '.' as word delimiter in gloss2; normalize to space
+            lexeme = token.gloss2.replace(".", " ")
+            parts.append(f'  lexeme:"{lexeme}"')
     return "".join(parts)
 
 

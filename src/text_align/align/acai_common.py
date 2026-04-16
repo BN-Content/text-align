@@ -306,17 +306,21 @@ def load_trabina_translations(trabina_folder: Path, target_language: str) -> dic
 def load_alignment_template(
     corpus: str, target_edition: str, creator: str = "text-align"
 ) -> dict[str, Any]:
-    """Return an empty alignment JSON skeleton for *corpus* and *target_edition*."""
+    """Return an empty SB 0.4 groups alignment skeleton for *corpus* and *target_edition*."""
     corpus_edition = "WLCM" if corpus == "ot" else "SBLGNT"
     return {
-        "documents": [
-            {"docid": corpus_edition, "scheme": "BCVWP"},
-            {"docid": target_edition, "scheme": "BCVWP"},
-        ],
-        "meta": {"conformsTo": "0.4", "creator": creator},
-        "roles": ["source", "target"],
-        "type": "translation",
-        "records": [],
+        "format": "alignment",
+        "version": "0.4",
+        "groups": [{
+            "type": "translation",
+            "meta": {"conformsTo": "0.4", "creator": creator},
+            "documents": [
+                {"docid": corpus_edition, "scheme": "BCVWP"},
+                {"docid": target_edition, "scheme": "BCVWP"},
+            ],
+            "roles": ["source", "target"],
+            "records": [],
+        }],
     }
 
 
@@ -335,6 +339,7 @@ def populate_alignment(
     bcv_counts: dict[str, int] = {}
     all_used_source_ids: list[str] = []
     all_used_target_ids: list[str] = []
+    records = alignment_data["groups"][0]["records"]
 
     for match_id, matched_target in matches.items():
         target_instances = list(matched_target.explicit_instances)
@@ -353,14 +358,9 @@ def populate_alignment(
                     bcv_key = bcv_explicit.to_bcvid
                     bcv_counts[bcv_key] = bcv_counts.get(bcv_key, 0) + 1
                     if explicit_instance not in all_used_source_ids and target_instance not in all_used_target_ids:
-                        alignment_data["records"].append({
+                        records.append({
                             "source": [explicit_instance],
                             "target": [target_instance],
-                            "meta": {
-                                "id": f"{bcv_key}.{bcv_counts[bcv_key]}",
-                                "origin": "manual",
-                                "status": "created",
-                            },
                         })
                         used_target_instances.append(target_instance)
                         all_used_target_ids.append(target_instance)
@@ -370,5 +370,5 @@ def populate_alignment(
                 if used in target_instances:
                     target_instances.remove(used)
 
-    alignment_data["records"].sort(key=lambda r: r["meta"]["id"])
+    records.sort(key=lambda r: r["source"][0] if r.get("source") else "")
     return alignment_data

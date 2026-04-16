@@ -10,7 +10,7 @@ CLI entry point: ``diff-migrate``
 import argparse
 from pathlib import Path
 
-import diff_match_patch as dmp_module
+from . import diff_match_patch as dmp_module
 
 from text_align.config import load_config_from_args, require
 from .alignment_io import create_new_alignments, load_alignment_json, write_alignment_json

@@ -537,21 +537,6 @@ profiler = ["nvidia-cuda-profiler-api (==13.0.85.*) ; sys_platform == \"linux\" 
 sanitizer = ["nvidia-cuda-sanitizer-api (==13.0.85.*) ; sys_platform == \"linux\" or sys_platform == \"win32\""]
 
 [[package]]
-name = "diff-match-patch"
-version = "20241021"
-description = "Repackaging of Google's Diff Match and Patch libraries."
-optional = false
-python-versions = ">=3.7"
-groups = ["main"]
-files = [
-    {file = "diff_match_patch-20241021-py3-none-any.whl", hash = "sha256:93cea333fb8b2bc0d181b0de5e16df50dd344ce64828226bda07728818936782"},
-    {file = "diff_match_patch-20241021.tar.gz", hash = "sha256:beae57a99fa48084532935ee2968b8661db861862ec82c6f21f4acdd6d835073"},
-]
-
-[package.extras]
-dev = ["attribution (==1.8.0)", "black (==24.8.0)", "build (>=1)", "flit (==3.9.0)", "mypy (==1.12.1)", "ufmt (==2.7.3)", "usort (==1.0.8.post1)"]
-
-[[package]]
 name = "distlib"
 version = "0.4.0"
 description = "Distribution utilities"
@@ -3551,4 +3536,4 @@ typing-extensions = {version = ">=4.13.2", markers = "python_version < \"3.11\""
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "b39341ddc26cdacc10168bd523a866417ac00efc3575f9a387a39acdb9569d8e"
+content-hash = "a28ee5f44580397c800f24622fd15c000b8c2ac6a7222bdd9d169d2e590f3cd1"

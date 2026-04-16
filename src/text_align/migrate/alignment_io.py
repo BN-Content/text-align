@@ -19,7 +19,8 @@ def write_alignment_json(alignment: dict[str, Any], path: Path) -> None:
     json_string = json.dumps(alignment, ensure_ascii=False)
     # put "records" on its own line, then one record per line
     json_string = re.sub(r'"records"', r'\n"records"', json_string)
-    json_string = re.sub(r"\}\}, ", "}},\n", json_string)
+    # break between adjacent JSON objects (handles both old }}, and new }, separators)
+    json_string = re.sub(r"(\}+), (\{)", r"\1,\n\2", json_string)
     path.write_text(json_string, encoding="utf-8")
 
 
@@ -30,29 +31,25 @@ def create_new_alignments(
     edition: str,
     creator: str = "text-align",
 ) -> dict[str, Any]:
-    """Build a new alignment JSON object by remapping target token IDs.
+    """Build a new SB 0.4 alignment object by remapping target token IDs.
 
-    *alignments* is the source alignment dict (parsed JSON).
+    *alignments* is the source alignment dict (parsed JSON); accepts both flat
+    and SB 0.4 groups format.
     *remap_target_ids* maps old target IDs → new target IDs.
     *corpus* is the source corpus ID (e.g. ``"SBLGNT"`` or ``"WLCM"``).
     *edition* is the target edition ID (e.g. ``"NIrV"``).
     """
+    # accept both flat and SB 0.4 groups input
+    if "groups" in alignments:
+        source_records = alignments["groups"][0]["records"]
+    else:
+        source_records = alignments["records"]
+
     used_new_targets: list[str] = []
-    new_alignment: dict[str, Any] = {
-        "documents": [
-            {"docid": corpus, "scheme": "BCVWP"},
-            {"docid": edition, "scheme": "BCVWP"},
-        ],
-        "meta": {
-            "conformsTo": "0.4",
-            "creator": creator,
-        },
-        "roles": ["source", "target"],
-        "type": "translation",
-        "records": [],
-    }
-    for alignment in alignments["records"]:
-        if not alignment["source"] or not alignment["target"]:
+    new_records: list[dict] = []
+
+    for alignment in source_records:
+        if not alignment.get("source") or not alignment.get("target"):
             continue
         remapped_ids: list[str] = []
         for target_id in alignment["target"]:
@@ -64,19 +61,22 @@ def create_new_alignments(
         target_ids = sorted(set(remapped_ids))
         if not target_ids:
             continue
-        meta = alignment["meta"]
-        new_meta: dict[str, Any] = {"id": meta["id"]}
-        if "source" in meta:
-            new_meta["source"] = meta["source"]
-        # handle old 'process' key (pre-0.2.1 data) as well as current 'origin'
-        if "process" in meta:
-            new_meta["origin"] = meta["process"]
-        elif "origin" in meta:
-            new_meta["origin"] = meta["origin"]
-        new_meta["status"] = "created"
-        new_alignment["records"].append({
+        new_records.append({
             "source": alignment["source"],
             "target": target_ids,
-            "meta": new_meta,
         })
-    return new_alignment
+
+    return {
+        "format": "alignment",
+        "version": "0.4",
+        "groups": [{
+            "type": "translation",
+            "meta": {"conformsTo": "0.4", "creator": creator},
+            "documents": [
+                {"docid": corpus, "scheme": "BCVWP"},
+                {"docid": edition, "scheme": "BCVWP"},
+            ],
+            "roles": ["source", "target"],
+            "records": new_records,
+        }],
+    }

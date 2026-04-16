@@ -312,6 +312,10 @@ def parse_args() -> argparse.Namespace:
                    help="Root data/ directory for the target language alignment repo")
     p.add_argument("--output-dir", default=None, type=Path,
                    help="Root directory to write HTML output files")
+    p.add_argument("--alignment-dir", default=None, type=Path,
+                   help="Directory containing alignment JSON files to render "
+                        "(overrides the standard alignments/ path derived from "
+                        "--lang-data-path; e.g. exp/OENGB/LLM-REFINED)")
     p.add_argument("--acai-data-dir", default=None, type=Path,
                    help="Path to ACAI root directory (omit to disable ACAI annotations)")
     p.add_argument("--acai-types", nargs="+", default=ACAI_TYPES,
@@ -333,22 +337,23 @@ def main() -> None:
     tag_acai = args.acai_data_dir is not None
 
     print("Loading AlignmentSets ...")
-    alset_ot = AlignmentSet(
-        targetlanguage=args.alignment_lang,
-        targetid=args.alignment_edition,
-        sourceid="WLCM",
-        langdatapath=args.lang_data_path,
-    )
-    alset_nt = AlignmentSet(
-        targetlanguage=args.alignment_lang,
-        targetid=args.alignment_edition,
-        sourceid="SBLGNT",
-        langdatapath=args.lang_data_path,
-    )
-    mgr_ot = Manager(alset_ot)
-    mgr_nt = Manager(alset_nt)
+    adir = args.alignment_dir
+    managers = []
+    for sourceid, canon in (("WLCM", "ot"), ("SBLGNT", "nt")):
+        override = adir / f"{sourceid}-{args.alignment_edition}-manual.json" if adir else None
+        try:
+            alset = AlignmentSet(
+                targetlanguage=args.alignment_lang,
+                targetid=args.alignment_edition,
+                sourceid=sourceid,
+                langdatapath=args.lang_data_path,
+                alignmentpath_override=override,
+            )
+            managers.append(Manager(alset))
+        except AssertionError as exc:
+            print(f"Skipping {canon.upper()} ({sourceid}): {exc}")
 
-    for mgr in (mgr_ot, mgr_nt):
+    for mgr in managers:
         corpus = "ot" if mgr.alignmentset.sourceid == "WLCM" else "nt"
         print(f"\nRendering {corpus.upper()} — {mgr.alignmentset.sourceid}")
 

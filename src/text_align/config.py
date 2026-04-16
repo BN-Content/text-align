@@ -37,6 +37,9 @@ provided is derived automatically:
     output_dir           → <root>/alignments-<trg_lang>/exp/<trg_ed>/<output_suffix>
                            (or <root>/alignments-<trg_lang>/<output_suffix> when
                             output_in_exp=False, used by render-alignment)
+    alignment_dir        → <root>/alignments-<trg_lang>/exp/<trg_ed>/<alignment_suffix>
+                           (only derived when ``alignment_suffix`` is set in the YAML;
+                            used by render-alignment to point at a specific exp subdir)
 
 Explicit values in the YAML always override derived ones.
 """
@@ -137,6 +140,9 @@ def derive_paths(
             result.setdefault("output_dir", trg_repo / "exp" / trg_ed / output_suffix)
         else:
             result.setdefault("output_dir", trg_repo / output_suffix)
+        alignment_suffix = config.get("alignment_suffix")
+        if alignment_suffix:
+            result.setdefault("alignment_dir", trg_repo / "exp" / trg_ed / alignment_suffix)
 
     return result
 

@@ -9,7 +9,6 @@ CLI entry point: ``acai-align``
 """
 
 import argparse
-import json
 import os
 from pathlib import Path
 
@@ -17,6 +16,7 @@ import regex as re
 from biblelib.word import BCVWPID
 
 from text_align.config import load_config_from_args, require
+from text_align.migrate.alignment_io import write_alignment_json
 from text_align.stopwords import load_stopwordsiso_stopwords
 
 from .acai_common import (
@@ -220,10 +220,9 @@ def main() -> None:
         )
 
         out_path = args.output_dir / f"{corpus_edition}-{args.target_edition}-manual.json"
-        json_string = json.dumps(alignment, ensure_ascii=False)
-        json_string = re.sub(r"\}\}, ", "}},\n", json_string)
-        out_path.write_text(json_string, encoding="utf-8")
-        print(f"  → {out_path}  ({len(alignment['records'])} records)")
+        write_alignment_json(alignment, out_path)
+        n_records = len(alignment["groups"][0]["records"])
+        print(f"  → {out_path}  ({n_records} records)")
 
 
 if __name__ == "__main__":

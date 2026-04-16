@@ -1,6 +1,7 @@
 """Read and write alignment data in Scripture Burrito format."""
 
 from collections import defaultdict
+from dataclasses import fields as dataclass_fields
 import json
 from typing import Any, Optional, TextIO
 
@@ -26,9 +27,6 @@ def bad_reason(
         return BadRecord(**badrecdict, reason=Reason.NOTARGET)
     elif "" in arecdict["target"]:
         return BadRecord(**badrecdict, reason=Reason.EMPTYTARGET)
-    elif any(targetitems[sel].exclude for sel in arecdict["target"]):
-        excluded = [sel for sel in arecdict["target"] if targetitems[sel].exclude]
-        return BadRecord(**badrecdict, reason=Reason.ALIGNEDEXCLUDE, data=excluded)
     elif any(sel not in sourceitems for sel in arecdict["source"]):
         missing = [sel for sel in arecdict["source"] if sel not in sourceitems]
         return BadRecord(**badrecdict, reason=Reason.MISSINGSOURCE, data=missing)
@@ -38,6 +36,9 @@ def bad_reason(
             return BadRecord(**badrecdict, reason=Reason.MISSINGTARGETSOME, data=missing)
         else:
             return BadRecord(**badrecdict, reason=Reason.MISSINGTARGETALL, data=missing)
+    elif any(targetitems[sel].exclude for sel in arecdict["target"]):
+        excluded = [sel for sel in arecdict["target"] if targetitems[sel].exclude]
+        return BadRecord(**badrecdict, reason=Reason.ALIGNEDEXCLUDE, data=excluded)
     return None
 
 
@@ -69,17 +70,23 @@ class AlignmentsReader:
         return targetid
 
     def _make_record(self, alrec: dict[str, Any]) -> Optional[AlignmentRecord]:
-        metadatadict = alrec["meta"]
+        metadatadict = dict(alrec.get("meta") or {})
         # upgrade: 0.2.1 renamed 'process' to 'origin'
         if "process" in metadatadict:
             metadatadict["origin"] = metadatadict["process"]
             del metadatadict["process"]
-        metadatadict["status"] = metadatadict.get("status", "created")
+        metadatadict.setdefault("status", "created")
+        # filter to known Metadata fields to avoid TypeError on SB 0.4 extension keys
+        known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
+        metadatadict = {k: v for k, v in metadatadict.items() if k in known_fields}
         meta = Metadata(**metadatadict)
-        if not alrec["source"]:
-            print(f"No source selectors for {alrec['meta']['id']}: dropping record.")
+        if not alrec.get("source"):
+            print(f"No source selectors for {meta.id or '(unknown)'}: dropping record.")
             return None
         alrec["source"] = [macula_unprefixer(src) for src in alrec["source"]]
+        # SB 0.4 records have no per-record id; synthesize from first source selector
+        if not meta.id:
+            meta.id = alrec["source"][0]
         sourceref = AlignmentReference(document=self.sourcedoc, selectors=alrec["source"])
         trgselectors = [self._targetid(tid) for tid in alrec["target"]]
         targetref = AlignmentReference(document=self.targetdoc, selectors=trgselectors)
@@ -89,12 +96,16 @@ class AlignmentsReader:
 
     def read_alignments(self, keeprejected: bool = False) -> AlignmentGroup:
         with self.alignmentset.alignmentpath.open("rb") as f:
-            agroupdict = json.load(f)
-            if isinstance(agroupdict, list):
+            data = json.load(f)
+            if isinstance(data, list):
                 raise ValueError(
                     f"{self.alignmentset.alignmentpath} should be an object, not a list."
                 )
-            meta = Metadata(**agroupdict["meta"])
+            # Handle SB 0.4 groups wrapper
+            agroupdict = data["groups"][0] if "groups" in data else data
+            known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
+            raw_meta = {k: v for k, v in agroupdict["meta"].items() if k in known_fields}
+            meta = Metadata(**raw_meta)
             assert agroupdict["type"] == self.altype.type, (
                 f"Unexpected alignment type: {agroupdict['type']}"
             )

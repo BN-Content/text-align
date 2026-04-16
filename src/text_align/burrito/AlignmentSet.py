@@ -22,6 +22,7 @@ class AlignmentSet:
     langdatapath: Path = Path()
     alternateid: str = "manual"
     reponame: str = ""
+    alignmentpath_override: Path | None = None
     # computed in __post_init__
     sourcepath: Path = Path()
     targetpath: Path = Path()
@@ -41,9 +42,12 @@ class AlignmentSet:
             self.langdatapath / f"targets/{self.targetid}/{self.canon}_{self.targetid}.tsv"
         )
         assert self.targetpath.exists(), f"No such target TSV: {self.targetpath}"
-        self.alignmentpath = (
-            self.langdatapath / f"alignments/{self.targetid}/{self.identifier}.json"
-        )
+        if self.alignmentpath_override is not None:
+            self.alignmentpath = self.alignmentpath_override
+        else:
+            self.alignmentpath = (
+                self.langdatapath / f"alignments/{self.targetid}/{self.identifier}.json"
+            )
         assert self.alignmentpath.exists(), f"No such alignment file: {self.alignmentpath}"
         self.tomlpath = self.langdatapath / f"alignments/{self.targetid}/{self.identifier}.toml"
 

@@ -252,7 +252,7 @@ class LLMClient:
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
         max_retries: int = 2,
-    ) -> tuple[dict[str, list[dict]], list[str]]:
+    ) -> tuple[dict[str, list[dict]], list[str], int]:
         """Call the LLM for a verse batch with forced tool use, validate, and retry.
 
         Args:
@@ -394,6 +394,7 @@ class LLMClient:
 
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
+        total_sanitized = 0
 
         for attempt in range(max_retries + 1):
             response = self._client.messages.create(

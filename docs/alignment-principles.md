@@ -770,7 +770,27 @@ Conjunctions (καί, δέ, γάρ, οὖν, ἀλλά, etc.) and particles (μ�
 
 **Simple negation** (οὐ, οὐκ, οὐχ, μή) → "not," "no": **primary** 1:1 record.
 
+**Discontiguous verb alignment with intervening negation:** when a negation particle is present, its English correspondent ("not") belongs in the negation record — not as a secondary token in the verb record. Because English places "not" between the auxiliary and the main verb, the verb record is typically **discontiguous**: the auxiliary and main verb are non-adjacent target token IDs (listed in document order), with the negation record interleaved between them. This is expected and correct.
+
+Example — John 4:2, Ἰησοῦς αὐτὸς οὐκ ἐβάπτιζεν → "Jesus himself was not baptizing":
+
+| Source | Target | Note |
+|---|---|---|
+| Ἰησοῦς | "Jesus" | primary |
+| αὐτός | "himself" | primary |
+| οὐκ | "not" | primary 1:1 |
+| ἐβάπτιζεν | "was … baptizing" | "baptizing" primary; "was" secondary — discontiguous target ("not" intervenes) |
+
 **Emphatic negation** (οὐ μή + subjunctive → "will never," "certainly not," "by no means"): both particles are **primary** source tokens in a single record against the English emphatic expression. English auxiliaries ("will") are **secondary** to the main verb, not part of the negation record.
+
+**Compound negation tokens** — some Greek negation forms are single tokens encoding negation together with another element. All English words in the rendered phrase are **primary** to that single token:
+
+| Greek token | Typical rendering | Note |
+|---|---|---|
+| οὐδέ / μηδέ | "and not," "neither," "nor" | All words primary |
+| οὐκέτι / μηκέτι | "no longer," "no more" | All words primary |
+| οὔπω / μήπω | "not yet" | All words primary |
+| οὔτε | "neither … nor" (correlative) | Align to "neither" or "nor" as applicable |
 
 **Double negative with οὐδείς/μηδείς** (e.g. οὐδείς … οὐ μή → "nobody will ever"): accept the counterintuitive link. Greek double negation is emphatic, not canceling; the translation absorbs the extra negation into English "ever." The polarity shift is real but the mapping is clean — alignment documents what the translation did, not semantic equivalence.
 

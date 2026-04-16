@@ -39,23 +39,51 @@ lexical equivalents.
 
 Every token in a record is either primary or secondary.
 
-**Primary:** the token carries the core lexical or semantic content of the alignment.
+**Primary:** the translation token directly corresponds to the Greek lexeme — it is the
+word the translator chose to render that Greek word's meaning.
 
-**Secondary:** the token exists in the translation as a consequence of Greek grammar,
-not as the correspondent of a separate Greek word. Common cases: prepositions implied
-by case, helping verbs, supplied pronouns (subject implied by a verb's person/number),
-copulas implied by context. Secondary target tokens are listed in meta.secondary.target;
-secondary source tokens in meta.secondary.source.
+**Secondary:** the translation token exists because of grammar *implied by* the primary
+source token, not because of a separate Greek word. The secondary token has no Greek
+lexeme of its own in this record.
 
-The practical test: ask "what Greek word is the reason this translation word exists?"
-— If the answer is a specific Greek token, the translation word is primary to that token.
-— If the answer is Greek grammar but no specific token, the translation word is secondary
-  within the record whose primary source token governs that grammar.
-— If there is no Greek correspondent at all, the token may be NEQ (see below).
+The test: identify which English word translates the Greek lexeme. That word is primary.
+Any other words in the record that exist only because of grammar implied by that Greek
+token are secondary. Words that translate a *different* Greek token belong in a separate
+record — do not pull them into this record as secondary.
+
+Common secondary cases with examples:
+
+- **Supplied subject pronoun** — ἦλθεν (3sg aorist) → "he came":
+  primary: "came" (translates the verb); secondary: "he" (subject from the verb's
+  person/number ending, no separate pronoun token)
+
+- **Auxiliary verb** — ἐδίδασκεν (imperfect) → "was teaching":
+  primary: "teaching" (translates the verb stem); secondary: "was" (aspect encoded in
+  the Greek morphology, not a separate token)
+
+- **Infinitive marker** — λαβεῖν → "to take":
+  primary: "take" (translates the Greek infinitive); secondary: "to" (Greek has a bare
+  infinitive form; the marker is implied by the mood)
+
+- **Article or indefinite marker** — ἄνθρωπος (anarthrous noun) → "a man":
+  primary: "man" (translates the noun); secondary: "a" (definiteness encoded in the
+  anarthrous form, not a separate token)
+
+- **Genitive/possessive** — τέκνα θεοῦ → "children of God":
+  Record for τέκνα: source=[τέκνα], target=["children"] — primary: "children"
+  Record for θεοῦ:  source=[θεοῦ],  target=["of", "God"] — primary: "God",
+                    secondary: "of" (expresses the genitive case of θεοῦ, not a
+                    separate Greek token). Note: "children" belongs in the τέκνα
+                    record, not as secondary here.
 
 Every record must have at least one primary token on each populated side. A token cannot
 be the only token on its side of a record and also be marked secondary — secondary tokens
 are secondary *to* a primary token in the same record.
+
+Concretely: if a record has exactly one target token, do not put it in
+meta.secondary.target. If a record has exactly one source token, do not put it in
+meta.secondary.source. Secondary is only meaningful when at least one primary token
+remains on that side after secondary tokens are removed.
 
 ## NEQ (NON-EQUIVALENT)
 
@@ -164,10 +192,13 @@ A subject pronoun supplied in the translation but absent from the Greek ("it was
 written", "he was sent") is also secondary — the subject is implied by the verb's
 person, number, and discourse context, not by a separate Greek token.
 
-γέγραπται → "it is written" illustrates both: "written" is primary; "is" and "it" are
-both secondary. The "it" here is the implied subject of the passive — distinct from the
-dummy subject "it" of impersonal verbs (see IMPERSONAL VERBS below), which has no Greek
-correspondent at all and is NEQ rather than secondary.\
+The "it" of a passive supplied subject is secondary, not NEQ — contrast the dummy "it"
+of impersonal verbs (see IMPERSONAL VERBS below), which has no Greek correspondent at
+all and is NEQ rather than secondary.
+
+Example — γέγραπται → "it is written":
+  source=[γέγραπται], target=["it", "is", "written"]
+    primary: "written";  secondary: "is", "it"\
 """
 
 IMPERSONAL_BLOCK = """\
@@ -189,7 +220,14 @@ normal way.
 
 Contrast with the passive supplied subject (see PASSIVE VOICE above): a passive supplied
 "it" is secondary because it represents the implied grammatical subject of the verb. An
-impersonal "it" is NEQ because no subject — implied or otherwise — exists in the Greek.\
+impersonal "it" is NEQ because no subject — implied or otherwise — exists in the Greek.
+
+Example — δεῖ → "it is necessary":
+  source=[δεῖ], target=["is", "necessary"] — "is" and "necessary" both primary to δεῖ
+  "it" → NEQ target (no Greek correspondent; no subject is implied)
+
+  Or rendered compactly:
+  source=[δεῖ], target=["must"] — primary\
 """
 
 PARTICIPLE_BLOCK = """\
@@ -209,11 +247,20 @@ participle's aspect and context. A subject pronoun supplied in the translation i
 secondary if implied by the participle's case agreement; otherwise treat as you would
 any supplied pronoun.
 
+Example — ἀκούσας → "when he heard":
+  source=[ἀκούσας], target=["when", "he", "heard"]
+    primary: "heard";  secondary: "when" (circumstantial relationship), "he" (implied from participle's case)
+
 ### Genitive absolute
 
 The participle and its genitive nominal element together express a circumstantial idea.
 Align each to its translation correspondent. Supplied conjunctions or adverbs
 introducing the rendered clause are secondary to the participle, as above.
+
+Example — αὐτοῦ λαλοῦντος → "while he was speaking":
+  source=[αὐτοῦ],      target=["he"]                       — primary (explicit genitive subject)
+  source=[λαλοῦντος], target=["while", "was", "speaking"]
+    primary: "speaking";  secondary: "while", "was"
 
 ### Substantive participle
 
@@ -221,6 +268,10 @@ The article, if present in both source and translation, aligns per the article
 guidelines. The participial phrase ("who believes", "that were spoken") is primary to
 the Greek participle. Relative pronouns or connectors introduced in translation ("who",
 "that", "which") are secondary to the participle.
+
+Example — anarthrous πιστεύων → "whoever believes":
+  source=[πιστεύων], target=["whoever", "believes"]
+    primary: "believes";  secondary: "whoever"
 
 ### Discourse particles near a participle
 
@@ -243,6 +294,17 @@ infinitive completes the main verb's meaning. The infinitive is primary to the G
 infinitive; "to" is secondary — it is an English grammatical marker with no separate
 Greek correspondent.
 
+### Complementary infinitive
+
+After verbs of ability, necessity, or desire (δύναμαι, θέλω, and similar), the
+infinitive completes the main verb's meaning. The infinitive is primary to the Greek
+infinitive; "to" is secondary — it is an English grammatical marker with no separate
+Greek correspondent.
+
+Example — θέλω ἐλθεῖν → "I want to come":
+  source=[ἐλθεῖν], target=["to", "come"]
+    primary: "come";  secondary: "to"
+
 ### Articular infinitive
 
 When the infinitive is preceded by an article (τό + infinitive), the article governs
@@ -260,11 +322,21 @@ the infinitive phrase ("in order to", "so as to"), that conjunction is secondary
 infinitive — it makes explicit a relationship the Greek encodes through the infinitive's
 function alone.
 
+Example — ἦλθεν σῴζειν → "he came to save":
+  source=[σῴζειν], target=["to", "save"]
+    primary: "save";  secondary: "to"
+
 ### Indirect discourse
 
 An infinitive in indirect discourse (after verbs of saying, believing, knowing) aligns
 to its translation correspondent. Supplied conjunctions ("that") introducing the
-indirect statement are secondary to the governing verb, not the infinitive.\
+indirect statement are secondary to the governing verb, not the infinitive.
+
+Example — λέγει αὐτὸν εἶναι → "says that he is":
+  source=[λέγει],  target=["says"]        — primary
+  source=[αὐτόν], target=["he"]           — primary
+  source=[εἶναι], target=["that", "is"]
+    primary: "is" (infinitive → finite verb in English);  secondary: "that"\
 """
 
 HINA_BLOCK = """\
@@ -291,7 +363,14 @@ aligns to the Greek verb in the ἵνα clause normally.
 
 When a translator absorbs ἵνα's force into the surrounding structure without a distinct
 conjunction or infinitive marker, ἵνα → NEQ source. Apply this only when you are
-confident no translation element corresponds to ἵνα's purpose or result force.\
+confident no translation element corresponds to ἵνα's purpose or result force.
+
+Example — ἵνα σωθῇ → "that he might be saved":
+  source=[ἵνα], target=["that"] — primary 1:1
+
+Example — ἵνα σῴζῃ → "to save" (bare infinitive rendering):
+  source=[ἵνα],   target=["to"]   — primary (purpose marker, not an infinitive marker)
+  source=[σῴζῃ], target=["save"] — primary\
 """
 
 COMPARATIVE_BLOCK = """\
@@ -317,7 +396,13 @@ it governs in the comparison.
 
 The same principle applies: degree word + base form ("most clearly", "greatest") are
 both primary to the single Greek superlative token. An elative superlative (very +
-adjective, "very great") follows the same pattern.\
+adjective, "very great") follows the same pattern.
+
+Example — μείζων → "greater":
+  source=[μείζων], target=["greater"] — primary 1:1
+
+Example — ἁγιώτατος → "most holy":
+  source=[ἁγιώτατος], target=["most", "holy"] — both primary\
 """
 
 AUTOS_BLOCK = """\
@@ -348,7 +433,14 @@ and the supplied subject pronoun, if any, is secondary.
 
 When αὐτός is not rendered explicitly in the translation — absorbed into verbal
 morphology or omitted for stylistic reasons — consider NEQ source, but only when
-confident it has no translation equivalent in the surrounding clause.\
+confident it has no translation equivalent in the surrounding clause.
+
+Example — αὐτός (intensive) with noun → "Jesus himself":
+  source=[αὐτός],   target=["himself"] — primary
+  source=[Ἰησοῦς], target=["Jesus"]   — primary (separate record)
+
+Example — αὐτόν (pronoun) → "him":
+  source=[αὐτόν], target=["him"] — primary 1:1\
 """
 
 HOTI_BLOCK = """\
@@ -375,7 +467,13 @@ quotation marks) rather than a word. In this use ὅτι → NEQ source.
 The function is usually clear from context: ὅτι recitativum follows a verb of saying
 or asking and introduces direct speech; ὅτι as conjunction introduces an indirect
 statement or a causal clause. When the distinction is genuinely ambiguous, prefer the
-conjunction reading and align if a correspondent exists.\
+conjunction reading and align if a correspondent exists.
+
+Example — ὅτι (conjunction) → "that":
+  source=[ὅτι], target=["that"] — primary 1:1
+
+Example — ὅτι (recitativum) → quotation marks only:
+  source=[ὅτι] → NEQ source\
 """
 
 CONDITIONAL_BLOCK = """\
@@ -412,7 +510,76 @@ words.
 ### Everything else
 
 Supplied pronouns, helping verbs, conjunctions, and particles within the protasis and
-apodosis follow the general guidelines for those constructions.\
+apodosis follow the general guidelines for those constructions.
+
+Example — εἰ → "if":
+  source=[εἰ], target=["if"] — primary 1:1
+
+Example — contrary-to-fact apodosis verb → "would have known":
+  source=[verb], target=["would", "have", "known"]
+    all three primary — Greek encodes counterfactuality through mood and tense;
+    English distributes that meaning across modal + auxiliary + main verb\
+"""
+
+
+NEGATION_BLOCK = """\
+## NEGATION
+
+### Simple negation
+
+Greek negation particles (οὐ, οὐκ, οὐχ, μή and related forms) are discrete tokens
+separate from the verb they negate. Look for the English "not" or "no" and align it
+directly to the negation particle as a **primary** 1:1 record.
+
+The negated verb aligns to its English correspondent — main verb and auxiliaries —
+**without** including "not." Because English places "not" between the auxiliary and
+the main verb, the verb record is typically **discontiguous**: the auxiliary and main
+verb are non-adjacent target tokens (listed in document order), with "not" belonging
+to its own record between them. This discontiguous verb record is expected and correct.
+
+Do not include "not" as a secondary token within the verb record. It has its own
+source token and belongs in its own record.
+
+Example — οὐκ ἔρχεται → "is not coming":
+  source=[οὐκ],       target=["not"]              — primary 1:1
+  source=[ἔρχεται],  target=["is", "coming"]
+    primary: "coming";  secondary: "is"
+    (discontiguous — "not" intervenes in English but belongs to the negation record)
+
+### Emphatic negation
+
+οὐ μή + subjunctive expresses strong emphatic negation. Translations render it as
+"will never," "certainly not," "by no means," or similar. Both particles are
+**primary** in a single record against the emphatic English expression. "will" belongs
+in the verb record as secondary, not in the negation record.
+
+Example — οὐ μή + subjunctive verb → "will never [verb]":
+  source=[οὐ, μή],  target=["never"]            — both particles primary
+  source=[verb],    target=["will", "[verb]"]
+    primary: main verb;  secondary: "will"
+
+### Compound negation tokens
+
+Some Greek forms are single tokens encoding negation together with another element.
+All English words in the rendered phrase are **primary** to the single Greek token:
+
+- οὐδέ / μηδέ ("and not," "neither," "nor") — single token aligns to full phrase
+- οὐκέτι / μηκέτι ("no longer," "no more") — single token aligns to full phrase
+- οὔπω / μήπω ("not yet") — single token aligns to full phrase
+- οὔτε ("neither … nor," correlative) — aligns to whichever element corresponds
+
+Example — οὐκέτι → "no longer":
+  source=[οὐκέτι], target=["no", "longer"] — both primary
+
+### Negation with negative pronouns
+
+When a clause contains both a negative pronoun (οὐδείς → "nobody," "no one";
+μηδείς → "no one," "nothing") and emphatic negation (οὐ μή), Greek double negation
+is emphatic, not canceling. English absorbs the extra negation into "ever" or "at all."
+
+- οὐδείς / μηδείς → "nobody" / "no one" / "nothing" — primary
+- οὐ + μή → "ever" / "at all" — both primary in a single record
+- Main verb auxiliaries → secondary to the verb, not part of the negation record\
 """
 
 
@@ -431,6 +598,7 @@ BLOCK_ORDER = [
     "AUTOS",
     "HOTI",
     "CONDITIONAL",
+    "NEGATION",
 ]
 
 CONDITIONAL_BLOCKS: dict[str, str] = {
@@ -443,6 +611,7 @@ CONDITIONAL_BLOCKS: dict[str, str] = {
     "AUTOS":       AUTOS_BLOCK,
     "HOTI":        HOTI_BLOCK,
     "CONDITIONAL": CONDITIONAL_BLOCK,
+    "NEGATION":    NEGATION_BLOCK,
 }
 
 # When a tag is detected, these additional tags are always included
@@ -454,6 +623,16 @@ FORCED_INCLUSIONS: dict[str, set[str]] = {
 # Text forms that identify impersonal verb uses (expand as needed)
 _IMPERSONAL_FORMS: frozenset[str] = frozenset({
     "δεῖ", "ἔξεστιν", "ἔξεστι", "πρέπει", "συμφέρει", "δοκεῖ",
+})
+
+# Negation particle text forms (simple, emphatic, and compound single-token)
+_NEGATION_FORMS: frozenset[str] = frozenset({
+    "οὐ", "οὐκ", "οὐχ", "οὐχί",
+    "μή", "μήτε",
+    "οὐδέ", "μηδέ",
+    "οὐκέτι", "μηκέτι",
+    "οὔπω", "μήπω",
+    "οὔτε",
 })
 
 
@@ -506,6 +685,8 @@ def detect_phenomena(source_tokens: list[Source]) -> set[str]:
             tags.add("AUTOS")
         if text in _IMPERSONAL_FORMS:
             tags.add("IMPERSONAL")
+        if text in _NEGATION_FORMS:
+            tags.add("NEGATION")
 
     return tags
 

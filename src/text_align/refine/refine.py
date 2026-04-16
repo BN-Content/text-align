@@ -27,6 +27,11 @@ from .source import load_source_verses
 
 ALIGNMENT_SOURCE_TYPES = ["ACAI", "SIM-MIGRATED", "DIFF-MIGRATED"]
 
+# Diagnostic threshold for all-secondary sanitization.
+# Warn if sanitized records are >= this fraction of total AND >= the minimum count.
+_SANITIZE_WARN_PCT = 0.02   # 2%
+_SANITIZE_WARN_MIN = 5      # absolute floor to suppress noise on small runs
+
 _SOURCES_DIR = ROOT / "data" / "sources"
 
 
@@ -202,6 +207,7 @@ def process_corpus(
 
     all_records: list[dict] = []
     all_errors: list[str] = []
+    total_sanitized = 0
 
     for batch_num, batch_start in enumerate(range(0, len(verse_ids), batch_size), 1):
         batch_ids = verse_ids[batch_start:batch_start + batch_size]
@@ -229,7 +235,7 @@ def process_corpus(
         system_msg  = build_system_prompt(phenomena, target_language)
         user_msg    = build_batch_message(verse_batch, target_language)
 
-        results, errors = llm_client.call_batch(
+        results, errors, n_san = llm_client.call_batch(
             system_prompt=system_msg,
             user_message=user_msg,
             verse_source_ids=verse_source_ids,
@@ -246,6 +252,7 @@ def process_corpus(
         for recs in results.values():
             all_records.extend(recs)
         all_errors.extend(errors)
+        total_sanitized += n_san
 
     # Write output
     output   = build_output_alignment(all_records, corpus_id, target_edition, creator)
@@ -261,6 +268,15 @@ def process_corpus(
     print(f"\n  → {out_path}")
     print(f"     {n_reg} records | "
           f"NEQ source: {n_neq_s} | NEQ target: {n_neq_t}")
+
+    if total_sanitized:
+        san_pct = total_sanitized / n_reg * 100 if n_reg else 0
+        san_msg = f"     {total_sanitized} record(s) sanitized (all-secondary stripped) — {san_pct:.1f}% of records"
+        if total_sanitized >= _SANITIZE_WARN_MIN and san_pct >= _SANITIZE_WARN_PCT * 100:
+            print(f"  !! PROMPT REVIEW SUGGESTED: {san_msg.strip()}")
+        else:
+            print(san_msg)
+
     if all_errors:
         print(f"     {len(all_errors)} unresolved validation error(s):")
         for err in all_errors[:10]:

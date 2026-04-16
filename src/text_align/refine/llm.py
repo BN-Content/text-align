@@ -99,13 +99,19 @@ def validate_records(
     records: list[dict],
     source_ids: set[str],
     target_ids: set[str],
-) -> tuple[list[dict], list[str]]:
+) -> tuple[list[dict], list[str], int]:
     """Validate alignment records against the known token ID sets for a verse.
 
-    Invalid records are dropped.  Returns ``(valid_records, error_messages)``.
+    Invalid records are dropped.  Records where secondary exhausts all tokens on
+    one side are silently sanitized (secondary stripped) rather than dropped —
+    the alignment correspondence is valid; only the classification is wrong.
+
+    Returns ``(valid_records, error_messages, n_sanitized)`` where
+    ``n_sanitized`` is the count of records that had secondary stripped.
     """
     valid: list[dict] = []
     errors: list[str] = []
+    n_sanitized = 0
 
     for i, rec in enumerate(records):
         label = f"record {i + 1}"
@@ -153,9 +159,36 @@ def validate_records(
                 errors.extend(f"{label}: {e}" for e in rec_errors)
                 continue
 
+            # Sanitize: strip secondary lists that exhaust all tokens on one side.
+            # A record with no primary tokens on a side is invalid, but the
+            # alignment itself is correct — strip the bad classification only.
+            sec_src = list(secondary.get("source") or [])
+            sec_tgt = list(secondary.get("target") or [])
+            stripped = False
+            if src and set(sec_src) >= set(src):
+                sec_src = []
+                stripped = True
+            if tgt and set(sec_tgt) >= set(tgt):
+                sec_tgt = []
+                stripped = True
+
+            if stripped:
+                n_sanitized += 1
+                clean_secondary = {}
+                if sec_src:
+                    clean_secondary["source"] = sec_src
+                if sec_tgt:
+                    clean_secondary["target"] = sec_tgt
+                clean_meta = {k: v for k, v in meta.items() if k != "secondary"}
+                if clean_secondary:
+                    clean_meta["secondary"] = clean_secondary
+                rec = {**rec, "meta": clean_meta} if clean_meta else {
+                    k: v for k, v in rec.items() if k != "meta"
+                }
+
         valid.append(rec)
 
-    return valid, errors
+    return valid, errors, n_sanitized
 
 
 # ---------------------------------------------------------------------------
@@ -230,9 +263,10 @@ class LLMClient:
             max_retries: Maximum retry attempts on validation failure.
 
         Returns:
-            ``(results, unresolved_errors)`` where ``results`` maps
-            ``verse_id → list[record_dict]`` and ``unresolved_errors`` lists
-            any errors that remained after all retry attempts.
+            ``(results, unresolved_errors, n_sanitized)`` where ``results`` maps
+            ``verse_id → list[record_dict]``, ``unresolved_errors`` lists errors
+            that remained after all retries, and ``n_sanitized`` is the count of
+            records that had an all-secondary side stripped.
         """
         if self.provider == "openai":
             return self._call_openai(
@@ -264,6 +298,7 @@ class LLMClient:
 
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
+        total_sanitized = 0
 
         for attempt in range(max_retries + 1):
             response = self._client.chat.completions.create(
@@ -292,11 +327,12 @@ class LLMClient:
 
                 verse_id = data.get("verse_id", "")
                 records  = data.get("records", [])
-                valid, errs = validate_records(
+                valid, errs, n_san = validate_records(
                     records,
                     verse_source_ids.get(verse_id, set()),
                     verse_target_ids.get(verse_id, set()),
                 )
+                total_sanitized += n_san
                 if valid:
                     results[verse_id] = valid
                 if errs:
@@ -338,7 +374,7 @@ class LLMClient:
             messages.extend(tool_results)
             messages.append({"role": "user", "content": _build_retry_message(verse_errors)})
 
-        return results, all_errors
+        return results, all_errors, total_sanitized
 
     # ------------------------------------------------------------------
     # Anthropic
@@ -376,11 +412,12 @@ class LLMClient:
             for block in tool_use_blocks:
                 verse_id = block.input.get("verse_id", "")
                 records  = block.input.get("records", [])
-                valid, errs = validate_records(
+                valid, errs, n_san = validate_records(
                     records,
                     verse_source_ids.get(verse_id, set()),
                     verse_target_ids.get(verse_id, set()),
                 )
+                total_sanitized += n_san
                 if valid:
                     results[verse_id] = valid
                 if errs:
@@ -412,4 +449,4 @@ class LLMClient:
                 ],
             })
 
-        return results, all_errors
+        return results, all_errors, total_sanitized

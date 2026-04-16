@@ -53,6 +53,10 @@ The practical test: ask "what Greek word is the reason this translation word exi
   within the record whose primary source token governs that grammar.
 — If there is no Greek correspondent at all, the token may be NEQ (see below).
 
+Every record must have at least one primary token on each populated side. A token cannot
+be the only token on its side of a record and also be marked secondary — secondary tokens
+are secondary *to* a primary token in the same record.
+
 ## NEQ (NON-EQUIVALENT)
 
 Some tokens have no correspondent in the other language — positively determined. These

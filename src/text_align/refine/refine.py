@@ -215,7 +215,7 @@ def process_corpus(
 
     all_records: list[dict] = []
     all_errors: list[str] = []
-    total_sanitized = 0
+    all_san_details: list[str] = []
 
     for batch_num, batch_start in enumerate(range(0, len(verse_ids), batch_size), 1):
         batch_ids = verse_ids[batch_start:batch_start + batch_size]
@@ -243,7 +243,7 @@ def process_corpus(
         system_msg  = build_system_prompt(phenomena, target_language)
         user_msg    = build_batch_message(verse_batch, target_language)
 
-        results, errors, n_san = llm_client.call_batch(
+        results, errors, san_details = llm_client.call_batch(
             system_prompt=system_msg,
             user_message=user_msg,
             verse_source_ids=verse_source_ids,
@@ -260,7 +260,7 @@ def process_corpus(
         for recs in results.values():
             all_records.extend(recs)
         all_errors.extend(errors)
-        total_sanitized += n_san
+        all_san_details.extend(san_details)
 
     # Write output
     output   = build_output_alignment(all_records, corpus_id, target_edition, creator)
@@ -277,11 +277,15 @@ def process_corpus(
     print(f"     {n_reg} records | "
           f"NEQ source: {n_neq_s} | NEQ target: {n_neq_t}")
 
-    if total_sanitized:
-        san_pct = total_sanitized / n_reg * 100 if n_reg else 0
-        san_msg = f"     {total_sanitized} record(s) sanitized (all-secondary stripped) — {san_pct:.1f}% of records"
-        if total_sanitized >= _SANITIZE_WARN_MIN and san_pct >= _SANITIZE_WARN_PCT * 100:
+    n_sanitized = len(all_san_details)
+    if n_sanitized:
+        san_pct = n_sanitized / n_reg * 100 if n_reg else 0
+        san_msg = f"     {n_sanitized} record(s) sanitized — {san_pct:.1f}% of records"
+        if n_sanitized >= _SANITIZE_WARN_MIN and san_pct >= _SANITIZE_WARN_PCT * 100:
             print(f"  !! PROMPT REVIEW SUGGESTED: {san_msg.strip()}")
+            print(f"     Sanitization details:")
+            for detail in all_san_details:
+                print(f"       {detail}")
         else:
             print(san_msg)
 

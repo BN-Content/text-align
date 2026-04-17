@@ -61,6 +61,11 @@ src/text_align/
 ├── align/               # Alignment creation
 │   ├── acai_common.py   # AcaiEntity, matching logic, trabina, populate_alignment
 │   └── acai.py          # acai-align CLI
+├── refine/              # LLM-assisted alignment refinement
+│   ├── source.py        # Source token loader
+│   ├── prompt.py        # System prompt and batch message assembly
+│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic)
+│   └── refine.py        # refine-alignment CLI
 └── render/
     └── html.py          # render-alignment CLI
 ```
@@ -116,9 +121,43 @@ acai-align \
   [--acai-types people places groups deities]
 ```
 
+### `refine-alignment`
+
+Refine alignment candidates using an LLM (OpenAI or Anthropic). Reads candidate files from the `exp/` directory (one or more of `ACAI`, `SIM-MIGRATED`, `DIFF-MIGRATED`), assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+
+Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment depending on the chosen provider.
+
+```
+refine-alignment \
+  --target-language eng \
+  --target-edition OENGB \
+  --target-tsv-dir  path/to/alignments-eng/data/targets/OENGB \
+  --output-dir      path/to/alignments-eng/exp/OENGB/LLM-REFINED \
+  [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED] \
+  [--corpora ot nt] \
+  [--llm-provider openai] \
+  [--llm-model gpt-5.4-mini] \
+  [--batch-size 5] \
+  [--max-retries 2] \
+  [--verse 41004003]              # single verse (testing)
+  [--verse-range 41004001 41020]  # BCV range
+```
+
+The `--output-dir` is also used to derive the `exp/` root for candidate lookup: candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Output files are written to `--output-dir` as `WLCM-<edition>-manual.json` (OT) and `SBLGNT-<edition>-manual.json` (NT).
+
 ### `render-alignment`
 
-Generate per-chapter HTML alignment visualizations. Each file shows target tokens above their aligned source tokens with subscript word-position indices. Optionally annotates ACAI entities.
+Generate per-chapter HTML alignment visualizations in SBL Reverse Interlinear style. Each verse is a row of inline-block cells (translation order). Each cell shows the target token above its aligned source token(s) with subscript word-position indices. Relationship symbols follow the SBL RI convention:
+
+| Symbol | Meaning |
+|--------|---------|
+| → / ← | Non-anchor token; source shown in the adjacent anchor cell |
+| ▶N | Token separated from its group by intervening tokens |
+| • | Target token with no source correspondent |
+| ≠ | Token positively confirmed as non-equivalent (NEQ) |
+| ‹ … › | Multiple source tokens behind one target token/phrase |
+
+Secondary (grammatically implied) tokens are rendered in italic grey. Idiomatic records are rendered in italic. ACAI entity tokens are highlighted.
 
 ```
 render-alignment \
@@ -126,6 +165,7 @@ render-alignment \
   --alignment-edition BONBV \
   --lang-data-path path/to/alignments-spa/data \
   --output-dir path/to/alignments-spa/viz \
+  [--alignment-dir path/to/exp/BONBV/LLM-REFINED]  # override default alignments/ path
   [--acai-data-dir C:/git/BibleAquifer/ACAI] \
   [--r2l]
 ```

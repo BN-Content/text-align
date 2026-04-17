@@ -190,13 +190,21 @@ def process_corpus(
         candidate_ids.update(recs.keys())
     verse_ids = sorted(candidate_ids & set(source_verses.keys()))
 
+    is_nt_corpus = corpus == "nt"
+
     if single_verse:
+        verse_book = int(single_verse[:2])
+        if (verse_book > 39) != is_nt_corpus:
+            return  # verse is from the other testament; nothing to do
         verse_ids = [single_verse] if single_verse in verse_ids else []
         if not verse_ids:
             print(f"Verse {single_verse} not found in candidate set — skipping.")
             return
     elif verse_range:
         start, end = verse_range
+        start_book = int(start[:2])
+        if (start_book > 39) != is_nt_corpus:
+            return  # range is from the other testament; nothing to do
         verse_ids = [v for v in verse_ids if start <= v <= end]
         if not verse_ids:
             print(f"No verses found in range {start}–{end} — skipping.")

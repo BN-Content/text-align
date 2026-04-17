@@ -83,8 +83,10 @@ class Metadata:
     coverage: str = ""
     description: str = ""
     id: str = ""
+    is_idiom: bool = False
     note: str = ""
     origin: str = ""
+    secondary: dict = field(default_factory=dict)
     status: str = ""
     _fieldnames: tuple[str, ...] = ()
 

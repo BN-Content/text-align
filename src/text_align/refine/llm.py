@@ -121,6 +121,14 @@ def validate_records(
         is_neq = meta.get("rel") == "NEQ"
 
         if is_neq:
+            # secondary is meaningless on a NEQ record — strip it silently
+            if meta.get("secondary"):
+                clean_meta = {k: v for k, v in meta.items() if k != "secondary"}
+                rec = {**rec, "meta": clean_meta} if clean_meta else {
+                    k: v for k, v in rec.items() if k != "meta"
+                }
+                meta = clean_meta
+                n_sanitized += 1
             # Exactly one non-empty array
             if bool(src) == bool(tgt):
                 errors.append(
@@ -188,7 +196,31 @@ def validate_records(
 
         valid.append(rec)
 
-    return valid, errors, n_sanitized
+    # Cross-record: deduplicate target IDs (non-NEQ only — each target token
+    # should appear in exactly one alignment record per verse).
+    seen_targets: set[str] = set()
+    deduped: list[dict] = []
+    for rec in valid:
+        if (rec.get("meta") or {}).get("rel") == "NEQ":
+            deduped.append(rec)
+            continue
+        tgts = list(rec.get("target") or [])
+        dup = [t for t in tgts if t in seen_targets]
+        if dup:
+            clean = [t for t in tgts if t not in seen_targets]
+            if not clean:
+                errors.append(
+                    f"record dropped: all target ID(s) already used in this verse: "
+                    f"{', '.join(dup)}"
+                )
+                continue
+            rec = {**rec, "target": clean}
+            n_sanitized += 1
+            tgts = clean
+        seen_targets.update(tgts)
+        deduped.append(rec)
+
+    return deduped, errors, n_sanitized
 
 
 # ---------------------------------------------------------------------------

@@ -62,6 +62,8 @@ class AlignmentsReader:
         self.targetdoc = Document(docid=self.alignmentset.targetid, scheme=self.scheme)
         self.badrecords: Optional[dict[str, list[BadRecord]]] = defaultdict(list)
         self.rejected: dict[str, AlignmentRecord] = {}
+        self.neq_source: frozenset[str] = frozenset()
+        self.neq_target: frozenset[str] = frozenset()
         self.alignmentgroup: AlignmentGroup = self.read_alignments(keeprejected=keeprejected)
 
     def _targetid(self, targetid: str) -> str:
@@ -101,8 +103,14 @@ class AlignmentsReader:
                 raise ValueError(
                     f"{self.alignmentset.alignmentpath} should be an object, not a list."
                 )
-            # Handle SB 0.4 groups wrapper
-            agroupdict = data["groups"][0] if "groups" in data else data
+            # Handle SB 0.4 groups wrapper; extract group-level NEQ sets
+            if "groups" in data:
+                agroupdict = data["groups"][0]
+                neq = agroupdict["meta"].get("nonEquivalent", {})
+                self.neq_source = frozenset(neq.get("source", []))
+                self.neq_target = frozenset(neq.get("target", []))
+            else:
+                agroupdict = data
             known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
             raw_meta = {k: v for k, v in agroupdict["meta"].items() if k in known_fields}
             meta = Metadata(**raw_meta)

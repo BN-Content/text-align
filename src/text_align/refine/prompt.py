@@ -76,6 +76,16 @@ Common secondary cases with examples:
                     separate Greek token). Note: "children" belongs in the τέκνα
                     record, not as secondary here.
 
+- **Case-implied preposition** — when Greek has article + noun in any case and English
+  renders it as prep + "the" + noun, the article aligns to "the" (per the article rules)
+  and the preposition is secondary to the noun whose case implies it. This applies for
+  any case: dative (on/to/for), genitive (of/from), locative (in/among), etc.
+  Example: τοῖς σάββασιν → "on the Sabbath":
+    source=[τοῖς],     target=["the"] — primary (article → "the")
+    source=[σάββασιν], target=["on", "Sabbath"] — primary: "Sabbath"; secondary: "on"
+  The same principle holds when the noun is anarthrous: the preposition is still
+  secondary to the noun, with no article record.
+
 Every record must have at least one primary token on each populated side. A token cannot
 be the only token on its side of a record and also be marked secondary — secondary tokens
 are secondary *to* a primary token in the same record.
@@ -92,6 +102,9 @@ are recorded as NEQ: a record with one populated array and one empty array,
 meta.rel: "NEQ". NEQ is a positive determination, not a default. Tokens whose
 correspondence is simply unknown or undetermined are left unrecorded. Use NEQ only
 when you are confident no correspondence exists.
+
+NEQ records must not include meta.secondary. A token either has no correspondent
+(NEQ) or has a primary/secondary relationship with another token — not both.
 
 ## SURFACE FORM DIFFERENCES
 
@@ -151,12 +164,29 @@ Examples:
 
 Greek has a definite article (ὁ/ἡ/τό); English has both definite ("the") and indefinite
 ("a/an"). Four cases arise:
-- Articular noun → translated with article: English "the" is primary to the Greek
-  article token.
-- Anarthrous noun → translated with "a/an": English article is secondary to the noun
-  (no Greek article token exists).
-- Articular noun → translated without article: the Greek article token → NEQ source.
-- Anarthrous noun → translated without article: no special action needed.
+
+- **Articular noun → English has "the":** create a separate 1:1 record aligning the
+  Greek article token to the English "the" (both primary). The noun has its own record.
+
+- **Articular noun → English has no "the":** the article is secondary to its noun —
+  **never NEQ**. A Greek article (POS code T-*) must never appear as a NEQ source
+  record. It either gets its own 1:1 record with "the" (case above), or it is secondary
+  in the noun's record. There is no third option.
+  Example: τὴν χεῖρα → "hand" (English has no article):
+    source=[τὴν, χεῖρα], target=["hand"], meta.secondary.source=[τὴν]
+  Example: οἱ ἀδελφοί αὐτοῦ → "his brothers":
+    source=[οἱ, ἀδελφοί], target=["brothers"], meta.secondary.source=[οἱ]
+
+- **Anarthrous noun → English has "a/an":** include the English article as a secondary
+  target token in the noun's record (no Greek article token exists to align it to).
+  Example: ἄνθρωπος → "a man": source=[ἄνθρωπος], target=["a","man"],
+    meta.secondary.target=["a"]
+
+- **Anarthrous noun → English has no article:** no special handling needed.
+
+- **Articular noun → English has prep + "the" + noun:** the article aligns to "the"
+  as a 1:1 primary record; the preposition is secondary to the noun (see case-implied
+  preposition rule in TOKEN ROLES above). Do not align the article to the preposition.
 
 ## CONJUNCTIONS AND PARTICLES
 

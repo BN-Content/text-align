@@ -123,7 +123,7 @@ acai-align \
 
 ### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI or Anthropic). Reads candidate files from the `exp/` directory (one or more of `ACAI`, `SIM-MIGRATED`, `DIFF-MIGRATED`), assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI or Anthropic). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
 Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment depending on the chosen provider.
 
@@ -133,17 +133,28 @@ refine-alignment \
   --target-edition OENGB \
   --target-tsv-dir  path/to/alignments-eng/data/targets/OENGB \
   --output-dir      path/to/alignments-eng/exp/OENGB/LLM-REFINED \
-  [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED] \
+  [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
+  [--from-scratch]               # align without candidates; no --alignment-sources needed
   [--corpora ot nt] \
   [--llm-provider openai] \
   [--llm-model gpt-5.4-mini] \
+  [--reasoning-effort high]      # OpenAI gpt-5.x only: none/minimal/low/medium/high
   [--batch-size 5] \
   [--max-retries 2] \
   [--verse 41004003]              # single verse (testing)
   [--verse-range 41004001 41020]  # BCV range
 ```
 
-The `--output-dir` is also used to derive the `exp/` root for candidate lookup: candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Output files are written to `--output-dir` as `WLCM-<edition>-manual.json` (OT) and `SBLGNT-<edition>-manual.json` (NT).
+Candidate source types (default: all five — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERGED, FASTALIGN):
+- `ACAI` — entity alignments from `acai-align`
+- `SIM-MIGRATED` — similarity-migrated alignments from `sim-migrate`
+- `DIFF-MIGRATED` — diff-migrated alignments from `diff-migrate`
+- `MERGED` — a pre-merged candidate file
+- `FASTALIGN` — fast_align output
+
+Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely and align from the source/target token universe alone. Output files are written to `--output-dir` as `WLCM-<edition>-manual.json` (OT) and `SBLGNT-<edition>-manual.json` (NT).
+
+`--reasoning-effort` uses the OpenAI `/v1/responses` API (required for reasoning models). Omit for standard chat models.
 
 ### `render-alignment`
 

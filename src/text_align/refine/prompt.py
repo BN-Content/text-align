@@ -37,74 +37,69 @@ lexical equivalents.
 
 ## TOKEN ROLES
 
-Every token in a record is either primary or secondary.
+Every token in a record is either primary or secondary. For each English word, ask:
 
-**Primary:** the translation token directly corresponds to the Greek lexeme — it is the
-word the translator chose to render that Greek word's meaning.
+**Why does this word exist in the translation?**
 
-**Secondary:** the translation token exists because of grammar *implied by* the primary
-source token, not because of a separate Greek word. The secondary token has no Greek
-lexeme of its own in this record.
+- **It translates a specific Greek lexeme** → it is **primary** in that lexeme's record.
+- **It exists because of grammar implied by the primary Greek token** (morphological
+  person/number, case, aspect, mood, definiteness) with no separate Greek word of its
+  own → it is **secondary** in the same record as the primary it depends on.
+- **It translates a different Greek token** → it belongs in a **separate record** for
+  that token, not as secondary here.
 
-The test: identify which English word translates the Greek lexeme. That word is primary.
-Any other words in the record that exist only because of grammar implied by that Greek
-token are secondary. Words that translate a *different* Greek token belong in a separate
-record — do not pull them into this record as secondary.
+Find the English word that translates the Greek lexeme — that is primary. Every other
+word in the same record exists only because of grammar encoded in that Greek token; those
+are secondary. If a word could be primary to a different Greek token in the verse, give
+it its own record instead.
 
-Common secondary cases with examples:
+Common secondary cases:
 
-- **Supplied subject pronoun** — ἦλθεν (3sg aorist) → "he came":
-  primary: "came" (translates the verb); secondary: "he" (subject from the verb's
-  person/number ending, no separate pronoun token)
+- **Supplied subject pronoun** — ἦλθεν (3sg) → "he came":
+  "came" primary; "he" secondary (person/number in verb ending)
 
 - **Auxiliary verb** — ἐδίδασκεν (imperfect) → "was teaching":
-  primary: "teaching" (translates the verb stem); secondary: "was" (aspect encoded in
-  the Greek morphology, not a separate token)
+  "teaching" primary; "was" secondary (aspect in morphology)
 
 - **Infinitive marker** — λαβεῖν → "to take":
-  primary: "take" (translates the Greek infinitive); secondary: "to" (Greek has a bare
-  infinitive form; the marker is implied by the mood)
+  "take" primary; "to" secondary (Greek infinitive has no separate marker)
 
-- **Article or indefinite marker** — ἄνθρωπος (anarthrous noun) → "a man":
-  primary: "man" (translates the noun); secondary: "a" (definiteness encoded in the
-  anarthrous form, not a separate token)
+- **Indefinite article** — ἄνθρωπος (anarthrous) → "a man":
+  "man" primary; "a" secondary (definiteness encoded in anarthrous form)
 
-- **Genitive/possessive** — τέκνα θεοῦ → "children of God":
-  Record for τέκνα: source=[τέκνα], target=["children"] — primary: "children"
-  Record for θεοῦ:  source=[θεοῦ],  target=["of", "God"] — primary: "God",
-                    secondary: "of" (expresses the genitive case of θεοῦ, not a
-                    separate Greek token). Note: "children" belongs in the τέκνα
-                    record, not as secondary here.
+- **Case-implied preposition** — θεοῦ → "of God":
+  "God" primary; "of" secondary (genitive case of θεοῦ, no separate Greek token)
+  Note: other words from different records (e.g. "children") are never secondary here.
 
-- **Case-implied preposition** — when Greek has article + noun in any case and English
-  renders it as prep + "the" + noun, the article aligns to "the" (per the article rules)
-  and the preposition is secondary to the noun whose case implies it. This applies for
-  any case: dative (on/to/for), genitive (of/from), locative (in/among), etc.
-  Example: τοῖς σάββασιν → "on the Sabbath":
-    source=[τοῖς],     target=["the"] — primary (article → "the")
-    source=[σάββασιν], target=["on", "Sabbath"] — primary: "Sabbath"; secondary: "on"
-  The same principle holds when the noun is anarthrous: the preposition is still
-  secondary to the noun, with no article record.
+- **Case-implied preposition with article** — τοῖς σάββασιν → "on the Sabbath":
+  source=[τοῖς],     target=["the"]            — article → "the", primary 1:1
+  source=[σάββασιν], target=["on", "Sabbath"]  — "Sabbath" primary; "on" secondary
+
+**Structural constraints:**
 
 Every record must have at least one primary token on each populated side. A token cannot
-be the only token on its side of a record and also be marked secondary — secondary tokens
-are secondary *to* a primary token in the same record.
+be the only token on its side and also be marked secondary.
 
-Concretely: if a record has exactly one target token, do not put it in
-meta.secondary.target. If a record has exactly one source token, do not put it in
-meta.secondary.source. Secondary is only meaningful when at least one primary token
-remains on that side after secondary tokens are removed.
+Each target token ID must appear in exactly one record per verse. Do not assign the same
+target token to two records, even as secondary in one and primary in another.
 
 ## NEQ (NON-EQUIVALENT)
 
-Some tokens have no correspondent in the other language — positively determined. These
-are recorded as NEQ: a record with one populated array and one empty array,
-meta.rel: "NEQ". NEQ is a positive determination, not a default. Tokens whose
-correspondence is simply unknown or undetermined are left unrecorded. Use NEQ only
-when you are confident no correspondence exists.
+For each token without an obvious alignment, ask:
 
-NEQ records must not include meta.secondary. A token either has no correspondent
-(NEQ) or has a primary/secondary relationship with another token — not both.
+**Am I certain this token has no correspondent anywhere in the translation of this verse?**
+
+- **YES, certain** → NEQ: a record with the token in one array and the other array
+  empty, plus `meta.rel: "NEQ"`.
+- **Uncertain / cannot determine** → leave the token **unrecorded**. Do not use NEQ
+  as a fallback for difficulty or uncertainty.
+
+Unrecorded tokens are normal — they mean the correspondence was not determined.
+NEQ tokens make a positive claim that no correspondence exists. Using NEQ when you
+are merely unsure corrupts the data.
+
+NEQ records must not include meta.secondary. A token is either non-equivalent (NEQ)
+or has a primary/secondary relationship with another token — never both.
 
 ## SURFACE FORM DIFFERENCES
 
@@ -163,30 +158,73 @@ Examples:
 ## ARTICLES
 
 Greek has a definite article (ὁ/ἡ/τό); English has both definite ("the") and indefinite
-("a/an"). Four cases arise:
+("a/an"). For every Greek article token (POS T-*), ask one question:
 
-- **Articular noun → English has "the":** create a separate 1:1 record aligning the
-  Greek article token to the English "the" (both primary). The noun has its own record.
+**Does this article have a specific English word as its direct correspondent?**
 
-- **Articular noun → English has no "the":** the article is secondary to its noun —
-  **never NEQ**. A Greek article (POS code T-*) must never appear as a NEQ source
-  record. It either gets its own 1:1 record with "the" (case above), or it is secondary
-  in the noun's record. There is no third option.
-  Example: τὴν χεῖρα → "hand" (English has no article):
-    source=[τὴν, χεῖρα], target=["hand"], meta.secondary.source=[τὴν]
-  Example: οἱ ἀδελφοί αὐτοῦ → "his brothers":
-    source=[οἱ, ἀδελφοί], target=["brothers"], meta.secondary.source=[οἱ]
+**YES → give it a primary 1:1 record for that word (see branch A below).**
+**NO  → it is secondary to its head word. Never NEQ. Never omitted. Always secondary.**
 
-- **Anarthrous noun → English has "a/an":** include the English article as a secondary
-  target token in the noun's record (no Greek article token exists to align it to).
-  Example: ἄνθρωπος → "a man": source=[ἄνθρωπος], target=["a","man"],
-    meta.secondary.target=["a"]
+**Critical prohibition: a Greek article NEVER corresponds to a preposition.**
+English prepositions ("of", "to", "for", "with", "from", "in", "among", etc.) that
+arise from a noun's or participle's case are secondary to that noun or participle —
+not to the article. The article is either "the" (branch A) or secondary to its head
+(branch B), regardless of what case it is in.
 
-- **Anarthrous noun → English has no article:** no special handling needed.
+### Branch A — article has an English correspondent
 
-- **Articular noun → English has prep + "the" + noun:** the article aligns to "the"
-  as a 1:1 primary record; the preposition is secondary to the noun (see case-implied
-  preposition rule in TOKEN ROLES above). Do not align the article to the preposition.
+- **→ "the":** 1:1 primary record for the article; noun/adjective/participle gets its
+  own separate record.
+  Example: ὁ λόγος → "the word":
+    source=[ὁ], target=["the"] — primary 1:1
+    source=[λόγος], target=["word"] — primary 1:1
+
+- **→ possessive pronoun ("his", "her", "their", "its"):** 1:1 primary — but ONLY when
+  no explicit Greek possessive pronoun (αὐτοῦ, αὐτῆς, αὐτῶν, μου, σου, ἡμῶν, etc.)
+  is present. Greek uses the article with body parts and personal relationships where
+  English supplies a possessive.
+  Example (no explicit pronoun): τοὺς ὀφθαλμούς → "their eyes":
+    source=[τούς],       target=["their"] — primary 1:1
+    source=[ὀφθαλμούς], target=["eyes"]  — primary 1:1
+  Counter-example (explicit αὐτῶν present): τοὺς ὀφθαλμοὺς αὐτῶν → "their eyes":
+    source=[αὐτῶν],             target=["their"] — primary 1:1 (pronoun takes "their")
+    source=[τούς, ὀφθαλμούς],  target=["eyes"]  — primary: "eyes"; secondary.source: [τούς]
+
+- **→ "those" / "the one" (substantive participle):** When an article + participle
+  forms a noun phrase and English renders it with "those who", "the one who", "whoever",
+  etc., the article → "those"/"the one" (primary 1:1); the relative pronoun "who" is
+  secondary to the participle. Any case-implied preposition ("to those who", "for those
+  who") is secondary to the **participle**, not to the article.
+  Example: τοῖς πιστεύουσιν → "to those who believe":
+    source=[τοῖς],         target=["those"]          — primary 1:1
+    source=[πιστεύουσιν],  target=["who", "believe"] — primary: "believe"; secondary: "who"
+    "to" → secondary to πιστεύουσιν (dative case-implied)
+
+### Branch B — article has no English correspondent → secondary to its head
+
+Apply independently to each article in the verse. The head is always the word the
+article grammatically modifies:
+
+- **Articular noun, no English "the":** secondary to the noun.
+  Example: τὴν χεῖρα → "hand":
+    source=[τήν, χεῖρα], target=["hand"] — primary: "hand"; secondary.source: [τήν]
+
+- **Attributive adjective:** secondary to the adjective (not the noun), applied to
+  each article separately.
+  Example: τὴν γῆν τὴν καλήν → "good soil":
+    source=[τήν, γῆν],   target=["soil"] — primary: "soil"; secondary.source: [τήν]
+    source=[τήν, καλήν], target=["good"] — primary: "good"; secondary.source: [τήν]
+
+- **Articular infinitive:** secondary to the infinitive.
+  Example: ἐν τῷ σπείρειν → "while sowing":
+    source=[τῷ, σπείρειν], target=["sowing"] — primary: "sowing"; secondary.source: [τῷ]
+
+### Anarthrous noun → English has "a/an"
+
+No Greek article token exists; include the English "a/an" as a secondary target in
+the noun's record.
+  Example: ἄνθρωπος → "a man":
+    source=[ἄνθρωπος], target=["a", "man"] — primary: "man"; secondary.target: ["a"]
 
 ## CONJUNCTIONS AND PARTICLES
 
@@ -200,6 +238,23 @@ conjunction/particle or a content word, the content word has priority.
 When a phrase-level correspondence has no token-level equivalent, use
 meta.is_idiom: true. All tokens in the record are implicitly primary; meta.secondary
 does not apply to idiom records.
+
+**Idiom is a last resort.** Always prefer splitting a phrase into standard non-idiom
+records before reaching for meta.is_idiom. If you can find a reasonable primary
+correspondence for individual tokens — even if the match is loose — use standard records.
+Use idiom only when no plausible token-level decomposition exists.
+
+**Function-word records are never idioms.** When the source side of a record consists
+entirely of conjunctions (POS C-*), particles (POS X-*), or prepositions — even when
+aligning to multiple target tokens — do not mark it as an idiom. These function words
+are semantically flexible and need not match their literal glosses to be primary
+alignments. Instead, produce a standard record with the translation correspondent(s)
+as primary tokens.
+
+Example — καὶ ἐγένετο → "Now it came to pass":
+  Wrong:  source=[καὶ, ἐγένετο], target=["Now","it","came","to","pass"], meta.is_idiom: true
+  Better: source=[καὶ], target=["Now"] — primary 1:1 (καὶ here marks a narrative transition)
+          source=[ἐγένετο], target=["it","came","to","pass"] — primary: "came"; secondary: "it", "to", "pass"
 
 ## VERBAL ASPECT
 
@@ -277,52 +332,50 @@ Example — δεῖ → "it is necessary":
 PARTICIPLE_BLOCK = """\
 ## PARTICIPIAL CONSTRUCTIONS
 
-Greek participles are verbal adjectives — they carry both verbal content (tense, voice,
-a relationship to the main clause) and nominal or adjectival function. Translations
-render them in several ways, and the alignment approach follows the function.
+Greek participles are verbal adjectives. First identify the participle's syntactic role,
+then apply the rule for that role.
 
-### Circumstantial participle
+**What syntactic function is the participle serving?**
 
-When a participle is rendered as a subordinate temporal, causal, or concessive clause
-("while he was speaking", "after they had left", "because he saw"), the conjunction or
-adverb introducing the clause ("while", "after", "because") is secondary to the
-participle — it makes explicit the logical relationship that Greek encodes in the
-participle's aspect and context. A subject pronoun supplied in the translation is
-secondary if implied by the participle's case agreement; otherwise treat as you would
-any supplied pronoun.
+### Adverbial (circumstantial)
 
-Example — ἀκούσας → "when he heard":
+The participle modifies the main verb, expressing time, cause, concession, or manner.
+English renders it as a subordinate clause introduced by a conjunction or adverb
+("when", "while", "after", "because", "although").
+
+The introductory conjunction/adverb is **secondary** to the participle — it makes
+explicit the logical relationship Greek encodes in the participle's aspect and context.
+A supplied subject pronoun is secondary if implied by the participle's case agreement.
+
   source=[ἀκούσας], target=["when", "he", "heard"]
-    primary: "heard";  secondary: "when" (circumstantial relationship), "he" (implied from participle's case)
+    primary: "heard";  secondary: "when", "he"
 
 ### Genitive absolute
 
-The participle and its genitive nominal element together express a circumstantial idea.
-Align each to its translation correspondent. Supplied conjunctions or adverbs
-introducing the rendered clause are secondary to the participle, as above.
+The participle and its genitive nominal element together express a circumstantial idea
+external to the main clause. Align each element to its translation correspondent.
+Supplied conjunctions or adverbs introducing the rendered clause are secondary to the
+participle.
 
-Example — αὐτοῦ λαλοῦντος → "while he was speaking":
-  source=[αὐτοῦ],      target=["he"]                       — primary (explicit genitive subject)
+  source=[αὐτοῦ],     target=["he"]                      — primary (explicit subject)
   source=[λαλοῦντος], target=["while", "was", "speaking"]
     primary: "speaking";  secondary: "while", "was"
 
-### Substantive participle
+### Substantive
 
-The article, if present in both source and translation, aligns per the article
-guidelines. The participial phrase ("who believes", "that were spoken") is primary to
-the Greek participle. Relative pronouns or connectors introduced in translation ("who",
-"that", "which") are secondary to the participle.
+The participle functions as a noun phrase. Apply ARTICLES rules to the article if
+present (→ "the"/"those" if English has it; secondary to participle otherwise).
+Relative pronouns or connectors ("who", "that", "which") introduced in English are
+secondary to the participle.
 
-Example — anarthrous πιστεύων → "whoever believes":
   source=[πιστεύων], target=["whoever", "believes"]
     primary: "believes";  secondary: "whoever"
 
-### Discourse particles near a participle
+### Discourse particle adjacent to a participle
 
-When a discourse particle (δέ, καί, οὖν) appears in the Greek near a participle but
-has no correspondent in the translation's rendering of the participial clause, consider
-NEQ — but only when you are confident the particle genuinely has no translation
-equivalent anywhere in the surrounding clause structure.\
+When δέ, καί, οὖν or similar appears near a participle but has no correspondent in the
+participle's rendering, consider NEQ — only when confident the particle has no
+translation equivalent anywhere in the surrounding clause.\
 """
 
 INFINITIVE_BLOCK = """\
@@ -338,25 +391,26 @@ infinitive completes the main verb's meaning. The infinitive is primary to the G
 infinitive; "to" is secondary — it is an English grammatical marker with no separate
 Greek correspondent.
 
-### Complementary infinitive
-
-After verbs of ability, necessity, or desire (δύναμαι, θέλω, and similar), the
-infinitive completes the main verb's meaning. The infinitive is primary to the Greek
-infinitive; "to" is secondary — it is an English grammatical marker with no separate
-Greek correspondent.
-
 Example — θέλω ἐλθεῖν → "I want to come":
   source=[ἐλθεῖν], target=["to", "come"]
     primary: "come";  secondary: "to"
 
 ### Articular infinitive
 
-When the infinitive is preceded by an article (τό + infinitive), the article governs
-the infinitive's case function. The article aligns per the article guidelines; the
-infinitive aligns to its translation correspondent. Prepositions governing the articular
-infinitive (εἰς τό, ἐν τῷ, πρὸς τό) express purpose, time, or manner — the
-preposition is primary to the Greek preposition; "to" or other English connectors are
-secondary.
+When an infinitive is preceded by an article (τό, τῷ, τοῦ), the article marks the
+infinitive's case function in the clause. English has no separate word for this article,
+so the article is **secondary to the infinitive** — it does not get its own record and
+is never NEQ.
+
+Prepositions governing the articular infinitive (εἰς τό, ἐν τῷ, πρὸς τό) align to
+their English correspondents as primary records. Auxiliaries rendered from the
+infinitive's aspect ("was sowing", "to be doing") are secondary to the infinitive.
+
+Example — ἐν τῷ σπείρειν αὐτόν → "as he was sowing":
+  source=[ἐν],            target=["as"]              — primary (preposition)
+  source=[αὐτόν],         target=["he"]              — primary (accusative subject)
+  source=[τῷ, σπείρειν],  target=["was", "sowing"]
+    primary: "sowing";  secondary.source: [τῷ];  secondary.target: ["was"]
 
 ### Purpose and result infinitive (without ἵνα)
 
@@ -452,39 +506,39 @@ Example — ἁγιώτατος → "most holy":
 AUTOS_BLOCK = """\
 ## αὐτός
 
-αὐτός has three distinct uses in Greek, and its alignment depends on which function
-it is serving in the clause.
+First identify the grammatical function αὐτός is serving in the clause:
 
-### Intensive ("himself", "herself", "itself", "themselves")
+**What is αὐτός doing here?**
 
-When αὐτός is used intensively, it adds emphasis to a noun or pronoun already present.
-The intensive pronoun in translation ("himself", "the man himself") is primary to
-αὐτός.
+### Intensive (attributive position — adds emphasis to a noun or pronoun)
 
-### Reflexive ("himself", "herself", "themselves" as object)
+αὐτός stands beside a noun/pronoun to emphasize it ("the man himself", "Jesus
+himself"). Align to the intensive pronoun; the noun it modifies gets its own record.
 
-When αὐτός functions reflexively, the reflexive pronoun in translation is primary to
-αὐτός.
+  source=[αὐτός],   target=["himself"] — primary 1:1
+  source=[Ἰησοῦς], target=["Jesus"]   — primary 1:1 (separate record)
 
-### Third-person pronoun ("him", "her", "it", "them", "his", "her", "their")
+### Reflexive (object refers back to the subject)
 
-When αὐτός serves as a simple third-person pronoun, the corresponding pronoun in
-translation is primary to αὐτός. When the translation reinstates a proper name or
-noun for clarity ("Jesus" instead of "he"), the reinstated name is primary to αὐτός
-and the supplied subject pronoun, if any, is secondary.
+αὐτός functions as a reflexive pronoun. Align to the reflexive in translation
+("himself", "herself", "themselves").
 
-### αὐτός with no translation correspondent
+  source=[αὐτόν], target=["himself"] — primary 1:1
 
-When αὐτός is not rendered explicitly in the translation — absorbed into verbal
-morphology or omitted for stylistic reasons — consider NEQ source, but only when
-confident it has no translation equivalent in the surrounding clause.
+### Third-person pronoun (most common use)
 
-Example — αὐτός (intensive) with noun → "Jesus himself":
-  source=[αὐτός],   target=["himself"] — primary
-  source=[Ἰησοῦς], target=["Jesus"]   — primary (separate record)
+αὐτός serves as a simple third-person pronoun. Align to the corresponding pronoun
+("him", "her", "it", "them", "his", "her", "their"). When the translation substitutes
+a proper name for clarity, the name is primary to αὐτός; any additionally supplied
+subject pronoun is secondary.
 
-Example — αὐτόν (pronoun) → "him":
-  source=[αὐτόν], target=["him"] — primary 1:1\
+  source=[αὐτόν], target=["him"]   — primary 1:1
+  source=[αὐτοῦ], target=["Jesus"] — primary (name substituted for pronoun)
+
+### No translation correspondent
+
+αὐτός is absorbed into surrounding structure or stylistically omitted → NEQ source,
+but only when confident no translation element corresponds to it.\
 """
 
 HOTI_BLOCK = """\

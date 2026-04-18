@@ -61,6 +61,19 @@ nt_corpus: SBLGNT
 creator: text-align
 
 # ---------------------------------------------------------------------------
+# refine-alignment settings
+# ---------------------------------------------------------------------------
+
+# Candidate source types to load (default: all five).
+# Override here to restrict to a subset, e.g. for a well-aligned English edition
+# where only a merged candidate file exists:
+# alignment_sources: [MERGED]
+
+# OpenAI reasoning effort for gpt-5.x models (none/minimal/low/medium/high).
+# Omit or leave blank to use the model's default.
+# reasoning_effort: high
+
+# ---------------------------------------------------------------------------
 # sim-migrate settings
 # ---------------------------------------------------------------------------
 

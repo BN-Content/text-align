@@ -13,9 +13,13 @@ Symbols follow the SBL Reverse Interlinear convention:
   ≠         Token confirmed to have no equivalent in the other language (NEQ)
   ‹ … ›    Multiple Greek words behind a single English word/phrase
 
-Secondary (grammatically implied) tokens are rendered in italic grey.
-Idiomatic records are rendered in italic.
+Idiomatic records collapse into a single merged cell: all target tokens are
+joined in the top row and all source tokens are shown in the bottom row.
+If the target tokens are discontiguous, the longest contiguous run is the
+anchor (source displayed there); remaining runs show arrow pointers.
 ACAI entity tokens are highlighted.
+NEQ tokens (source or target) are rendered in grey; all other symbols use
+the default text color.
 
 CLI entry point: ``render-alignment``
 """
@@ -55,7 +59,7 @@ body  { font-family: serif; font-size: 14px; }
 .src  { display: block; font-size: 90%; }
 .neq  { color: #bbb; }
 .idiom{ font-style: italic; }
-.arr  { font-size: 65%; color: #aaa; }
+
 .sub  { font-size: 60%; }
 .acai-hl  { background: #d0e8ff; border-radius: 2px; padding: 0 1px; }
 .acai-tag { font-size: 55%; font-family: Arial, sans-serif; line-height: 2;
@@ -245,6 +249,100 @@ def _render_cell(
     return f"<div class='cell'>{tgt_row}{src_row}</div>"
 
 
+def _contiguous_runs(
+    ordered_tids: list[str],
+    verse_tids: list[str],
+) -> list[list[str]]:
+    """Split ordered_tids into contiguous groups based on their positions in verse_tids."""
+    if not ordered_tids:
+        return []
+    pos = {t: i for i, t in enumerate(verse_tids)}
+    runs: list[list[str]] = []
+    current = [ordered_tids[0]]
+    for prev, curr in zip(ordered_tids, ordered_tids[1:]):
+        if pos.get(curr, -1) == pos.get(prev, -2) + 1:
+            current.append(curr)
+        else:
+            runs.append(current)
+            current = [curr]
+    runs.append(current)
+    return runs
+
+
+def _precompute_idiom_cells(
+    token: AlignmentToken,
+    verse_tids: list[str],
+    is_r2l: bool,
+    acai_entities: dict[str, list[AcaiEntity]],
+    tag_acai: bool,
+    out: dict[str, tuple[str | None, list[str]]],
+) -> None:
+    """Populate out[target_id] = (html | None, source_ids) for an idiom record.
+
+    The anchor cell gets merged target text and all source tokens; other cells
+    in the anchor run are set to (None, []) so they are skipped.  Tokens in
+    non-anchor runs get arrow cells.
+    """
+    idiom_tids = [t for t in verse_tids if t in token.targets]
+    if not idiom_tids:
+        return
+
+    runs = _contiguous_runs(idiom_tids, verse_tids)
+    # Anchor run = longest; ties broken by rightmost for LTR, leftmost for RTL
+    anchor_run = max(
+        runs,
+        key=lambda r: (len(r), verse_tids.index(r[-1]) if not is_r2l else -verse_tids.index(r[0])),
+    )
+    anchor_display = anchor_run[0] if is_r2l else anchor_run[-1]
+
+    # ── anchor cell ───────────────────────────────────────────────────────
+    combined_text = " ".join(token.targets.get(t, "") for t in anchor_run)
+    tgt_inner = combined_text
+    if tag_acai and token.sources:
+        acai_hits = [ae for sid in token.sources for ae in acai_entities.get(sid, [])]
+        if acai_hits:
+            tag_str = " ".join(ae.id for ae in acai_hits)
+            tgt_inner = (
+                f"<span class='acai-hl'>{combined_text}</span>"
+                f"<span class='acai-tag'>{tag_str}</span>"
+            )
+    tgt_row = f"<div class='tgt idiom'>{tgt_inner}</div>"
+
+    if token.sources:
+        parts: list[str] = []
+        for sid in sorted(token.sources):
+            idx = _source_index(sid, anchor_display)
+            parts.append(f"{token.sources[sid]}<sub class='sub'>{idx}</sub>")
+        inner = "&nbsp;".join(parts)
+        greek_html = f"‹{inner}›" if len(parts) > 1 else inner
+        src_row = f"<div class='src'>{greek_html}</div>"
+    else:
+        src_row = "<div class='src'>&nbsp;</div>"
+
+    out[anchor_display] = (f"<div class='cell'>{tgt_row}{src_row}</div>", list(token.sources.keys()))
+
+    for t in anchor_run:
+        if t != anchor_display:
+            out[t] = (None, [])
+
+    # ── arrow cells for non-anchor runs ──────────────────────────────────
+    tri = "◀" if is_r2l else "▶"
+    for run in runs:
+        if run is anchor_run:
+            continue
+        for t in run:
+            tgt_text = token.targets.get(t, "")
+            if anchor_display in verse_tids and t in verse_tids:
+                ap = verse_tids.index(anchor_display)
+                mp = verse_tids.index(t)
+                arrow = ("→" if mp < ap else "←") if not is_r2l else ("←" if mp < ap else "→")
+            else:
+                arrow = "→"
+            tgt_row_a = f"<div class='tgt idiom'>{tgt_text}</div>"
+            src_row_a = f"<div class='src'><span class='arr'>{arrow}</span></div>"
+            out[t] = (f"<div class='cell'>{tgt_row_a}{src_row_a}</div>", [])
+
+
 # ---------------------------------------------------------------------------
 # Verse rendering
 # ---------------------------------------------------------------------------
@@ -262,13 +360,33 @@ def write_verse(
 ) -> None:
     cells: list[dict] = []  # {"html": str, "source_ids": list[str]}
 
+    # Pre-compute merged cells for idiom records
+    idiom_cell_map: dict[str, tuple[str | None, list[str]]] = {}
+    seen_idiom_ids: set[int] = set()
     for target_id in verse_tids:
         tok_list = alignments.get(target_id, [])
         if not tok_list:
             continue
         tok = tok_list[0]
-        cell_html = _render_cell(target_id, tok, verse_tids, is_r2l, acai_entities, tag_acai)
-        cells.append({"html": cell_html, "source_ids": list(tok.sources.keys())})
+        if tok.is_idiom and id(tok) not in seen_idiom_ids:
+            seen_idiom_ids.add(id(tok))
+            _precompute_idiom_cells(tok, verse_tids, is_r2l, acai_entities, tag_acai, idiom_cell_map)
+
+    for target_id in verse_tids:
+        tok_list = alignments.get(target_id, [])
+        if not tok_list:
+            continue
+        tok = tok_list[0]
+        if tok.is_idiom:
+            if target_id not in idiom_cell_map:
+                continue
+            cell_html, src_ids = idiom_cell_map[target_id]
+            if cell_html is None:
+                continue  # absorbed into merged anchor cell
+            cells.append({"html": cell_html, "source_ids": src_ids})
+        else:
+            cell_html = _render_cell(target_id, tok, verse_tids, is_r2l, acai_entities, tag_acai)
+            cells.append({"html": cell_html, "source_ids": list(tok.sources.keys())})
 
     # insert unaligned / NEQ source tokens in positional order
     for unused_id in sorted(unused_source_ids, reverse=True):
@@ -285,8 +403,9 @@ def write_verse(
         is_neq = unused_id in neq_source
         marker = "≠" if is_neq else "•"
         src_cls = " class='neq'" if is_neq else ""
+        tgt_cls = " class='neq'" if is_neq else ""
 
-        tgt_row = f"<div class='tgt'><span class='neq'>{marker}</span></div>"
+        tgt_row = f"<div class='tgt'><span{tgt_cls}>{marker}</span></div>"
         src_row = (
             f"<div class='src'><span{src_cls}>"
             f"{source_text}<sub class='sub'>{idx_str}</sub></span></div>"

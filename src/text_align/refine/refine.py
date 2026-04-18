@@ -25,7 +25,7 @@ from .prompt import build_batch_message, build_system_prompt, detect_phenomena
 from .source import load_source_verses
 
 
-ALIGNMENT_SOURCE_TYPES = ["ACAI", "SIM-MIGRATED", "DIFF-MIGRATED"]
+ALIGNMENT_SOURCE_TYPES = ["ACAI", "SIM-MIGRATED", "DIFF-MIGRATED", "MERGED", "FASTALIGN", "REVISED"]
 
 # Diagnostic threshold for all-secondary sanitization.
 # Warn if sanitized records are >= this fraction of total AND >= the minimum count.
@@ -159,6 +159,7 @@ def process_corpus(
     creator: str,
     single_verse: str | None = None,
     verse_range: tuple[str, str] | None = None,
+    from_scratch: bool = False,
 ) -> None:
     """Process one corpus (``"nt"`` or ``"ot"``) and write its output JSON."""
     corpus_id = "SBLGNT" if corpus == "nt" else "WLCM"
@@ -172,23 +173,27 @@ def process_corpus(
 
     # Load candidate alignments for each requested source type
     candidates_by_type: dict[str, dict[str, list[dict]]] = {}
-    for src_type in alignment_sources:
-        path = exp_dir / src_type / f"{corpus_id}-{target_edition}-manual.json"
-        if path.exists():
-            print(f"Loading candidates: {path.name}")
-            candidates_by_type[src_type] = load_candidate_records(path)
-        else:
-            print(f"Candidate file not found, skipping: {path}")
+    if not from_scratch:
+        for src_type in alignment_sources:
+            path = exp_dir / src_type / f"{corpus_id}-{target_edition}-manual.json"
+            if path.exists():
+                print(f"Loading candidates: {path.name}")
+                candidates_by_type[src_type] = load_candidate_records(path)
+            else:
+                print(f"Candidate file not found, skipping: {path}")
 
-    if not candidates_by_type:
-        print("No candidate files found — skipping corpus.")
-        return
+        if not candidates_by_type:
+            print("No candidate files found — aligning from scratch.")
 
-    # Universe of verse IDs: present in candidates AND in source tokens
-    candidate_ids: set[str] = set()
-    for recs in candidates_by_type.values():
-        candidate_ids.update(recs.keys())
-    verse_ids = sorted(candidate_ids & set(source_verses.keys()))
+    # Universe of verse IDs.  With candidates: intersection of candidate verses and
+    # source tokens.  Without: every source verse that also has target tokens.
+    if candidates_by_type:
+        candidate_ids: set[str] = set()
+        for recs in candidates_by_type.values():
+            candidate_ids.update(recs.keys())
+        verse_ids = sorted(candidate_ids & set(source_verses.keys()))
+    else:
+        verse_ids = sorted(set(source_verses.keys()) & set(target_verses.keys()))
 
     is_nt_corpus = corpus == "nt"
 
@@ -198,7 +203,7 @@ def process_corpus(
             return  # verse is from the other testament; nothing to do
         verse_ids = [single_verse] if single_verse in verse_ids else []
         if not verse_ids:
-            print(f"Verse {single_verse} not found in candidate set — skipping.")
+            print(f"Verse {single_verse} not found in verse set — skipping.")
             return
     elif verse_range:
         start, end = verse_range
@@ -243,6 +248,7 @@ def process_corpus(
         system_msg  = build_system_prompt(phenomena, target_language)
         user_msg    = build_batch_message(verse_batch, target_language)
 
+        print(f"  Batch {batch_num}/{total_batches}: calling LLM ({len(batch_ids)} verses) ...", flush=True)
         results, errors, san_details = llm_client.call_batch(
             system_prompt=system_msg,
             user_message=user_msg,
@@ -263,6 +269,8 @@ def process_corpus(
         all_san_details.extend(san_details)
 
     # Write output
+    n_neq_recs = sum(1 for r in all_records if (r.get("meta") or {}).get("rel") == "NEQ")
+    print(f"  Records collected: {len(all_records)} total, {n_neq_recs} NEQ, {len(all_records) - n_neq_recs} regular")
     output   = build_output_alignment(all_records, corpus_id, target_edition, creator)
     group    = output["groups"][0]
     n_reg    = len(group["records"])
@@ -340,6 +348,10 @@ def parse_args() -> argparse.Namespace:
                    help="LLM provider (default: openai)")
     p.add_argument("--llm-model", default="gpt-5.4-mini",
                    help="Model name for the chosen provider (default: gpt-5.4-mini)")
+    p.add_argument("--reasoning-effort", default=None,
+                   choices=["none", "minimal", "low", "medium", "high"],
+                   help="OpenAI reasoning_effort (default: model default; "
+                        "none/minimal for speed, high for quality)")
     p.add_argument("--batch-size", type=int, default=5,
                    help="Verses per LLM call (default: 5)")
     p.add_argument("--max-retries", type=int, default=2,
@@ -350,6 +362,8 @@ def parse_args() -> argparse.Namespace:
                    help="Process a BCV range, e.g. --verse-range 41004001 41004020")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
+    p.add_argument("--from-scratch", action="store_true", default=False,
+                   help="Skip candidate loading and align entirely from source/target tokens")
 
     p.set_defaults(**config_defaults)
     args = p.parse_args()
@@ -371,15 +385,19 @@ def main() -> None:
     exp_dir = args.output_dir.parent
 
     print(f"refine-alignment: {args.target_edition} ({args.target_language})")
-    print(f"  Provider:  {args.llm_provider} / {args.llm_model}")
-    print(f"  Sources:   {', '.join(args.alignment_sources)}")
+    effort_str = f" (reasoning_effort={args.reasoning_effort})" if args.reasoning_effort else ""
+    print(f"  Provider:  {args.llm_provider} / {args.llm_model}{effort_str}")
+    if args.from_scratch:
+        print(f"  Sources:   (from scratch — no candidates)")
+    else:
+        print(f"  Sources:   {', '.join(args.alignment_sources)}")
     print(f"  Output:    {args.output_dir}")
     if args.verse:
         print(f"  Verse:     {args.verse} (single-verse mode)")
     elif args.verse_range:
         print(f"  Range:     {args.verse_range[0]}–{args.verse_range[1]}")
 
-    llm_client = LLMClient(provider=args.llm_provider, model=args.llm_model)
+    llm_client = LLMClient(provider=args.llm_provider, model=args.llm_model, reasoning_effort=args.reasoning_effort)
 
     for corpus in args.corpora:
         process_corpus(
@@ -397,6 +415,7 @@ def main() -> None:
             creator=args.creator,
             single_verse=args.verse,
             verse_range=tuple(args.verse_range) if args.verse_range else None,
+            from_scratch=args.from_scratch,
         )
 
 

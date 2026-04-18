@@ -339,6 +339,8 @@ Idiom records:
 
 **Prefer smaller alignment units.** `meta.is_idiom` is a last resort — use it only when word-level mapping genuinely breaks down and would be misleading, not merely when mappings are counterintuitive or involve unexpected polarity or form shifts. Where individual token mappings are workable, even if surprising, prefer them over a larger phrasal idiom record.
 
+**Function words are never idioms.** A source unit consisting entirely of conjunctions, particles, or prepositions (e.g. καὶ ἐγένετο) is never an idiom record. These elements have individual token-level correspondences or NEQ determinations; they must be aligned (or marked NEQ) individually. If no word-level mapping is workable, the correct outcome is NEQ — not `meta.is_idiom: true`.
+
 **Frequency varies by translation type.** More literal translations tend to preserve word-level correspondence, so idiom records will be rare. More dynamic or paraphrase translations restructure content more heavily, and genuine idiom records will be correspondingly more frequent. In both cases `meta.is_idiom` remains a last resort — the threshold does not change, only how often that threshold is reached.
 
 ---

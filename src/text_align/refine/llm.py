@@ -18,56 +18,71 @@ import os
 TOOL_NAME = "submit_verse_alignments"
 
 # Neutral tool schema; translated to provider-specific format before each call.
+# The tool accepts ALL verses in the batch in a single call so that providers
+# which only make one forced tool call per turn still return every verse.
 _NEUTRAL_TOOL_SCHEMA: dict = {
     "name": TOOL_NAME,
-    "description": "Submit refined alignment records for one verse in the batch.",
+    "description": (
+        "Submit refined alignment records for every verse in the batch. "
+        "Include one entry per verse — do not omit any verse from the batch."
+    ),
     "parameters": {
         "type": "object",
         "properties": {
-            "verse_id": {
-                "type": "string",
-                "description": "8-digit BCV verse ID, e.g. '41004003'.",
-            },
-            "records": {
+            "verses": {
                 "type": "array",
-                "description": "Alignment records for this verse.",
+                "description": "One entry per verse in the batch.",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "source": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Source token IDs.",
+                        "verse_id": {
+                            "type": "string",
+                            "description": "8-digit BCV verse ID, e.g. '41004003'.",
                         },
-                        "target": {
+                        "records": {
                             "type": "array",
-                            "items": {"type": "string"},
-                            "description": "Target token IDs.",
-                        },
-                        "meta": {
-                            "type": "object",
-                            "properties": {
-                                "secondary": {
-                                    "type": "object",
-                                    "properties": {
-                                        "source": {"type": "array", "items": {"type": "string"}},
-                                        "target": {"type": "array", "items": {"type": "string"}},
+                            "description": "Alignment records for this verse.",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "source": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Source token IDs.",
+                                    },
+                                    "target": {
+                                        "type": "array",
+                                        "items": {"type": "string"},
+                                        "description": "Target token IDs.",
+                                    },
+                                    "meta": {
+                                        "type": "object",
+                                        "properties": {
+                                            "secondary": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "source": {"type": "array", "items": {"type": "string"}},
+                                                    "target": {"type": "array", "items": {"type": "string"}},
+                                                },
+                                            },
+                                            "is_idiom": {"type": "boolean"},
+                                            "rel": {
+                                                "type": "string",
+                                                "enum": ["NEQ"],
+                                                "description": "NEQ = non-equivalent; internal use only.",
+                                            },
+                                        },
                                     },
                                 },
-                                "is_idiom": {"type": "boolean"},
-                                "rel": {
-                                    "type": "string",
-                                    "enum": ["NEQ"],
-                                    "description": "NEQ = non-equivalent; internal use only.",
-                                },
+                                "required": ["source", "target"],
                             },
                         },
                     },
-                    "required": ["source", "target"],
+                    "required": ["verse_id", "records"],
                 },
             },
         },
-        "required": ["verse_id", "records"],
+        "required": ["verses"],
     },
 }
 
@@ -80,6 +95,15 @@ def _openai_tool_schema(neutral: dict) -> dict:
             "description": neutral["description"],
             "parameters": neutral["parameters"],
         },
+    }
+
+
+def _openai_responses_tool_schema(neutral: dict) -> dict:
+    return {
+        "type": "function",
+        "name": neutral["name"],
+        "description": neutral["description"],
+        "parameters": neutral["parameters"],
     }
 
 
@@ -114,12 +138,48 @@ def validate_records(
     errors: list[str] = []
     san_details: list[str] = []
 
+    # Build a map from bare ID → prefixed source ID for normalization.
+    # Some models (reasoning mode) strip the canon prefix from source token IDs.
+    bare_to_src: dict[str, str] = {
+        sid[1:]: sid for sid in source_ids if sid and sid[0].isalpha()
+    }
+
     for i, rec in enumerate(records):
         label = f"record {i + 1}"
         src = rec.get("source") or []
         tgt = rec.get("target") or []
         meta = rec.get("meta") or {}
         is_neq = meta.get("rel") == "NEQ"
+
+        # Normalize bare source IDs: add canon prefix when the bare form matches a
+        # known source token and is not itself a target token.
+        normalized_src = [
+            bare_to_src[s] if (s not in source_ids and s in bare_to_src and s not in target_ids)
+            else s
+            for s in src
+        ]
+        if normalized_src != src:
+            san_details.append(
+                f"{label}: source IDs normalized (canon prefix added): "
+                f"{[s for s, n in zip(src, normalized_src) if s != n]!r}"
+            )
+            src = normalized_src
+            rec = {**rec, "source": src}
+
+        # If a record is flagged NEQ but has both source and target tokens, the model
+        # confused NEQ with a regular alignment — strip the NEQ flag and continue as
+        # a regular record.
+        if is_neq and src and tgt:
+            clean_meta = {k: v for k, v in meta.items() if k != "rel"}
+            rec = {**rec, "meta": clean_meta} if clean_meta else {
+                k: v for k, v in rec.items() if k != "meta"
+            }
+            meta = clean_meta
+            is_neq = False
+            san_details.append(
+                f"{label}: NEQ flag removed — both source and target present; "
+                f"treating as regular alignment"
+            )
 
         if is_neq:
             # secondary is meaningless on a NEQ record — strip it silently
@@ -261,13 +321,15 @@ class LLMClient:
     """
 
     #: Anthropic max_tokens for alignment batch calls.
-    ANTHROPIC_MAX_TOKENS = 16384
+    #: 32 000 gives Opus 4.7 headroom for thinking tokens before the tool call.
+    ANTHROPIC_MAX_TOKENS = 32000
 
-    def __init__(self, provider: str, model: str) -> None:
+    def __init__(self, provider: str, model: str, reasoning_effort: str | None = None) -> None:
         if provider not in ("openai", "anthropic"):
             raise ValueError(f"Unknown provider {provider!r}. Use 'openai' or 'anthropic'.")
         self.provider = provider
         self.model = model
+        self.reasoning_effort = reasoning_effort  # OpenAI only; None = use model default
         self._client = self._init_client()
 
     def _init_client(self):
@@ -328,6 +390,11 @@ class LLMClient:
         verse_target_ids: dict[str, set[str]],
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
+        if self.reasoning_effort is not None:
+            return self._call_openai_responses(
+                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+            )
+
         messages: list[dict] = [
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_message},
@@ -340,13 +407,25 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
-            response = self._client.chat.completions.create(
-                model=self.model,
-                messages=messages,
-                tools=tool_schema,
-                tool_choice=tool_choice,
-            )
-            assistant_msg = response.choices[0].message
+            try:
+                response = self._client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    tools=tool_schema,
+                    tool_choice=tool_choice,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"OpenAI API error (attempt {attempt + 1}): {exc}"
+                ) from exc
+
+            choice = response.choices[0]
+            if choice.finish_reason == "length":
+                print(
+                    f"  WARNING: response truncated (finish_reason=length) — "
+                    f"some verses may be missing. Reduce --batch-size."
+                )
+            assistant_msg = choice.message
             tool_calls = assistant_msg.tool_calls or []
 
             verse_errors: dict[str, list[str]] = {}
@@ -364,29 +443,30 @@ class LLMClient:
                     })
                     continue
 
-                verse_id = data.get("verse_id", "")
-                records  = data.get("records", [])
-                valid, errs, san_details = validate_records(
-                    records,
-                    verse_source_ids.get(verse_id, set()),
-                    verse_target_ids.get(verse_id, set()),
-                )
-                all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                if valid:
-                    results[verse_id] = valid
-                if errs:
-                    verse_errors[verse_id] = errs
-                    tool_results.append({
-                        "role": "tool",
-                        "content": "Validation errors:\n" + "\n".join(f"  - {e}" for e in errs),
-                        "tool_call_id": tc.id,
-                    })
-                else:
-                    tool_results.append({
-                        "role": "tool",
-                        "content": "ok",
-                        "tool_call_id": tc.id,
-                    })
+                tc_errors: list[str] = []
+                for entry in data.get("verses", []):
+                    verse_id = entry.get("verse_id", "")
+                    records  = entry.get("records", [])
+                    valid, errs, san_details = validate_records(
+                        records,
+                        verse_source_ids.get(verse_id, set()),
+                        verse_target_ids.get(verse_id, set()),
+                    )
+                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
+                    if valid:
+                        results[verse_id] = valid
+                    if errs:
+                        verse_errors[verse_id] = errs
+                        tc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": (
+                        "Validation errors:\n" + "\n".join(f"  - {e}" for e in tc_errors)
+                        if tc_errors else "ok"
+                    ),
+                })
 
             if not verse_errors or attempt == max_retries:
                 if verse_errors:
@@ -415,6 +495,113 @@ class LLMClient:
 
         return results, all_errors, all_san_details
 
+    def _call_openai_responses(
+        self,
+        system_prompt: str,
+        user_message: str,
+        verse_source_ids: dict[str, set[str]],
+        verse_target_ids: dict[str, set[str]],
+        max_retries: int,
+    ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
+        """Use /v1/responses API — required when reasoning_effort is set."""
+        initial_input: list[dict] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_message},
+        ]
+        tool_schema = [_openai_responses_tool_schema(_NEUTRAL_TOOL_SCHEMA)]
+        tool_choice = {"type": "function", "name": TOOL_NAME}
+
+        results: dict[str, list[dict]] = {}
+        all_errors: list[str] = []
+        all_san_details: list[str] = []
+        previous_response_id: str | None = None
+        retry_input: list[dict] = []
+
+        for attempt in range(max_retries + 1):
+            input_items = initial_input if previous_response_id is None else retry_input
+            kwargs: dict = dict(
+                model=self.model,
+                input=input_items,
+                tools=tool_schema,
+                tool_choice=tool_choice,
+                reasoning={"effort": self.reasoning_effort},
+            )
+            if previous_response_id is not None:
+                kwargs["previous_response_id"] = previous_response_id
+            try:
+                response = self._client.responses.create(**kwargs)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"OpenAI API error (attempt {attempt + 1}): {exc}"
+                ) from exc
+
+            previous_response_id = response.id
+
+            if getattr(response, "status", None) == "incomplete":
+                print(
+                    f"  WARNING: response incomplete — "
+                    f"some verses may be missing. Reduce --batch-size."
+                )
+
+            tool_calls = [
+                item for item in response.output
+                if getattr(item, "type", None) == "function_call"
+            ]
+
+            verse_errors: dict[str, list[str]] = {}
+            tool_results: list[dict] = []
+
+            for tc in tool_calls:
+                try:
+                    data = json.loads(tc.arguments)
+                except json.JSONDecodeError as exc:
+                    all_errors.append(f"JSON parse error in tool call: {exc}")
+                    tool_results.append({
+                        "type": "function_call_output",
+                        "call_id": tc.call_id,
+                        "output": f"parse error: {exc}",
+                    })
+                    continue
+
+                tc_errors: list[str] = []
+                for entry in data.get("verses", []):
+                    verse_id = entry.get("verse_id", "")
+                    records  = entry.get("records", [])
+                    valid, errs, san_details = validate_records(
+                        records,
+                        verse_source_ids.get(verse_id, set()),
+                        verse_target_ids.get(verse_id, set()),
+                    )
+                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
+                    if valid:
+                        results[verse_id] = valid
+                    if errs:
+                        verse_errors[verse_id] = errs
+                        tc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+
+                tool_results.append({
+                    "type": "function_call_output",
+                    "call_id": tc.call_id,
+                    "output": (
+                        "Validation errors:\n" + "\n".join(f"  - {e}" for e in tc_errors)
+                        if tc_errors else "ok"
+                    ),
+                })
+
+            if not verse_errors or attempt == max_retries:
+                if verse_errors:
+                    for vid, errs in verse_errors.items():
+                        all_errors.extend(f"VERSE {vid} (unresolved): {e}" for e in errs)
+                break
+
+            # For retry: tool results + new user message become the next input;
+            # previous_response_id chains the conversation context.
+            retry_input = tool_results + [
+                {"role": "user", "content": _build_retry_message(verse_errors)},
+            ]
+
+        return results, all_errors, all_san_details
+
     # ------------------------------------------------------------------
     # Anthropic
     # ------------------------------------------------------------------
@@ -436,43 +623,57 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
-            response = self._client.messages.create(
-                model=self.model,
-                max_tokens=self.ANTHROPIC_MAX_TOKENS,
-                system=system_prompt,
-                messages=messages,
-                tools=tool_schema,
-                tool_choice=tool_choice,
-            )
+            try:
+                with self._client.messages.stream(
+                    model=self.model,
+                    max_tokens=self.ANTHROPIC_MAX_TOKENS,
+                    system=system_prompt,
+                    messages=messages,
+                    tools=tool_schema,
+                    tool_choice=tool_choice,
+                ) as stream:
+                    response = stream.get_final_message()
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Anthropic API error (attempt {attempt + 1}): {exc}"
+                ) from exc
+
+            if response.stop_reason == "max_tokens":
+                print(
+                    f"  WARNING: response truncated (stop_reason=max_tokens, "
+                    f"limit={self.ANTHROPIC_MAX_TOKENS}) — "
+                    f"some verses may be missing. Reduce --batch-size."
+                )
 
             tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
             verse_errors: dict[str, list[str]] = {}
             tool_results: list[dict] = []
 
             for block in tool_use_blocks:
-                verse_id = block.input.get("verse_id", "")
-                records  = block.input.get("records", [])
-                valid, errs, san_details = validate_records(
-                    records,
-                    verse_source_ids.get(verse_id, set()),
-                    verse_target_ids.get(verse_id, set()),
-                )
-                all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                if valid:
-                    results[verse_id] = valid
-                if errs:
-                    verse_errors[verse_id] = errs
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": "Validation errors:\n" + "\n".join(f"  - {e}" for e in errs),
-                    })
-                else:
-                    tool_results.append({
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": "ok",
-                    })
+                block_errors: list[str] = []
+                for entry in block.input.get("verses", []):
+                    verse_id = entry.get("verse_id", "")
+                    records  = entry.get("records", [])
+                    valid, errs, san_details = validate_records(
+                        records,
+                        verse_source_ids.get(verse_id, set()),
+                        verse_target_ids.get(verse_id, set()),
+                    )
+                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
+                    if valid:
+                        results[verse_id] = valid
+                    if errs:
+                        verse_errors[verse_id] = errs
+                        block_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+
+                tool_results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": (
+                        "Validation errors:\n" + "\n".join(f"  - {e}" for e in block_errors)
+                        if block_errors else "ok"
+                    ),
+                })
 
             if not verse_errors or attempt == max_retries:
                 if verse_errors:

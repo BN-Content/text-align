@@ -1,11 +1,13 @@
 """Provider-agnostic LLM call layer for refine-alignment.
 
-Supports OpenAI and Anthropic.  Provider packages are imported lazily so only
-the package for the active provider needs to be installed.
+Supports OpenAI, Anthropic, and Google (Gemini).  Provider packages are
+imported lazily so only the package for the active provider needs to be
+installed.
 
 Environment variables:
     OPENAI_API_KEY    — required when provider is "openai"
     ANTHROPIC_API_KEY — required when provider is "anthropic"
+    GEMINI_API_KEY    — required when provider is "google"
 """
 
 import json
@@ -113,6 +115,18 @@ def _anthropic_tool_schema(neutral: dict) -> dict:
         "description": neutral["description"],
         "input_schema": neutral["parameters"],
     }
+
+
+def _gemini_tool_schema(neutral: dict):
+    """Return a google.genai types.Tool for the neutral schema."""
+    from google.genai import types
+    return types.Tool(function_declarations=[
+        types.FunctionDeclaration(
+            name=neutral["name"],
+            description=neutral["description"],
+            parameters=neutral["parameters"],
+        )
+    ])
 
 
 # ---------------------------------------------------------------------------
@@ -316,8 +330,9 @@ class LLMClient:
     """Provider-agnostic client for refine-alignment LLM calls.
 
     Args:
-        provider: ``"openai"`` or ``"anthropic"``.
-        model: Model name, e.g. ``"gpt-5.4-mini"`` or ``"claude-sonnet-4-6"``.
+        provider: ``"openai"``, ``"anthropic"``, or ``"google"``.
+        model: Model name, e.g. ``"gpt-5.4-mini"``, ``"claude-sonnet-4-6"``,
+            or ``"gemini-3.1-flash"``.
     """
 
     #: Anthropic max_tokens for alignment batch calls.
@@ -325,8 +340,10 @@ class LLMClient:
     ANTHROPIC_MAX_TOKENS = 32000
 
     def __init__(self, provider: str, model: str, reasoning_effort: str | None = None) -> None:
-        if provider not in ("openai", "anthropic"):
-            raise ValueError(f"Unknown provider {provider!r}. Use 'openai' or 'anthropic'.")
+        if provider not in ("openai", "anthropic", "google"):
+            raise ValueError(
+                f"Unknown provider {provider!r}. Use 'openai', 'anthropic', or 'google'."
+            )
         self.provider = provider
         self.model = model
         self.reasoning_effort = reasoning_effort  # OpenAI only; None = use model default
@@ -339,12 +356,18 @@ class LLMClient:
             except ImportError:
                 raise ImportError("Install the openai package: poetry add openai")
             return openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        else:
+        elif self.provider == "anthropic":
             try:
                 import anthropic
             except ImportError:
                 raise ImportError("Install the anthropic package: poetry add anthropic")
             return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        else:
+            try:
+                from google import genai
+            except ImportError:
+                raise ImportError("Install the google-genai package: poetry add google-genai")
+            return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
     def call_batch(
         self,
@@ -373,8 +396,12 @@ class LLMClient:
             return self._call_openai(
                 system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
             )
-        else:
+        elif self.provider == "anthropic":
             return self._call_anthropic(
+                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+            )
+        else:
+            return self._call_gemini(
                 system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
             )
 
@@ -689,5 +716,127 @@ class LLMClient:
                     {"type": "text", "text": _build_retry_message(verse_errors)},
                 ],
             })
+
+        return results, all_errors, all_san_details
+
+    # ------------------------------------------------------------------
+    # Google (Gemini)
+    # ------------------------------------------------------------------
+
+    def _call_gemini(
+        self,
+        system_prompt: str,
+        user_message: str,
+        verse_source_ids: dict[str, set[str]],
+        verse_target_ids: dict[str, set[str]],
+        max_retries: int,
+    ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
+        from google.genai import types
+
+        tool = _gemini_tool_schema(_NEUTRAL_TOOL_SCHEMA)
+        gen_config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            tools=[tool],
+            tool_config=types.ToolConfig(
+                function_calling_config=types.FunctionCallingConfig(
+                    mode="ANY",
+                    allowed_function_names=[TOOL_NAME],
+                )
+            ),
+        )
+
+        contents: list = [
+            types.Content(role="user", parts=[types.Part(text=user_message)])
+        ]
+
+        results: dict[str, list[dict]] = {}
+        all_errors: list[str] = []
+        all_san_details: list[str] = []
+
+        for attempt in range(max_retries + 1):
+            try:
+                response = self._client.models.generate_content(
+                    model=self.model,
+                    contents=contents,
+                    config=gen_config,
+                )
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Google API error (attempt {attempt + 1}): {exc}"
+                ) from exc
+
+            candidate = response.candidates[0]
+            finish_reason = getattr(candidate, "finish_reason", None)
+            if finish_reason is not None and "MAX_TOKENS" in str(finish_reason):
+                print(
+                    f"  WARNING: response truncated (finish_reason=MAX_TOKENS) — "
+                    f"some verses may be missing. Reduce --batch-size."
+                )
+
+            function_calls = [
+                part.function_call
+                for part in candidate.content.parts
+                if getattr(part, "function_call", None)
+            ]
+
+            verse_errors: dict[str, list[str]] = {}
+            response_parts: list = []
+
+            for fc in function_calls:
+                try:
+                    # fc.args is a dict in google-genai 1.x
+                    data = fc.args if isinstance(fc.args, dict) else dict(fc.args)
+                except Exception as exc:
+                    all_errors.append(f"Could not read function call args: {exc}")
+                    response_parts.append(types.Part(
+                        function_response=types.FunctionResponse(
+                            name=fc.name,
+                            response={"output": f"parse error: {exc}"},
+                        )
+                    ))
+                    continue
+
+                fc_errors: list[str] = []
+                for entry in data.get("verses", []):
+                    verse_id = entry.get("verse_id", "")
+                    records = entry.get("records", [])
+                    valid, errs, san_details = validate_records(
+                        records,
+                        verse_source_ids.get(verse_id, set()),
+                        verse_target_ids.get(verse_id, set()),
+                    )
+                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
+                    if valid:
+                        results[verse_id] = valid
+                    if errs:
+                        verse_errors[verse_id] = errs
+                        fc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+
+                response_parts.append(types.Part(
+                    function_response=types.FunctionResponse(
+                        name=fc.name,
+                        response={
+                            "output": (
+                                "Validation errors:\n" + "\n".join(f"  - {e}" for e in fc_errors)
+                                if fc_errors else "ok"
+                            )
+                        },
+                    )
+                ))
+
+            if not verse_errors or attempt == max_retries:
+                if verse_errors:
+                    for vid, errs in verse_errors.items():
+                        all_errors.extend(f"VERSE {vid} (unresolved): {e}" for e in errs)
+                break
+
+            # Extend contents for retry: model turn then user function results + message
+            contents.append(candidate.content)
+            contents.append(types.Content(
+                role="user",
+                parts=response_parts + [
+                    types.Part(text=_build_retry_message(verse_errors))
+                ],
+            ))
 
         return results, all_errors, all_san_details

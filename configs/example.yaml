@@ -69,6 +69,11 @@ creator: text-align
 # where only a merged candidate file exists:
 # alignment_sources: [MERGED]
 
+# LLM provider and model for refine-alignment.
+# provider: openai       model: gpt-5.4-mini        (default if unset)
+# provider: anthropic    model: claude-sonnet-4-6
+# provider: google       model: gemini-3.1-flash     (requires GEMINI_API_KEY)
+
 # OpenAI reasoning effort for gpt-5.x models (none/minimal/low/medium/high).
 # Omit or leave blank to use the model's default.
 # reasoning_effort: high

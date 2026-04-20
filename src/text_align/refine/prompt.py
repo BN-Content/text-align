@@ -41,17 +41,24 @@ Every token in a record is either primary or secondary. For each English word, a
 
 **Why does this word exist in the translation?**
 
-- **It translates a specific Greek lexeme** → it is **primary** in that lexeme's record.
-- **It exists because of grammar implied by the primary Greek token** (morphological
+- **It has a direct lexical or strong semantic connection to the Greek token** → it is
+  **primary** in that token's record. A record may have multiple primary target tokens
+  when the Greek token's meaning distributes across several English words — this is
+  expected, not exceptional.
+- **It exists because of grammar implied by the Greek token** (morphological
   person/number, case, aspect, mood, definiteness) with no separate Greek word of its
-  own → it is **secondary** in the same record as the primary it depends on.
+  own, and carries no independent lexical content → it is **secondary** in the same
+  record.
 - **It translates a different Greek token** → it belongs in a **separate record** for
-  that token, not as secondary here.
+  that token, not here.
 
-Find the English word that translates the Greek lexeme — that is primary. Every other
-word in the same record exists only because of grammar encoded in that Greek token; those
-are secondary. If a word could be primary to a different Greek token in the verse, give
-it its own record instead.
+One or more English words may all be primary to a single Greek token. The key
+distinction: primary words exist because of the Greek token's **lexical and semantic
+content**; secondary words exist only because of **grammatical features encoded in its
+morphology** (person, number, case, aspect, voice) with no separate Greek word.
+
+If a word could be primary to a different Greek token in the verse, give it its own
+record instead.
 
 Common secondary cases:
 
@@ -101,6 +108,10 @@ are merely unsure corrupts the data.
 NEQ records must not include meta.secondary. A token is either non-equivalent (NEQ)
 or has a primary/secondary relationship with another token — never both.
 
+**Greek articles (POS T-*) are never NEQ.** When an article has no English
+correspondent — most commonly when it precedes a proper name — it is always
+secondary to its head noun or name. See ARTICLES → Branch B.
+
 ## SURFACE FORM DIFFERENCES
 
 Morphological differences between source and target — tense, voice, number, aspect —
@@ -122,12 +133,10 @@ Source token lines may include two gloss fields:
 - **gloss**: contextual meaning, including grammatical role words the English requires
   (prepositions, articles, case markers). Example: "of [the] genealogy".
 - **lexeme**: the bare lexeme meaning, stripped of role words. Example: "genealogy".
-  For Hebrew tokens, the lexeme may include morphologically implied words separated by
-  spaces (e.g. "he created" for a verb whose subject is encoded in its form).
 
-When **lexeme** is present, it identifies the primary token: the English word that
-directly translates the source lexeme. Words in **gloss** that do not appear in
-**lexeme** are candidates for secondary classification.
+When **lexeme** is present, it identifies English word(s) with a direct lexical or
+strong semantic connection to the source token — these are candidates for primary
+alignment.
 
 ## SBLGNT MORPH CODES
 
@@ -219,6 +228,12 @@ article grammatically modifies:
   Example: ἐν τῷ σπείρειν → "while sowing":
     source=[τῷ, σπείρειν], target=["sowing"] — primary: "sowing"; secondary.source: [τῷ]
 
+- **Article before a proper name:** secondary to the name. Greek regularly uses the
+  article with proper names (ὁ Ἰησοῦς, ὁ Παῦλος, ὁ Πέτρος); English never does.
+  The article is never NEQ in this situation — it is always secondary to the name.
+  Example: ὁ Ἰησοῦς → "Jesus":
+    source=[ὁ, Ἰησοῦς], target=["Jesus"] — primary: "Jesus"; secondary.source: [ὁ]
+
 ### Anarthrous noun → English has "a/an"
 
 No Greek article token exists; include the English "a/an" as a secondary target in
@@ -229,9 +244,11 @@ the noun's record.
 ## CONJUNCTIONS AND PARTICLES
 
 When a conjunction or particle has a clear lexical correspondent in the translation,
-align it. When the translation restructures and no correspondent exists, the conjunction
-or particle → NEQ. When a translation word could plausibly align to either a
-conjunction/particle or a content word, the content word has priority.
+align it. When multiple translation words together render a single conjunction or
+particle, all of those translation words are primary to it (e.g. ὥστε → "so that":
+both "so" and "that" primary). When the translation restructures and no correspondent
+exists, the conjunction or particle → NEQ. When a translation word could plausibly
+align to either a conjunction/particle or a content word, the content word has priority.
 
 ## IDIOMS
 

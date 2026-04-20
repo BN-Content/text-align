@@ -13,10 +13,12 @@ Symbols follow the SBL Reverse Interlinear convention:
   ≠         Token confirmed to have no equivalent in the other language (NEQ)
   ‹ … ›    Multiple Greek words behind a single English word/phrase
 
-Idiomatic records collapse into a single merged cell: all target tokens are
-joined in the top row and all source tokens are shown in the bottom row.
+Idiomatic records and non-idiom records with multiple primary targets collapse
+their primary tokens into merged cells: the anchor run (longest, rightmost for
+LTR) shows joined text and source tokens; non-anchor runs show joined text with
+a triangle+number pointer (▶N) back to the anchor.
 If the target tokens are discontiguous, the longest contiguous run is the
-anchor (source displayed there); remaining runs show arrow pointers.
+anchor; remaining runs show triangle+number pointers.
 ACAI entity tokens are highlighted.
 NEQ tokens (source or target) are rendered in grey; all other symbols use
 the default text color.
@@ -325,22 +327,117 @@ def _precompute_idiom_cells(
         if t != anchor_display:
             out[t] = (None, [])
 
-    # ── arrow cells for non-anchor runs ──────────────────────────────────
+    # ── triangle+number cells for non-anchor runs ────────────────────────
     tri = "◀" if is_r2l else "▶"
+    ref_idx = _source_index(sorted(token.sources.keys())[0], anchor_display) if token.sources else ""
     for run in runs:
         if run is anchor_run:
             continue
+        run_display = run[0] if is_r2l else run[-1]
+        combined_r = " ".join(token.targets.get(t, "") for t in run)
+        tgt_row_r = f"<div class='tgt idiom'>{combined_r}</div>"
+        src_row_r = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+        out[run_display] = (f"<div class='cell'>{tgt_row_r}{src_row_r}</div>", [])
         for t in run:
-            tgt_text = token.targets.get(t, "")
-            if anchor_display in verse_tids and t in verse_tids:
-                ap = verse_tids.index(anchor_display)
-                mp = verse_tids.index(t)
-                arrow = ("→" if mp < ap else "←") if not is_r2l else ("←" if mp < ap else "→")
-            else:
-                arrow = "→"
-            tgt_row_a = f"<div class='tgt idiom'>{tgt_text}</div>"
-            src_row_a = f"<div class='src'><span class='arr'>{arrow}</span></div>"
-            out[t] = (f"<div class='cell'>{tgt_row_a}{src_row_a}</div>", [])
+            if t != run_display:
+                out[t] = (None, [])
+
+
+def _precompute_multiprimary_cells(
+    token: AlignmentToken,
+    verse_tids: list[str],
+    is_r2l: bool,
+    acai_entities: dict[str, list[AcaiEntity]],
+    tag_acai: bool,
+    out: dict[str, tuple[str | None, list[str]]],
+) -> None:
+    """Populate out[target_id] for a non-idiom record with multiple primary targets.
+
+    Primary tokens are grouped into contiguous runs.  The anchor run (longest,
+    rightmost for LTR / leftmost for RTL) merges its tokens into one cell with
+    the source text.  Non-anchor primary runs each merge into one cell with a
+    triangle+number pointer.  Secondary tokens show an arrow if adjacent to the
+    anchor, or a triangle+number pointer if separated from it by non-members.
+    """
+    pri_tids = [t for t in verse_tids if t in token.primary_targets]
+    if not pri_tids:
+        return
+
+    pri_runs = _contiguous_runs(pri_tids, verse_tids)
+
+    anchor_run = max(
+        pri_runs,
+        key=lambda r: (len(r), verse_tids.index(r[-1]) if not is_r2l else -verse_tids.index(r[0])),
+    )
+    anchor_display = anchor_run[0] if is_r2l else anchor_run[-1]
+
+    tri = "◀" if is_r2l else "▶"
+    ref_idx = _source_index(sorted(token.sources.keys())[0], anchor_display) if token.sources else ""
+
+    # ── anchor run ───────────────────────────────────────────────────────────
+    combined = " ".join(token.targets.get(t, "") for t in anchor_run)
+    tgt_inner = combined
+    if tag_acai and token.sources:
+        acai_hits = [ae for sid in token.sources for ae in acai_entities.get(sid, [])]
+        if acai_hits:
+            tag_str = " ".join(ae.id for ae in acai_hits)
+            tgt_inner = (
+                f"<span class='acai-hl'>{combined}</span>"
+                f"<span class='acai-tag'>{tag_str}</span>"
+            )
+    tgt_row = f"<div class='tgt'>{tgt_inner}</div>"
+
+    if token.sources:
+        parts = [
+            f"{token.sources[sid]}<sub class='sub'>{_source_index(sid, anchor_display)}</sub>"
+            for sid in sorted(token.sources)
+        ]
+        inner = "&nbsp;".join(parts)
+        greek_html = f"‹{inner}›" if len(parts) > 1 else inner
+        src_row = f"<div class='src'>{greek_html}</div>"
+    else:
+        src_row = "<div class='src'>&nbsp;</div>"
+
+    out[anchor_display] = (f"<div class='cell'>{tgt_row}{src_row}</div>", list(token.sources.keys()))
+    for t in anchor_run:
+        if t != anchor_display:
+            out[t] = (None, [])
+
+    # ── non-anchor primary runs ───────────────────────────────────────────────
+    for run in pri_runs:
+        if run is anchor_run:
+            continue
+        run_display = run[0] if is_r2l else run[-1]
+        combined_r = " ".join(token.targets.get(t, "") for t in run)
+        tgt_row_r = f"<div class='tgt'>{combined_r}</div>"
+        src_row_r = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+        out[run_display] = (f"<div class='cell'>{tgt_row_r}{src_row_r}</div>", [])
+        for t in run:
+            if t != run_display:
+                out[t] = (None, [])
+
+    # ── secondary tokens ─────────────────────────────────────────────────────
+    pos = {t: i for i, t in enumerate(verse_tids)}
+    anchor_pos = pos.get(anchor_display, -1)
+    sec_tids = [t for t in verse_tids if t in token.secondary_targets]
+
+    for t in sec_tids:
+        t_pos = pos.get(t, -1)
+        if t_pos < 0:
+            continue
+        tgt_text = token.targets.get(t, "")
+        lo, hi = min(t_pos, anchor_pos), max(t_pos, anchor_pos)
+        has_gap = any(verse_tids[p] not in token.targets for p in range(lo + 1, hi))
+
+        if has_gap:
+            src_row_s = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+        else:
+            ap = verse_tids.index(anchor_display)
+            mp = verse_tids.index(t)
+            arrow = ("→" if mp < ap else "←") if not is_r2l else ("←" if mp < ap else "→")
+            src_row_s = f"<div class='src'><span class='arr'>{arrow}</span></div>"
+
+        out[t] = (f"<div class='cell'><div class='tgt'>{tgt_text}</div>{src_row_s}</div>", [])
 
 
 # ---------------------------------------------------------------------------
@@ -360,9 +457,11 @@ def write_verse(
 ) -> None:
     cells: list[dict] = []  # {"html": str, "source_ids": list[str]}
 
-    # Pre-compute merged cells for idiom records
+    # Pre-compute merged cells for idiom and multi-primary records
     idiom_cell_map: dict[str, tuple[str | None, list[str]]] = {}
+    multiprimary_cell_map: dict[str, tuple[str | None, list[str]]] = {}
     seen_idiom_ids: set[int] = set()
+    seen_multiprimary_ids: set[int] = set()
     for target_id in verse_tids:
         tok_list = alignments.get(target_id, [])
         if not tok_list:
@@ -371,6 +470,9 @@ def write_verse(
         if tok.is_idiom and id(tok) not in seen_idiom_ids:
             seen_idiom_ids.add(id(tok))
             _precompute_idiom_cells(tok, verse_tids, is_r2l, acai_entities, tag_acai, idiom_cell_map)
+        elif not tok.is_idiom and len(tok.primary_targets) > 1 and id(tok) not in seen_multiprimary_ids:
+            seen_multiprimary_ids.add(id(tok))
+            _precompute_multiprimary_cells(tok, verse_tids, is_r2l, acai_entities, tag_acai, multiprimary_cell_map)
 
     for target_id in verse_tids:
         tok_list = alignments.get(target_id, [])
@@ -381,6 +483,13 @@ def write_verse(
             if target_id not in idiom_cell_map:
                 continue
             cell_html, src_ids = idiom_cell_map[target_id]
+            if cell_html is None:
+                continue  # absorbed into merged anchor cell
+            cells.append({"html": cell_html, "source_ids": src_ids})
+        elif not tok.is_idiom and len(tok.primary_targets) > 1:
+            if target_id not in multiprimary_cell_map:
+                continue
+            cell_html, src_ids = multiprimary_cell_map[target_id]
             if cell_html is None:
                 continue  # absorbed into merged anchor cell
             cells.append({"html": cell_html, "source_ids": src_ids})

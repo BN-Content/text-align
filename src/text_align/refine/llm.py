@@ -305,6 +305,30 @@ def validate_records(
 
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _iter_verse_entries(
+    data: dict,
+    errors: list[str],
+) -> list[tuple[str, list[dict]]]:
+    """Return (verse_id, records) pairs from a tool-call data dict.
+
+    Skips and logs any entry that is not a dict (malformed model output).
+    """
+    out: list[tuple[str, list[dict]]] = []
+    for entry in data.get("verses", []):
+        if not isinstance(entry, dict):
+            errors.append(
+                f"Malformed entry in verses array (expected object, got "
+                f"{type(entry).__name__!r}): {str(entry)[:80]!r}"
+            )
+            continue
+        out.append((entry.get("verse_id", ""), entry.get("records", [])))
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Retry message builder
 # ---------------------------------------------------------------------------
 
@@ -471,9 +495,7 @@ class LLMClient:
                     continue
 
                 tc_errors: list[str] = []
-                for entry in data.get("verses", []):
-                    verse_id = entry.get("verse_id", "")
-                    records  = entry.get("records", [])
+                for verse_id, records in _iter_verse_entries(data, all_errors):
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -591,9 +613,7 @@ class LLMClient:
                     continue
 
                 tc_errors: list[str] = []
-                for entry in data.get("verses", []):
-                    verse_id = entry.get("verse_id", "")
-                    records  = entry.get("records", [])
+                for verse_id, records in _iter_verse_entries(data, all_errors):
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -678,9 +698,7 @@ class LLMClient:
 
             for block in tool_use_blocks:
                 block_errors: list[str] = []
-                for entry in block.input.get("verses", []):
-                    verse_id = entry.get("verse_id", "")
-                    records  = entry.get("records", [])
+                for verse_id, records in _iter_verse_entries(block.input, all_errors):
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -801,9 +819,7 @@ class LLMClient:
                     continue
 
                 fc_errors: list[str] = []
-                for entry in data.get("verses", []):
-                    verse_id = entry.get("verse_id", "")
-                    records = entry.get("records", [])
+                for verse_id, records in _iter_verse_entries(data, all_errors):
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),

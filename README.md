@@ -63,8 +63,11 @@ src/text_align/
 │   └── acai.py          # acai-align CLI
 ├── refine/              # LLM-assisted alignment refinement
 │   ├── source.py        # Source token loader
-│   ├── prompt.py        # System prompt and batch message assembly
-│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic)
+│   ├── prompt/          # Language-aware prompt assembly
+│   │   ├── core.py      #   LanguagePromptConfig, registry, detection, assembly
+│   │   ├── eng.py       #   English prompt blocks and config (auto-registered)
+│   │   └── __init__.py  #   Public API re-export
+│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google)
 │   └── refine.py        # refine-alignment CLI
 └── render/
     └── html.py          # render-alignment CLI
@@ -123,9 +126,12 @@ acai-align \
 
 ### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI or Anthropic). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI, Anthropic, or Google). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
-Requires `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the environment depending on the chosen provider.
+Requires the appropriate API key in the environment:
+- `OPENAI_API_KEY` for OpenAI models
+- `ANTHROPIC_API_KEY` for Anthropic models
+- `GEMINI_API_KEY` for Google Gemini models
 
 ```
 refine-alignment \
@@ -136,9 +142,11 @@ refine-alignment \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
   [--from-scratch]               # align without candidates; no --alignment-sources needed
   [--corpora ot nt] \
-  [--llm-provider openai] \
+  [--llm-provider openai]        # openai | anthropic | google
   [--llm-model gpt-5.4-mini] \
-  [--reasoning-effort high]      # OpenAI gpt-5.x only: none/minimal/low/medium/high
+  [--reasoning-effort high]      # none/minimal/low/medium/high
+                                 #   OpenAI gpt-5.x → reasoning_effort (Responses API)
+                                 #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
   [--batch-size 5] \
   [--max-retries 2] \
   [--verse 41004003]              # single verse (testing)
@@ -154,8 +162,6 @@ Candidate source types (default: all five — ACAI, SIM-MIGRATED, DIFF-MIGRATED,
 
 Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely and align from the source/target token universe alone. Output files are written to `--output-dir` as `WLCM-<edition>-manual.json` (OT) and `SBLGNT-<edition>-manual.json` (NT).
 
-`--reasoning-effort` uses the OpenAI `/v1/responses` API (required for reasoning models). Omit for standard chat models.
-
 ### `render-alignment`
 
 Generate per-chapter HTML alignment visualizations in SBL Reverse Interlinear style. Each verse is a row of inline-block cells (translation order). Each cell shows the target token above its aligned source token(s) with subscript word-position indices. Relationship symbols follow the SBL RI convention:
@@ -163,7 +169,7 @@ Generate per-chapter HTML alignment visualizations in SBL Reverse Interlinear st
 | Symbol | Meaning |
 |--------|---------|
 | → / ← | Non-anchor token; source shown in the adjacent anchor cell |
-| ▶N | Token separated from its group by intervening tokens |
+| ▸N / ◂N | Token separated from its anchor; triangle points toward anchor cell; N = source word index |
 | • | Target token with no source correspondent |
 | ≠ | Token positively confirmed as non-equivalent (NEQ) |
 | ‹ … › | Multiple source tokens behind one target token/phrase |

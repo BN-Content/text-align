@@ -1,16 +1,9 @@
-"""System prompt assembly and per-verse message formatting for refine-alignment.
+"""English target-language prompt config for refine-alignment.
 
-Block architecture
-------------------
-BASE_BLOCK is always included.  Nine CONDITIONAL_BLOCKS are included only when
-the corresponding phenomenon is detected in the verse batch by detect_phenomena().
-Two forced co-inclusions apply regardless of direct detection:
-  - PASSIVE  → also includes IMPERSONAL
-  - HINA     → also includes INFINITIVE
+Imported by prompt/__init__.py to register the English config automatically.
 """
 
-from text_align.burrito.source import Source
-from text_align.migrate.models import MigrateTarget
+from .core import LanguagePromptConfig, register_language
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +215,7 @@ article grammatically modifies:
   each article separately.
   Example: τὴν γῆν τὴν καλήν → "good soil":
     source=[τήν, γῆν],   target=["soil"] — primary: "soil"; secondary.source: [τήν]
-    source=[τήν, καλήν], target=["good"] — primary: "good"; secondary.source: [τήν]
+    source=[τήν, καλήν], target=["good"] — primary: "good"; secondary.source: [τήN]
 
 - **Articular infinitive:** secondary to the infinitive.
   Example: ἐν τῷ σπείρειν → "while sowing":
@@ -636,7 +629,6 @@ Example — contrary-to-fact apodosis verb → "would have known":
     English distributes that meaning across modal + auxiliary + main verb\
 """
 
-
 NEGATION_BLOCK = """\
 ## NEGATION
 
@@ -699,10 +691,9 @@ is emphatic, not canceling. English absorbs the extra negation into "ever" or "a
 
 
 # ---------------------------------------------------------------------------
-# Block registry
+# Block registry and config
 # ---------------------------------------------------------------------------
 
-# Canonical inclusion order for conditional blocks
 BLOCK_ORDER = [
     "PASSIVE",
     "IMPERSONAL",
@@ -729,197 +720,18 @@ CONDITIONAL_BLOCKS: dict[str, str] = {
     "NEGATION":    NEGATION_BLOCK,
 }
 
-# When a tag is detected, these additional tags are always included
 FORCED_INCLUSIONS: dict[str, set[str]] = {
     "PASSIVE": {"IMPERSONAL"},
     "HINA":    {"INFINITIVE"},
 }
 
-# Text forms that identify impersonal verb uses (expand as needed)
-_IMPERSONAL_FORMS: frozenset[str] = frozenset({
-    "δεῖ", "ἔξεστιν", "ἔξεστι", "πρέπει", "συμφέρει", "δοκεῖ",
-})
+ENG_CONFIG = LanguagePromptConfig(
+    language_code="eng",
+    base_block=BASE_BLOCK,
+    conditional_blocks=CONDITIONAL_BLOCKS,
+    block_order=BLOCK_ORDER,
+    forced_inclusions=FORCED_INCLUSIONS,
+    show_gloss=True,
+)
 
-# Negation particle text forms (simple, emphatic, and compound single-token)
-_NEGATION_FORMS: frozenset[str] = frozenset({
-    "οὐ", "οὐκ", "οὐχ", "οὐχί",
-    "μή", "μήτε",
-    "οὐδέ", "μηδέ",
-    "οὐκέτι", "μηκέτι",
-    "οὔπω", "μήπω",
-    "οὔτε",
-})
-
-
-# ---------------------------------------------------------------------------
-# Phenomenon detection
-# ---------------------------------------------------------------------------
-
-def detect_phenomena(source_tokens: list[Source]) -> set[str]:
-    """Scan source token POS/morph fields and return a set of phenomenon tags.
-
-    Tags correspond to keys in CONDITIONAL_BLOCKS.  Forced co-inclusions are
-    NOT applied here — that happens in build_system_prompt().
-    """
-    tags: set[str] = set()
-
-    for t in source_tokens:
-        morph = t.morph or ""
-        text = t.text or ""
-        lemma = t.lemma or ""
-
-        if t.pos == "verb" and "-" in morph:
-            # Split on "-": parts[1] is the TAM block (e.g. "PAI", "APP", "2AAN")
-            # Reading voice and mood from the END of the TAM block handles both
-            # standard 3-char codes and extended 4-char 2nd-aorist codes (e.g. "2APP").
-            tam = morph.split("-")[1]
-            if len(tam) >= 3:
-                voice = tam[-2]
-                mood  = tam[-1]
-                if voice == "P":
-                    tags.add("PASSIVE")
-                if mood == "P":
-                    tags.add("PARTICIPLE")
-                if mood == "N":
-                    tags.add("INFINITIVE")
-
-        if t.pos in ("adj", "adv"):
-            if morph.endswith("-C") or morph.endswith("-S"):
-                tags.add("COMPARATIVE")
-
-        if text == "ἵνα":
-            tags.add("HINA")
-        if text in ("εἰ", "ἐάν"):
-            tags.add("CONDITIONAL")
-        if text == "ὅτι":
-            tags.add("HOTI")
-        if lemma == "αὐτός" or text in ("αὐτός", "αὐτοῦ", "αὐτῷ", "αὐτόν",
-                                         "αὐτή", "αὐτῆς", "αὐτῇ", "αὐτήν",
-                                         "αὐτό", "αὐτοί", "αὐτῶν", "αὐτοῖς",
-                                         "αὐτούς", "αὐταί", "αὐτάς"):
-            tags.add("AUTOS")
-        if text in _IMPERSONAL_FORMS:
-            tags.add("IMPERSONAL")
-        if text in _NEGATION_FORMS:
-            tags.add("NEGATION")
-
-    return tags
-
-
-# ---------------------------------------------------------------------------
-# Prompt assembly
-# ---------------------------------------------------------------------------
-
-def build_system_prompt(phenomena: set[str], target_language: str) -> str:
-    """Assemble the system prompt from the base block plus relevant conditional blocks.
-
-    Applies forced co-inclusions before selecting blocks.  Blocks are included
-    in BLOCK_ORDER regardless of detection order.
-
-    Args:
-        phenomena: Tags returned by detect_phenomena().
-        target_language: ISO 639-3 code (e.g. "eng").  Currently unused but
-            reserved for future gloss-visibility logic at the system-prompt level.
-    """
-    # Apply forced co-inclusions
-    expanded: set[str] = set(phenomena)
-    for tag, forced in FORCED_INCLUSIONS.items():
-        if tag in expanded:
-            expanded |= forced
-
-    blocks = [BASE_BLOCK]
-
-    if expanded:
-        active = [t for t in BLOCK_ORDER if t in expanded]
-        notice = (
-            "The following constructions were identified in this verse batch. "
-            "Specific guidelines for each are included below: "
-            + ", ".join(active) + "."
-        )
-        blocks.append(notice)
-
-    for tag in BLOCK_ORDER:
-        if tag in expanded:
-            blocks.append(CONDITIONAL_BLOCKS[tag])
-
-    return "\n\n---\n\n".join(blocks)
-
-
-# ---------------------------------------------------------------------------
-# Per-verse message formatting
-# ---------------------------------------------------------------------------
-
-def _format_source_token(token: Source, show_gloss: bool) -> str:
-    """Return a single formatted source token line."""
-    parts = [f"  {token.id:<16}", token.text, f"  {token.pos:<6}", token.morph or ""]
-    if show_gloss and token.gloss:
-        parts.append(f'  gloss:"{token.gloss}"')
-        if token.gloss2 and token.gloss2 != token.gloss:
-            # WLCM uses '.' as word delimiter in gloss2; normalize to space
-            lexeme = token.gloss2.replace(".", " ")
-            parts.append(f'  lexeme:"{lexeme}"')
-    return "".join(parts)
-
-
-def format_verse_block(
-    verse_id: str,
-    source_tokens: list[Source],
-    target_tokens: list[MigrateTarget],
-    candidates: dict[str, list[dict]],
-    target_language: str,
-) -> str:
-    """Return the formatted text block for one verse within a batch message.
-
-    Args:
-        verse_id: 8-digit BCV string, e.g. "41004003".
-        source_tokens: Ordered source tokens for this verse.
-        target_tokens: Ordered target tokens for this verse.
-        candidates: Mapping of source-type label → list of record dicts, each
-            with ``"source": [str, ...]`` and ``"target": [str, ...]``.
-        target_language: ISO 639-3 code; glosses are shown only for "eng".
-    """
-    show_gloss = target_language == "eng"
-    lines: list[str] = []
-
-    lines.append(f"--- VERSE {verse_id} ---")
-    lines.append("")
-
-    lines.append("SOURCE TOKENS (SBLGNT):")
-    for t in source_tokens:
-        lines.append(_format_source_token(t, show_gloss))
-    lines.append("")
-
-    lines.append("TARGET TOKENS:")
-    for t in target_tokens:
-        lines.append(f"  {t.id:<16}  {t.text!r}")
-    lines.append("")
-
-    lines.append("ALIGNMENT CANDIDATES:")
-    if not candidates:
-        lines.append("  (none)")
-    else:
-        for source_type, records in candidates.items():
-            lines.append(f"\n[{source_type}]")
-            for rec in records:
-                src_ids = " ".join(rec.get("source", []))
-                tgt_ids = " ".join(rec.get("target", []))
-                lines.append(f"  source: [{src_ids}]  target: [{tgt_ids}]")
-
-    return "\n".join(lines)
-
-
-def build_batch_message(
-    verse_batch: list[tuple[str, list[Source], list[MigrateTarget], dict[str, list[dict]]]],
-    target_language: str,
-) -> str:
-    """Concatenate verse blocks for a batch into a single user message.
-
-    Args:
-        verse_batch: List of (verse_id, source_tokens, target_tokens, candidates)
-            tuples, one per verse.
-        target_language: ISO 639-3 code passed through to format_verse_block().
-    """
-    return "\n\n".join(
-        format_verse_block(vid, src, tgt, cands, target_language)
-        for vid, src, tgt, cands in verse_batch
-    )
+register_language(ENG_CONFIG)

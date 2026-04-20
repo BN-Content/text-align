@@ -734,6 +734,9 @@ class LLMClient:
         from google.genai import types
 
         tool = _gemini_tool_schema(_NEUTRAL_TOOL_SCHEMA)
+        thinking_config = None
+        if self.reasoning_effort and self.reasoning_effort != "none":
+            thinking_config = types.ThinkingConfig(thinking_level=self.reasoning_effort)
         gen_config = types.GenerateContentConfig(
             system_instruction=system_prompt,
             tools=[tool],
@@ -743,6 +746,7 @@ class LLMClient:
                     allowed_function_names=[TOOL_NAME],
                 )
             ),
+            thinking_config=thinking_config,
         )
 
         contents: list = [

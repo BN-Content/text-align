@@ -63,6 +63,7 @@ body  { font-family: serif; font-size: 14px; }
 .idiom{ font-style: italic; }
 
 .sub  { font-size: 60%; }
+.tri  { font-size: 90%; vertical-align: 1px; }
 .acai-hl  { background: #d0e8ff; border-radius: 2px; padding: 0 1px; }
 .acai-tag { font-size: 55%; font-family: Arial, sans-serif; line-height: 2;
             text-transform: uppercase; vertical-align: super;
@@ -163,6 +164,12 @@ def _anchor(token: AlignmentToken, verse_tids: list[str], is_r2l: bool) -> str |
     return ordered[0] if is_r2l else ordered[-1]
 
 
+def _tri_toward(token_pos: int, anchor_pos: int, is_r2l: bool) -> str:
+    """Return a small triangle character pointing toward the anchor cell."""
+    points_right = (token_pos < anchor_pos) if not is_r2l else (token_pos > anchor_pos)
+    return "▸" if points_right else "◂"
+
+
 def _render_cell(
     target_id: str,
     token: AlignmentToken,
@@ -203,7 +210,6 @@ def _render_cell(
     tgt_row = f"<div class='{cls_str}'>{tgt_inner}</div>"
 
     # ── bottom row: source reference ─────────────────────────────────────
-    tri = "◀" if is_r2l else "▶"
     arrow_to_anchor: str
     if anchor and anchor in verse_tids and target_id in verse_tids:
         ap = verse_tids.index(anchor)
@@ -225,15 +231,17 @@ def _render_cell(
         src_row = f"<div class='src'>{greek_html}</div>"
 
     elif is_separated:
-        # Show the subscript of the anchor's primary source word so the reader
-        # can locate the anchor cell directly (e.g. ▶16 → look for Greek word₁₆).
         anchor_tid = _anchor(token, verse_tids, is_r2l)
         if anchor_tid and token.sources:
             ref_src_id = sorted(token.sources.keys())[0]
             ref_idx = _source_index(ref_src_id, anchor_tid)
-            src_row = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+            ap = verse_tids.index(anchor_tid)
+            mp = verse_tids.index(target_id)
+            tri = _tri_toward(mp, ap, is_r2l)
+            src_row = f"<div class='src'><span class='arr'><span class='tri'>{tri}</span><sub class='sub'>{ref_idx}</sub></span></div>"
         else:
-            src_row = f"<div class='src'><span class='arr'>{tri}</span></div>"
+            tri = "◂" if is_r2l else "▸"
+            src_row = f"<div class='src'><span class='arr'><span class='tri'>{tri}</span></span></div>"
 
     elif not token.sources:
         # unaligned target token — check NEQ first before generic bullet
@@ -328,15 +336,16 @@ def _precompute_idiom_cells(
             out[t] = (None, [])
 
     # ── triangle+number cells for non-anchor runs ────────────────────────
-    tri = "◀" if is_r2l else "▶"
     ref_idx = _source_index(sorted(token.sources.keys())[0], anchor_display) if token.sources else ""
+    anchor_pos = verse_tids.index(anchor_display)
     for run in runs:
         if run is anchor_run:
             continue
         run_display = run[0] if is_r2l else run[-1]
+        tri = _tri_toward(verse_tids.index(run_display), anchor_pos, is_r2l)
         combined_r = " ".join(token.targets.get(t, "") for t in run)
         tgt_row_r = f"<div class='tgt idiom'>{combined_r}</div>"
-        src_row_r = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+        src_row_r = f"<div class='src'><span class='arr'><span class='tri'>{tri}</span><sub class='sub'>{ref_idx}</sub></span></div>"
         out[run_display] = (f"<div class='cell'>{tgt_row_r}{src_row_r}</div>", [])
         for t in run:
             if t != run_display:
@@ -370,8 +379,7 @@ def _precompute_multiprimary_cells(
         key=lambda r: (len(r), verse_tids.index(r[-1]) if not is_r2l else -verse_tids.index(r[0])),
     )
     anchor_display = anchor_run[0] if is_r2l else anchor_run[-1]
-
-    tri = "◀" if is_r2l else "▶"
+    anchor_pos = verse_tids.index(anchor_display)
     ref_idx = _source_index(sorted(token.sources.keys())[0], anchor_display) if token.sources else ""
 
     # ── anchor run ───────────────────────────────────────────────────────────
@@ -408,9 +416,10 @@ def _precompute_multiprimary_cells(
         if run is anchor_run:
             continue
         run_display = run[0] if is_r2l else run[-1]
+        tri = _tri_toward(verse_tids.index(run_display), anchor_pos, is_r2l)
         combined_r = " ".join(token.targets.get(t, "") for t in run)
         tgt_row_r = f"<div class='tgt'>{combined_r}</div>"
-        src_row_r = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+        src_row_r = f"<div class='src'><span class='arr'><span class='tri'>{tri}</span><sub class='sub'>{ref_idx}</sub></span></div>"
         out[run_display] = (f"<div class='cell'>{tgt_row_r}{src_row_r}</div>", [])
         for t in run:
             if t != run_display:
@@ -418,7 +427,6 @@ def _precompute_multiprimary_cells(
 
     # ── secondary tokens ─────────────────────────────────────────────────────
     pos = {t: i for i, t in enumerate(verse_tids)}
-    anchor_pos = pos.get(anchor_display, -1)
     sec_tids = [t for t in verse_tids if t in token.secondary_targets]
 
     for t in sec_tids:
@@ -430,7 +438,8 @@ def _precompute_multiprimary_cells(
         has_gap = any(verse_tids[p] not in token.targets for p in range(lo + 1, hi))
 
         if has_gap:
-            src_row_s = f"<div class='src'><span class='arr'>{tri}{ref_idx}</span></div>"
+            tri = _tri_toward(t_pos, anchor_pos, is_r2l)
+            src_row_s = f"<div class='src'><span class='arr'><span class='tri'>{tri}</span><sub class='sub'>{ref_idx}</sub></span></div>"
         else:
             ap = verse_tids.index(anchor_display)
             mp = verse_tids.index(t)

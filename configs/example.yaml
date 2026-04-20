@@ -74,8 +74,10 @@ creator: text-align
 # provider: anthropic    model: claude-sonnet-4-6
 # provider: google       model: gemini-3.1-flash     (requires GEMINI_API_KEY)
 
-# OpenAI reasoning effort for gpt-5.x models (none/minimal/low/medium/high).
-# Omit or leave blank to use the model's default.
+# Reasoning effort / thinking level (none/minimal/low/medium/high).
+# OpenAI gpt-5.x: maps to reasoning_effort on the Responses API.
+# Google gemini-3+: maps to thinkingLevel on ThinkingConfig.
+# Omit or leave blank to use the model's default (no thinking config sent).
 # reasoning_effort: high
 
 # ---------------------------------------------------------------------------

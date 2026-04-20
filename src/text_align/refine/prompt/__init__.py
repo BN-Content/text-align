@@ -15,6 +15,7 @@ from .core import (
 )
 from . import eng as _eng  # noqa: F401 — registers English config
 from . import por as _por  # noqa: F401 — registers Portuguese config
+from . import spa as _spa  # noqa: F401 — registers Spanish (Latin American) config
 
 __all__ = [
     "LanguagePromptConfig",

@@ -37,15 +37,23 @@ Prompts are assembled from a `LanguagePromptConfig` registered per ISO 639-3 cod
   `get_language_config`), Greek NT phenomenon detection (`detect_phenomena`), and
   all prompt assembly / verse formatting functions.
 - `eng.py` — English block strings + `ENG_CONFIG`; calls `register_language` on import.
-- `__init__.py` — re-exports the public API and imports `eng` to trigger registration.
+- `por.py` — Portuguese. Pro-drop, contracted preposition+article forms (do/da/no/na/
+  ao/à/pelo/pela), conditional proper-name articles (BP retains them), reflexive passive,
+  personal infinitive. Unchanged blocks imported from `eng.py`.
+- `spa.py` — Latin American Spanish. Same pro-drop rules; contracted forms limited to
+  `del` and `al` only; proper-name articles always Branch B (LA translations omit them);
+  vos/tú regional note; ustedes for 2nd plural; no personal infinitive.
+- `__init__.py` — re-exports the public API and imports all language modules to trigger
+  registration.
 
 **To add a new target language:** create `prompt/<iso>.py`, define a `LanguagePromptConfig`
-with the appropriate block content, and call `register_language()`. Then import it in
-`__init__.py`. English (`eng.py`) is a useful starting point for Romance languages.
+with the appropriate block content, and call `register_language()`. Then add the import
+to `__init__.py`. Import unchanged blocks from `eng.py` rather than duplicating them.
 Unknown language codes fall back to English automatically.
 
-Planned languages (in priority order): por, spa, fra — then Arabic, Chinese Simplified,
-Chinese Traditional, Hindi, Gujarati, Nepali, Tok Pisin, Bislama, Lingala, Swahili.
+Current languages: eng, por, spa.
+Planned: fra — then Arabic, Chinese Simplified, Chinese Traditional, Hindi, Gujarati,
+Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 
 ## LLM providers (`refine/llm.py`)
 
@@ -71,6 +79,14 @@ unfamiliar (e.g. `gpt-5.4-mini`, `gemini-3-flash-preview`). Trust the user.
   source index. The triangle (`▸` / `◂`) points toward the anchor cell.
 - `_tri_toward(token_pos, anchor_pos, is_r2l)` computes the correct direction.
 - CSS classes: `.tri` (triangle, 90% font-size), `.sub` (subscript, 60%).
+
+## LLM robustness (`refine/llm.py`)
+
+`_iter_verse_entries(data, errors)` is a helper used by all four provider call paths
+(`_call_openai`, `_call_openai_responses`, `_call_anthropic`, `_call_gemini`). It
+iterates the `verses` array from a tool-call response, skipping and logging any entry
+that is not a dict. This guards against malformed model output (e.g. a string element
+in the array) that would otherwise crash with `AttributeError` on `.get()`.
 
 ## Testing
 

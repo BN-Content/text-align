@@ -66,6 +66,8 @@ src/text_align/
 │   ├── prompt/          # Language-aware prompt assembly
 │   │   ├── core.py      #   LanguagePromptConfig, registry, detection, assembly
 │   │   ├── eng.py       #   English prompt blocks and config (auto-registered)
+│   │   ├── por.py       #   Portuguese (auto-registered)
+│   │   ├── spa.py       #   Latin American Spanish (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google)
 │   └── refine.py        # refine-alignment CLI

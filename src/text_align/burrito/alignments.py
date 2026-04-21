@@ -64,6 +64,7 @@ class AlignmentsReader:
         self.rejected: dict[str, AlignmentRecord] = {}
         self.neq_source: frozenset[str] = frozenset()
         self.neq_target: frozenset[str] = frozenset()
+        self.group_meta: dict = {}
         self.alignmentgroup: AlignmentGroup = self.read_alignments(keeprejected=keeprejected)
 
     def _targetid(self, targetid: str) -> str:
@@ -111,6 +112,7 @@ class AlignmentsReader:
                 self.neq_target = frozenset(neq.get("target", []))
             else:
                 agroupdict = data
+            self.group_meta = dict(agroupdict.get("meta", {}))
             known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
             raw_meta = {k: v for k, v in agroupdict["meta"].items() if k in known_fields}
             meta = Metadata(**raw_meta)

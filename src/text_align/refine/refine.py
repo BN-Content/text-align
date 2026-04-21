@@ -77,6 +77,9 @@ def build_output_alignment(
     corpus: str,
     edition: str,
     creator: str,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    reasoning_effort: str | None = None,
 ) -> dict[str, Any]:
     """Build an SB 0.4 groups alignment structure from LLM-refined records.
 
@@ -116,6 +119,15 @@ def build_output_alignment(
             regular.append(out_rec)
 
     group_meta: dict = {"creator": creator, "conformsTo": "0.4"}
+    if llm_provider or llm_model:
+        model_info: dict = {}
+        if llm_provider:
+            model_info["provider"] = llm_provider
+        if llm_model:
+            model_info["model"] = llm_model
+        if reasoning_effort:
+            model_info["reasoning_effort"] = reasoning_effort
+        group_meta["llm"] = model_info
     if neq_source or neq_target:
         non_equiv: dict = {}
         if neq_source:
@@ -157,6 +169,9 @@ def process_corpus(
     batch_size: int,
     max_retries: int,
     creator: str,
+    llm_provider: str | None = None,
+    llm_model: str | None = None,
+    reasoning_effort: str | None = None,
     single_verse: str | None = None,
     verse_range: tuple[str, str] | None = None,
     from_scratch: bool = False,
@@ -271,7 +286,10 @@ def process_corpus(
     # Write output
     n_neq_recs = sum(1 for r in all_records if (r.get("meta") or {}).get("rel") == "NEQ")
     print(f"  Records collected: {len(all_records)} total, {n_neq_recs} NEQ, {len(all_records) - n_neq_recs} regular")
-    output   = build_output_alignment(all_records, corpus_id, target_edition, creator)
+    output   = build_output_alignment(
+        all_records, corpus_id, target_edition, creator,
+        llm_provider=llm_provider, llm_model=llm_model, reasoning_effort=reasoning_effort,
+    )
     group    = output["groups"][0]
     n_reg    = len(group["records"])
     neq      = group["meta"].get("nonEquivalent") or {}
@@ -356,6 +374,9 @@ def parse_args() -> argparse.Namespace:
                    help="Verses per LLM call (default: 5)")
     p.add_argument("--max-retries", type=int, default=2,
                    help="Retry attempts on validation failure (default: 2)")
+    p.add_argument("--max-api-retries", type=int, default=4,
+                   help="Retry attempts on transient API errors (429/503) with "
+                        "exponential backoff — 2s, 4s, 8s, … (default: 4)")
     p.add_argument("--verse", default=None, metavar="BCV",
                    help="Process a single verse BCV for testing, e.g. 41004003")
     p.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
@@ -397,7 +418,12 @@ def main() -> None:
     elif args.verse_range:
         print(f"  Range:     {args.verse_range[0]}–{args.verse_range[1]}")
 
-    llm_client = LLMClient(provider=args.llm_provider, model=args.llm_model, reasoning_effort=args.reasoning_effort)
+    llm_client = LLMClient(
+        provider=args.llm_provider,
+        model=args.llm_model,
+        reasoning_effort=args.reasoning_effort,
+        max_api_retries=args.max_api_retries,
+    )
 
     for corpus in args.corpora:
         process_corpus(
@@ -413,6 +439,9 @@ def main() -> None:
             batch_size=args.batch_size,
             max_retries=args.max_retries,
             creator=args.creator,
+            llm_provider=args.llm_provider,
+            llm_model=args.llm_model,
+            reasoning_effort=args.reasoning_effort,
             single_verse=args.verse,
             verse_range=tuple(args.verse_range) if args.verse_range else None,
             from_scratch=args.from_scratch,

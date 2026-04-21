@@ -37,6 +37,9 @@ target_language: spa
 # Edition identifier for the target translation
 target_edition: BONBV
 
+# Full translation name shown in render-alignment HTML headers (optional)
+# target_edition_name: Biblia de Nuestra Familia Versión Breve
+
 # ---------------------------------------------------------------------------
 # Source (reference) translation — used by diff-migrate and sim-migrate
 # ---------------------------------------------------------------------------

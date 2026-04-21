@@ -12,6 +12,7 @@ Environment variables:
 
 import json
 import os
+import time
 
 # ---------------------------------------------------------------------------
 # Tool schema
@@ -329,6 +330,53 @@ def _iter_verse_entries(
 
 
 # ---------------------------------------------------------------------------
+# API-level backoff retry
+# ---------------------------------------------------------------------------
+
+_RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 503})
+
+
+def _status_code(exc: Exception) -> int | None:
+    """Return the HTTP status code from a provider exception, or None."""
+    if hasattr(exc, "status_code"):
+        try:
+            return int(exc.status_code)
+        except (TypeError, ValueError):
+            pass
+    # Fallback: the Google SDK embeds the code at the start of the str repr
+    s = str(exc)
+    for code in (429, 503, 500):
+        if s.startswith(str(code)):
+            return code
+    return None
+
+
+def _api_call_with_backoff(fn, max_retries: int, provider: str):
+    """Call fn(), retrying on transient API errors with exponential backoff.
+
+    Retries on 429 (rate-limited) and 503 (overloaded) up to *max_retries*
+    times.  Raises RuntimeError immediately on non-retriable errors or after
+    exhausting retries.  Delays: 2s, 4s, 8s, 16s, …
+    """
+    for attempt in range(max_retries + 1):
+        try:
+            return fn()
+        except Exception as exc:
+            code = _status_code(exc)
+            if code not in _RETRIABLE_STATUS_CODES or attempt == max_retries:
+                raise RuntimeError(
+                    f"{provider} API error (attempt {attempt + 1}): {exc}"
+                ) from exc
+            delay = 2 ** (attempt + 1)
+            print(
+                f"  {provider} API {code} — retrying in {delay}s "
+                f"(attempt {attempt + 1}/{max_retries + 1}) ...",
+                flush=True,
+            )
+            time.sleep(delay)
+
+
+# ---------------------------------------------------------------------------
 # Retry message builder
 # ---------------------------------------------------------------------------
 
@@ -363,7 +411,13 @@ class LLMClient:
     #: 32 000 gives Opus 4.7 headroom for thinking tokens before the tool call.
     ANTHROPIC_MAX_TOKENS = 32000
 
-    def __init__(self, provider: str, model: str, reasoning_effort: str | None = None) -> None:
+    def __init__(
+        self,
+        provider: str,
+        model: str,
+        reasoning_effort: str | None = None,
+        max_api_retries: int = 4,
+    ) -> None:
         if provider not in ("openai", "anthropic", "google"):
             raise ValueError(
                 f"Unknown provider {provider!r}. Use 'openai', 'anthropic', or 'google'."
@@ -371,6 +425,7 @@ class LLMClient:
         self.provider = provider
         self.model = model
         self.reasoning_effort = reasoning_effort  # OpenAI only; None = use model default
+        self.max_api_retries = max_api_retries
         self._client = self._init_client()
 
     def _init_client(self):
@@ -458,17 +513,16 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
-            try:
-                response = self._client.chat.completions.create(
+            response = _api_call_with_backoff(
+                lambda: self._client.chat.completions.create(
                     model=self.model,
                     messages=messages,
                     tools=tool_schema,
                     tool_choice=tool_choice,
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"OpenAI API error (attempt {attempt + 1}): {exc}"
-                ) from exc
+                ),
+                self.max_api_retries,
+                "OpenAI",
+            )
 
             choice = response.choices[0]
             if choice.finish_reason == "length":
@@ -577,12 +631,11 @@ class LLMClient:
             )
             if previous_response_id is not None:
                 kwargs["previous_response_id"] = previous_response_id
-            try:
-                response = self._client.responses.create(**kwargs)
-            except Exception as exc:
-                raise RuntimeError(
-                    f"OpenAI API error (attempt {attempt + 1}): {exc}"
-                ) from exc
+            response = _api_call_with_backoff(
+                lambda: self._client.responses.create(**kwargs),
+                self.max_api_retries,
+                "OpenAI",
+            )
 
             previous_response_id = response.id
 
@@ -670,7 +723,7 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
-            try:
+            def _do_anthropic():
                 with self._client.messages.stream(
                     model=self.model,
                     max_tokens=self.ANTHROPIC_MAX_TOKENS,
@@ -679,11 +732,9 @@ class LLMClient:
                     tools=tool_schema,
                     tool_choice=tool_choice,
                 ) as stream:
-                    response = stream.get_final_message()
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Anthropic API error (attempt {attempt + 1}): {exc}"
-                ) from exc
+                    return stream.get_final_message()
+
+            response = _api_call_with_backoff(_do_anthropic, self.max_api_retries, "Anthropic")
 
             if response.stop_reason == "max_tokens":
                 print(
@@ -776,16 +827,15 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
-            try:
-                response = self._client.models.generate_content(
+            response = _api_call_with_backoff(
+                lambda: self._client.models.generate_content(
                     model=self.model,
                     contents=contents,
                     config=gen_config,
-                )
-            except Exception as exc:
-                raise RuntimeError(
-                    f"Google API error (attempt {attempt + 1}): {exc}"
-                ) from exc
+                ),
+                self.max_api_retries,
+                "Google",
+            )
 
             candidate = response.candidates[0]
             finish_reason = getattr(candidate, "finish_reason", None)

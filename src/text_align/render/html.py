@@ -68,6 +68,10 @@ body  { font-family: serif; font-size: 14px; }
 .acai-tag { font-size: 55%; font-family: Arial, sans-serif; line-height: 2;
             text-transform: uppercase; vertical-align: super;
             margin-left: 0.4em; color: #446; }
+.file-meta { font-family: Arial, sans-serif; font-size: 12px; color: #666;
+             margin: 2px 0 14px 0; letter-spacing: 0.01em; }
+.file-meta .meta-edition { font-weight: bold; color: #333; }
+.file-meta .meta-sep { color: #bbb; margin: 0 7px; }
 </style>
 """
 
@@ -575,8 +579,43 @@ def _html_open(is_r2l: bool) -> str:
     return "<html>\n<head>\n<meta charset=\"utf-8\">\n" + _CSS
 
 
+def _build_meta_row(meta_info: dict) -> str:
+    """Build the styled metadata row shown below the chapter heading."""
+    parts: list[str] = []
+
+    edition = meta_info.get("translation_abbr", "")
+    name = meta_info.get("translation_name", "")
+    if edition and name:
+        parts.append(f"<span class='meta-edition'>{edition}</span> — {name}")
+    elif edition:
+        parts.append(f"<span class='meta-edition'>{edition}</span>")
+    elif name:
+        parts.append(name)
+
+    llm = meta_info.get("llm") or {}
+    provider = llm.get("provider", "")
+    model = llm.get("model", "")
+    effort = llm.get("reasoning_effort", "")
+    if provider and model:
+        parts.append(f"{provider} / {model}")
+    elif model:
+        parts.append(model)
+    if effort:
+        parts.append(f"effort: {effort}")
+
+    iso_date = meta_info.get("iso_date", "")
+    if iso_date:
+        parts.append(iso_date)
+
+    if not parts:
+        return ""
+    sep = "<span class='meta-sep'>·</span>"
+    return f"<div class='file-meta'>{sep.join(parts)}</div>\n"
+
+
 def start_new_chapter(
-    html_out, bcv: BCVWPID, viz_path: Path, is_r2l: bool, iso_date: str
+    html_out, bcv: BCVWPID, viz_path: Path, is_r2l: bool, iso_date: str,
+    meta_info: dict | None = None,
 ) -> object:
     if html_out is not None:
         html_out.close()
@@ -587,7 +626,11 @@ def start_new_chapter(
     html_out.write(
         f"<title>{usfm_ref} ({bcv.book_ID}-{bcv.chapter_ID})</title>\n</head>\n<body>\n"
     )
-    html_out.write(f"<h1>{usfm_ref}</h1>\n<p><b>Version: {iso_date}</b></p>\n<div class='chapter'>\n")
+    html_out.write(f"<h1>{usfm_ref}</h1>\n")
+    effective_meta = dict(meta_info or {})
+    effective_meta.setdefault("iso_date", iso_date)
+    html_out.write(_build_meta_row(effective_meta))
+    html_out.write("<div class='chapter'>\n")
     html_out = start_new_verse(html_out, bcv, is_r2l)
     return html_out
 
@@ -699,6 +742,8 @@ def parse_args() -> argparse.Namespace:
                    help="Include pronominal referents in ACAI entity data")
     p.add_argument("--r2l", action="store_true",
                    help="Target language is right-to-left")
+    p.add_argument("--target-edition-name", default=None,
+                   help="Full translation name shown in the HTML header (e.g. 'Biblia de Nuestra Familia')")
     p.set_defaults(**config_defaults)
     args = p.parse_args()
     require(args, "alignment_lang", "alignment_edition", "lang_data_path", "output_dir")
@@ -805,6 +850,13 @@ def main() -> None:
         )
         viz_path.mkdir(parents=True, exist_ok=True)
 
+        meta_info: dict = {
+            "translation_abbr": args.alignment_edition,
+            "translation_name": args.target_edition_name or "",
+            "iso_date": iso_date,
+            "llm": mgr.alignmentsreader.group_meta.get("llm") or {},
+        }
+
         html_out = None
         prev_chapter_key = ""
 
@@ -815,7 +867,7 @@ def main() -> None:
             if chapter_key != prev_chapter_key:
                 if html_out is not None:
                     end_chapter(html_out)
-                html_out = start_new_chapter(html_out, current_bcv, viz_path, is_r2l, iso_date)
+                html_out = start_new_chapter(html_out, current_bcv, viz_path, is_r2l, iso_date, meta_info)
                 prev_chapter_key = chapter_key
             else:
                 end_verse(html_out)

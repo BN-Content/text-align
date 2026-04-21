@@ -78,8 +78,12 @@ def load_config(name: str) -> dict[str, Any]:
         )
     with path.open("r", encoding="utf-8") as f:
         data: dict[str, Any] = yaml.safe_load(f) or {}
+    # Normalize hyphens to underscores so YAML keys match argparse dest names.
+    # e.g. from-scratch: true → from_scratch: true (both forms accepted).
     return {
-        k: Path(v) if isinstance(v, str) and any(k.endswith(s) for s in _PATH_SUFFIXES) else v
+        k.replace("-", "_"): (
+            Path(v) if isinstance(v, str) and any(k.endswith(s) for s in _PATH_SUFFIXES) else v
+        )
         for k, v in data.items()
     }
 

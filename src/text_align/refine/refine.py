@@ -344,7 +344,7 @@ def parse_args() -> argparse.Namespace:
                         f"{', '.join(ALIGNMENT_SOURCE_TYPES)})")
     p.add_argument("--corpora", default=["ot", "nt"], nargs="+", choices=["ot", "nt"],
                    help="Corpora to process (default: ot nt)")
-    p.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic"],
+    p.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "google"],
                    help="LLM provider (default: openai)")
     p.add_argument("--llm-model", default="gpt-5.4-mini",
                    help="Model name for the chosen provider (default: gpt-5.4-mini)")

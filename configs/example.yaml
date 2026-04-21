@@ -4,7 +4,8 @@
 # Invoke any tool with:  --config bonbv   (extension is assumed)
 #
 # CLI args always override values set here.
-# Keys use underscores to match argparse dest names.
+# Keys use underscores to match argparse dest names (hyphens are also accepted
+# and normalized automatically, so from_scratch and from-scratch both work).
 # Path values are resolved as-is (use absolute paths or paths relative to CWD).
 
 # ---------------------------------------------------------------------------
@@ -68,11 +69,15 @@ creator: text-align
 # Override here to restrict to a subset, e.g. for a well-aligned English edition
 # where only a merged candidate file exists:
 # alignment_sources: [MERGED]
+#
+# Candidates are read from <output_dir>/../<SOURCE-TYPE>/ (i.e. sibling directories
+# of output_dir under the same exp/ parent). Use from_scratch: true to skip
+# candidate loading and align purely from source/target token universe.
 
 # LLM provider and model for refine-alignment.
-# provider: openai       model: gpt-5.4-mini        (default if unset)
-# provider: anthropic    model: claude-sonnet-4-6
-# provider: google       model: gemini-3.1-flash     (requires GEMINI_API_KEY)
+# llm_provider: openai       llm_model: gpt-5.4-mini        (default if unset)
+# llm_provider: anthropic    llm_model: claude-sonnet-4-6
+# llm_provider: google       llm_model: gemini-3-flash-preview  (requires GEMINI_API_KEY)
 
 # Reasoning effort / thinking level (none/minimal/low/medium/high).
 # OpenAI gpt-5.x: maps to reasoning_effort on the Responses API.

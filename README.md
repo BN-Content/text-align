@@ -151,6 +151,7 @@ refine-alignment \
                                  #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
   [--batch-size 5] \
   [--max-retries 2] \
+  [--max-api-retries 4]           # retries on 429/503 with exponential backoff
   [--verse 41004003]              # single verse (testing)
   [--verse-range 41004001 41020]  # BCV range
 ```
@@ -185,6 +186,7 @@ render-alignment \
   --lang-data-path path/to/alignments-spa/data \
   --output-dir path/to/alignments-spa/viz \
   [--alignment-dir path/to/exp/BONBV/LLM-REFINED]  # override default alignments/ path
+  [--target-edition-name "Biblia de Nuestra Familia Versión Breve"] \
   [--acai-data-dir C:/git/BibleAquifer/ACAI] \
   [--r2l]
 ```
@@ -217,12 +219,17 @@ Record-level extensions (in `meta` on each record):
 | `meta.secondary.target` | `string[]` | Target token IDs that are secondary |
 | `meta.is_idiom` | `bool` | Marks a phrase-to-phrase idiomatic alignment |
 
-Group-level extension (in `meta` on the group, alongside `creator` and `conformsTo`):
+Group-level extensions (in `meta` on the group, alongside `creator` and `conformsTo`):
 
 | Field | Type | Meaning |
 |-------|------|---------|
 | `meta.nonEquivalent.source` | `string[]` | Source token IDs positively determined to have no translation equivalent |
 | `meta.nonEquivalent.target` | `string[]` | Target token IDs positively determined to have no source correspondent |
+| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`) |
+| `meta.llm.model` | `string` | Model name, e.g. `gpt-5.4-mini` |
+| `meta.llm.reasoning_effort` | `string` | Reasoning effort level if set, e.g. `high` |
+
+`AlignmentsReader.group_meta` exposes the full raw group meta dict so downstream tools (e.g. `render-alignment`) can read back fields like `llm` without re-parsing the JSON.
 
 All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivalent` tokens are distinct from simply unrecorded tokens — they represent a positive determination of non-equivalence (see §3.5 of alignment-principles). See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
 

@@ -88,6 +88,25 @@ iterates the `verses` array from a tool-call response, skipping and logging any 
 that is not a dict. This guards against malformed model output (e.g. a string element
 in the array) that would otherwise crash with `AttributeError` on `.get()`.
 
+`_api_call_with_backoff(fn, max_retries, provider)` wraps each provider's API call.
+It retries on 429 (rate-limited) and 503 (overloaded) with exponential backoff (2s,
+4s, 8s, …) up to `max_retries` times, and fails fast on non-retriable errors.
+`_status_code(exc)` extracts the HTTP status code from any provider exception.
+Exposed via `--max-api-retries` (default 4) in `refine-alignment`.
+
+## render-alignment header (`render/html.py`)
+
+Each chapter file opens with a styled `.file-meta` row below the `<h1>` showing:
+edition abbreviation + full name, LLM provider/model/reasoning_effort (read from
+`group_meta["llm"]` in the alignment JSON), and the render date.
+
+- `_build_meta_row(meta_info)` assembles the HTML row; missing fields are omitted
+  gracefully.
+- `AlignmentsReader.group_meta` (added to `burrito/alignments.py`) exposes the full
+  group-level JSON meta dict so render can read back whatever refine stored.
+- `--target-edition-name` CLI arg (also `target_edition_name` in YAML) supplies the
+  full translation name; the edition abbreviation comes from `--alignment-edition`.
+
 ## Testing
 
 Run tests with:

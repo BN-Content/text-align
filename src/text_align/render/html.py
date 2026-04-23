@@ -39,6 +39,7 @@ import regex as re
 from biblelib.word import BCVID, BCVWPID
 
 from text_align.burrito import AlignmentSet, Manager
+from text_align.burrito.alignments import AlignmentsReader
 from text_align.config import load_config_from_args, require
 from text_align.align.acai_common import (
     ACAI_TYPES,
@@ -760,16 +761,34 @@ def main() -> None:
     adir = args.alignment_dir
     managers = []
     for sourceid, canon in (("WLCM", "ot"), ("SBLGNT", "nt")):
-        override = adir / f"{sourceid}-{args.alignment_edition}-manual.json" if adir else None
         try:
-            alset = AlignmentSet(
-                targetlanguage=args.alignment_lang,
-                targetid=args.alignment_edition,
-                sourceid=sourceid,
-                langdatapath=args.lang_data_path,
-                alignmentpath_override=override,
+            # Prefer chapter files ({sourceid}-{edition}-BB-CCC-manual.json) when present
+            chapter_files = (
+                sorted(adir.glob(f"{sourceid}-{args.alignment_edition}-??-???-manual.json"))
+                if adir else []
             )
-            managers.append(Manager(alset))
+            if chapter_files:
+                print(f"  Found {len(chapter_files)} chapter file(s) for {sourceid} — merging")
+                # Use first chapter file as the alignmentpath sentinel (exists, assertion passes)
+                alset = AlignmentSet(
+                    targetlanguage=args.alignment_lang,
+                    targetid=args.alignment_edition,
+                    sourceid=sourceid,
+                    langdatapath=args.lang_data_path,
+                    alignmentpath_override=chapter_files[0],
+                )
+                reader = AlignmentsReader.from_chapter_files(chapter_files, alset)
+                managers.append(Manager(alset, preloaded_reader=reader))
+            else:
+                override = adir / f"{sourceid}-{args.alignment_edition}-manual.json" if adir else None
+                alset = AlignmentSet(
+                    targetlanguage=args.alignment_lang,
+                    targetid=args.alignment_edition,
+                    sourceid=sourceid,
+                    langdatapath=args.lang_data_path,
+                    alignmentpath_override=override,
+                )
+                managers.append(Manager(alset))
         except AssertionError as exc:
             print(f"Skipping {canon.upper()} ({sourceid}): {exc}")
 

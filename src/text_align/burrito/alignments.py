@@ -3,6 +3,7 @@
 from collections import defaultdict
 from dataclasses import fields as dataclass_fields
 import json
+from pathlib import Path
 from typing import Any, Optional, TextIO
 
 from .AlignmentGroup import Document, Metadata, AlignmentGroup, AlignmentReference, AlignmentRecord
@@ -54,6 +55,7 @@ class AlignmentsReader:
         keeptargetwordpart: bool = False,
         keepbadrecords: bool = False,
         keeprejected: bool = False,
+        _preloaded_data: Optional[dict] = None,
     ) -> None:
         self.alignmentset = alignmentset
         self.keeptargetwordpart = keeptargetwordpart
@@ -65,7 +67,9 @@ class AlignmentsReader:
         self.neq_source: frozenset[str] = frozenset()
         self.neq_target: frozenset[str] = frozenset()
         self.group_meta: dict = {}
-        self.alignmentgroup: AlignmentGroup = self.read_alignments(keeprejected=keeprejected)
+        self.alignmentgroup: AlignmentGroup = self.read_alignments(
+            keeprejected=keeprejected, data=_preloaded_data
+        )
 
     def _targetid(self, targetid: str) -> str:
         if not self.keeptargetwordpart and len(targetid) == 12:
@@ -97,48 +101,113 @@ class AlignmentsReader:
             meta=meta, references={"source": sourceref, "target": targetref}, type=self.altype
         )
 
-    def read_alignments(self, keeprejected: bool = False) -> AlignmentGroup:
-        with self.alignmentset.alignmentpath.open("rb") as f:
-            data = json.load(f)
-            if isinstance(data, list):
-                raise ValueError(
-                    f"{self.alignmentset.alignmentpath} should be an object, not a list."
-                )
-            # Handle SB 0.4 groups wrapper; extract group-level NEQ sets
-            if "groups" in data:
-                agroupdict = data["groups"][0]
-                neq = agroupdict["meta"].get("nonEquivalent", {})
-                self.neq_source = frozenset(neq.get("source", []))
-                self.neq_target = frozenset(neq.get("target", []))
-            else:
-                agroupdict = data
-            self.group_meta = dict(agroupdict.get("meta", {}))
-            known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
-            raw_meta = {k: v for k, v in agroupdict["meta"].items() if k in known_fields}
-            meta = Metadata(**raw_meta)
-            assert agroupdict["type"] == self.altype.type, (
-                f"Unexpected alignment type: {agroupdict['type']}"
+    @classmethod
+    def from_chapter_files(
+        cls,
+        paths: list[Path],
+        alignmentset: AlignmentSet,
+        keeptargetwordpart: bool = False,
+        keepbadrecords: bool = False,
+        keeprejected: bool = False,
+    ) -> "AlignmentsReader":
+        """Create an AlignmentsReader by merging records from multiple chapter JSON files.
+
+        Each file is expected to be an SB 0.4 alignment JSON covering one chapter.
+        NEQ sets and records are merged across all files.  ``group_meta`` is taken
+        from the first file (alphabetically) and shared across all chapters.
+        """
+        merged_records: list[dict] = []
+        merged_neq_source: list[str] = []
+        merged_neq_target: list[str] = []
+        first_meta: Optional[dict] = None
+        last_group: dict = {}
+
+        for path in sorted(paths):
+            with path.open("rb") as f:
+                raw = json.load(f)
+            group = raw["groups"][0] if "groups" in raw else raw
+            last_group = group
+            if first_meta is None:
+                first_meta = dict(group.get("meta", {}))
+            neq = group.get("meta", {}).get("nonEquivalent", {})
+            merged_neq_source.extend(neq.get("source", []))
+            merged_neq_target.extend(neq.get("target", []))
+            merged_records.extend(group.get("records", []))
+
+        merged_meta: dict = dict(first_meta or {})
+        if merged_neq_source or merged_neq_target:
+            non_equiv: dict = {}
+            if merged_neq_source:
+                non_equiv["source"] = merged_neq_source
+            if merged_neq_target:
+                non_equiv["target"] = merged_neq_target
+            merged_meta["nonEquivalent"] = non_equiv
+        elif "nonEquivalent" in merged_meta:
+            del merged_meta["nonEquivalent"]
+
+        merged_data: dict = {
+            "format": "alignment",
+            "version": "0.4",
+            "groups": [{
+                "type": "translation",
+                "meta": merged_meta,
+                "documents": last_group.get("documents", []),
+                "roles": last_group.get("roles", ["source", "target"]),
+                "records": merged_records,
+            }],
+        }
+
+        return cls(
+            alignmentset=alignmentset,
+            keeptargetwordpart=keeptargetwordpart,
+            keepbadrecords=keepbadrecords,
+            keeprejected=keeprejected,
+            _preloaded_data=merged_data,
+        )
+
+    def read_alignments(self, keeprejected: bool = False, data: Optional[dict] = None) -> AlignmentGroup:
+        if data is None:
+            with self.alignmentset.alignmentpath.open("rb") as f:
+                data = json.load(f)
+        if isinstance(data, list):
+            raise ValueError(
+                f"{self.alignmentset.alignmentpath} should be an object, not a list."
             )
-            records: list[AlignmentRecord] = [
-                record
-                for alrec in agroupdict["records"]
-                if (record := self._make_record(alrec))
-            ]
-            self.rejected = {
-                recid: rec for rec in records
-                if rec.meta.status == "rejected"
-                if (recid := rec.meta.id)
-            }
-            if not keeprejected:
-                records = [rec for rec in records if rec.meta.id not in self.rejected]
-                if self.rejected:
-                    print(f"Dropping {len(self.rejected)} rejected records")
-            return AlignmentGroup(
-                documents=(self.sourcedoc, self.targetdoc),
-                meta=meta,
-                records=sorted(records),
-                roles=records[0].roles,
-            )
+        # Handle SB 0.4 groups wrapper; extract group-level NEQ sets
+        if "groups" in data:
+            agroupdict = data["groups"][0]
+            neq = agroupdict["meta"].get("nonEquivalent", {})
+            self.neq_source = frozenset(neq.get("source", []))
+            self.neq_target = frozenset(neq.get("target", []))
+        else:
+            agroupdict = data
+        self.group_meta = dict(agroupdict.get("meta", {}))
+        known_fields = {f.name for f in dataclass_fields(Metadata) if f.name != "_fieldnames"}
+        raw_meta = {k: v for k, v in agroupdict["meta"].items() if k in known_fields}
+        meta = Metadata(**raw_meta)
+        assert agroupdict["type"] == self.altype.type, (
+            f"Unexpected alignment type: {agroupdict['type']}"
+        )
+        records: list[AlignmentRecord] = [
+            record
+            for alrec in agroupdict["records"]
+            if (record := self._make_record(alrec))
+        ]
+        self.rejected = {
+            recid: rec for rec in records
+            if rec.meta.status == "rejected"
+            if (recid := rec.meta.id)
+        }
+        if not keeprejected:
+            records = [rec for rec in records if rec.meta.id not in self.rejected]
+            if self.rejected:
+                print(f"Dropping {len(self.rejected)} rejected records")
+        return AlignmentGroup(
+            documents=(self.sourcedoc, self.targetdoc),
+            meta=meta,
+            records=sorted(records),
+            roles=records[0].roles,
+        )
 
     def _clean_corpus(self, records: dict[str, AlignmentRecord]) -> None:
         def _flag_dupes(dupedict: dict[str, list[AlignmentRecord]], reason: Reason) -> None:

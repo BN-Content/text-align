@@ -4,6 +4,8 @@ Takes automated alignment candidates (ACAI, SIM-MIGRATED, DIFF-MIGRATED) for a
 target edition, presents each verse to an LLM with source and target tokens, and
 produces a refined alignment JSON applying alignment-principles guidelines.
 
+Output is one JSON file per chapter: {corpus_id}-{edition}-{BB}-{CCC}-manual.json
+
 CLI entry point: refine-alignment
 """
 
@@ -33,6 +35,7 @@ _SANITIZE_WARN_PCT = 0.02   # 2%
 _SANITIZE_WARN_MIN = 5      # absolute floor to suppress noise on small runs
 
 _SOURCES_DIR = ROOT / "data" / "sources"
+_JOBS_DIR = ROOT / "jobs"
 
 
 # ---------------------------------------------------------------------------
@@ -152,6 +155,76 @@ def build_output_alignment(
     }
 
 
+def _write_chapter_file(
+    chapter_id: str,
+    records: list[dict],
+    corpus_id: str,
+    target_edition: str,
+    output_dir: Path,
+    creator: str,
+    llm_provider: str | None,
+    llm_model: str | None,
+    reasoning_effort: str | None,
+) -> Path:
+    """Write one chapter's records to a chapter-based JSON file.
+
+    Returns the output path.
+    """
+    book_id = chapter_id[:2]
+    chap_num = chapter_id[2:]
+    out_path = output_dir / f"{corpus_id}-{target_edition}-{book_id}-{chap_num}-manual.json"
+
+    output = build_output_alignment(
+        records, corpus_id, target_edition, creator,
+        llm_provider=llm_provider, llm_model=llm_model, reasoning_effort=reasoning_effort,
+    )
+    write_alignment_json(output, out_path)
+    return out_path
+
+
+# ---------------------------------------------------------------------------
+# Range filtering
+# ---------------------------------------------------------------------------
+
+def _filter_verse_ids(verse_ids: list[str], args: argparse.Namespace) -> list[str]:
+    """Return the subset of verse_ids matching the active range filter on args.
+
+    Checks (in order): --verse, --verse-range, --book, --book-range,
+    --chapter, --chapter-range.  When no filter is active, returns verse_ids
+    unchanged.
+    """
+    if getattr(args, "verse", None):
+        vid = args.verse
+        result = [vid] if vid in set(verse_ids) else []
+        if not result:
+            print(f"Verse {vid} not found in verse set — skipping.")
+        return result
+
+    if getattr(args, "verse_range", None):
+        start, end = args.verse_range
+        return [v for v in verse_ids if start <= v <= end]
+
+    if getattr(args, "book", None):
+        book = str(args.book).zfill(2)
+        return [v for v in verse_ids if v[:2] == book]
+
+    if getattr(args, "book_range", None):
+        start = str(args.book_range[0]).zfill(2)
+        end = str(args.book_range[1]).zfill(2)
+        return [v for v in verse_ids if start <= v[:2] <= end]
+
+    if getattr(args, "chapter", None):
+        chap = str(args.chapter).zfill(5)
+        return [v for v in verse_ids if v[:5] == chap]
+
+    if getattr(args, "chapter_range", None):
+        start = str(args.chapter_range[0]).zfill(5)
+        end = str(args.chapter_range[1]).zfill(5)
+        return [v for v in verse_ids if start <= v[:5] <= end]
+
+    return verse_ids
+
+
 # ---------------------------------------------------------------------------
 # Per-corpus processing
 # ---------------------------------------------------------------------------
@@ -172,11 +245,12 @@ def process_corpus(
     llm_provider: str | None = None,
     llm_model: str | None = None,
     reasoning_effort: str | None = None,
-    single_verse: str | None = None,
-    verse_range: tuple[str, str] | None = None,
+    args: argparse.Namespace | None = None,
     from_scratch: bool = False,
+    batch_mode: str = "sync",
+    jobs_dir: Path = _JOBS_DIR,
 ) -> None:
-    """Process one corpus (``"nt"`` or ``"ot"``) and write its output JSON."""
+    """Process one corpus (``"nt"`` or ``"ot"``) and write chapter-based output JSON files."""
     corpus_id = "SBLGNT" if corpus == "nt" else "WLCM"
     print(f"\n--- {corpus.upper()} ({corpus_id}) ---")
 
@@ -210,117 +284,269 @@ def process_corpus(
     else:
         verse_ids = sorted(set(source_verses.keys()) & set(target_verses.keys()))
 
-    is_nt_corpus = corpus == "nt"
+    # Apply range filter
+    if args is not None:
+        verse_ids = _filter_verse_ids(verse_ids, args)
 
-    if single_verse:
-        verse_book = int(single_verse[:2])
-        if (verse_book > 39) != is_nt_corpus:
-            return  # verse is from the other testament; nothing to do
-        verse_ids = [single_verse] if single_verse in verse_ids else []
-        if not verse_ids:
-            print(f"Verse {single_verse} not found in verse set — skipping.")
-            return
-    elif verse_range:
-        start, end = verse_range
-        start_book = int(start[:2])
-        if (start_book > 39) != is_nt_corpus:
-            return  # range is from the other testament; nothing to do
-        verse_ids = [v for v in verse_ids if start <= v <= end]
-        if not verse_ids:
-            print(f"No verses found in range {start}–{end} — skipping.")
-            return
+    if not verse_ids:
+        print("No verses to process — skipping.")
+        return
 
-    total_batches = (len(verse_ids) + batch_size - 1) // batch_size
-    print(f"Processing {len(verse_ids)} verses in {total_batches} batch(es) ...")
+    # Group verse IDs by chapter (vid[:5] = BBCCC)
+    chapters: dict[str, list[str]] = {}
+    for vid in verse_ids:
+        chapters.setdefault(vid[:5], []).append(vid)
 
-    all_records: list[dict] = []
-    all_errors: list[str] = []
-    all_san_details: list[str] = []
+    total_verses = len(verse_ids)
+    total_chapters = len(chapters)
+    print(f"Processing {total_verses} verses across {total_chapters} chapter(s) ...")
 
-    for batch_num, batch_start in enumerate(range(0, len(verse_ids), batch_size), 1):
-        batch_ids = verse_ids[batch_start:batch_start + batch_size]
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-        verse_batch = []
-        verse_source_ids: dict[str, set[str]] = {}
-        verse_target_ids: dict[str, set[str]] = {}
-
-        for verse_id in batch_ids:
-            src_tokens = source_verses.get(verse_id, [])
-            tgt_verse  = target_verses.get(verse_id)
-            tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-
-            cands = {
-                src_type: recs[verse_id]
-                for src_type, recs in candidates_by_type.items()
-                if verse_id in recs
-            }
-            verse_source_ids[verse_id] = {t.id for t in src_tokens}
-            verse_target_ids[verse_id] = {t.id for t in tgt_tokens}
-            verse_batch.append((verse_id, src_tokens, tgt_tokens, cands))
-
-        all_src = [t for _, src, _, _ in verse_batch for t in src]
-        phenomena   = detect_phenomena(all_src)
-        system_msg  = build_system_prompt(phenomena, target_language)
-        user_msg    = build_batch_message(verse_batch, target_language)
-
-        print(f"  Batch {batch_num}/{total_batches}: calling LLM ({len(batch_ids)} verses) ...", flush=True)
-        results, errors, san_details = llm_client.call_batch(
-            system_prompt=system_msg,
-            user_message=user_msg,
-            verse_source_ids=verse_source_ids,
-            verse_target_ids=verse_target_ids,
+    if batch_mode == "async":
+        _process_corpus_async(
+            chapters=chapters,
+            source_verses=source_verses,
+            target_verses=target_verses,
+            candidates_by_type=candidates_by_type,
+            corpus_id=corpus_id,
+            target_edition=target_edition,
+            target_language=target_language,
+            target_tsv_dir=target_tsv_dir,
+            output_dir=output_dir,
+            sources_dir=sources_dir,
+            corpus=corpus,
+            llm_client=llm_client,
+            batch_size=batch_size,
+            creator=creator,
+            llm_provider=llm_provider or llm_client.provider,
+            llm_model=llm_model or llm_client.model,
+            reasoning_effort=reasoning_effort,
+            jobs_dir=jobs_dir,
+        )
+    else:
+        _process_corpus_sync(
+            chapters=chapters,
+            source_verses=source_verses,
+            target_verses=target_verses,
+            candidates_by_type=candidates_by_type,
+            corpus_id=corpus_id,
+            target_edition=target_edition,
+            target_language=target_language,
+            output_dir=output_dir,
+            llm_client=llm_client,
+            batch_size=batch_size,
             max_retries=max_retries,
+            creator=creator,
+            llm_provider=llm_provider,
+            llm_model=llm_model,
+            reasoning_effort=reasoning_effort,
         )
 
-        n_records = sum(len(r) for r in results.values())
-        status = f"{len(results)}/{len(batch_ids)} verses, {n_records} records"
-        if errors:
-            status += f", {len(errors)} error(s)"
-        print(f"  Batch {batch_num}/{total_batches}: {status}")
 
-        for recs in results.values():
-            all_records.extend(recs)
-        all_errors.extend(errors)
-        all_san_details.extend(san_details)
+def _process_corpus_sync(
+    chapters: dict[str, list[str]],
+    source_verses: dict,
+    target_verses: dict,
+    candidates_by_type: dict[str, dict[str, list[dict]]],
+    corpus_id: str,
+    target_edition: str,
+    target_language: str,
+    output_dir: Path,
+    llm_client: LLMClient,
+    batch_size: int,
+    max_retries: int,
+    creator: str,
+    llm_provider: str | None,
+    llm_model: str | None,
+    reasoning_effort: str | None,
+) -> None:
+    """Synchronous path: call LLM per batch, write one file per chapter."""
+    all_san_details_total: list[str] = []
+    all_errors_total: list[str] = []
+    total_records = 0
 
-    # Write output
-    n_neq_recs = sum(1 for r in all_records if (r.get("meta") or {}).get("rel") == "NEQ")
-    print(f"  Records collected: {len(all_records)} total, {n_neq_recs} NEQ, {len(all_records) - n_neq_recs} regular")
-    output   = build_output_alignment(
-        all_records, corpus_id, target_edition, creator,
-        llm_provider=llm_provider, llm_model=llm_model, reasoning_effort=reasoning_effort,
-    )
-    group    = output["groups"][0]
-    n_reg    = len(group["records"])
-    neq      = group["meta"].get("nonEquivalent") or {}
-    n_neq_s  = len(neq.get("source", []))
-    n_neq_t  = len(neq.get("target", []))
+    for chapter_id, chapter_verse_ids in chapters.items():
+        chapter_records: list[dict] = []
+        chapter_errors: list[str] = []
+        chapter_san: list[str] = []
 
-    out_path = output_dir / f"{corpus_id}-{target_edition}-manual.json"
-    write_alignment_json(output, out_path)
+        total_batches = (len(chapter_verse_ids) + batch_size - 1) // batch_size
 
-    print(f"\n  → {out_path}")
-    print(f"     {n_reg} records | "
-          f"NEQ source: {n_neq_s} | NEQ target: {n_neq_t}")
+        for batch_num, batch_start in enumerate(range(0, len(chapter_verse_ids), batch_size), 1):
+            batch_ids = chapter_verse_ids[batch_start:batch_start + batch_size]
 
-    n_sanitized = len(all_san_details)
+            verse_batch = []
+            verse_source_ids: dict[str, set[str]] = {}
+            verse_target_ids: dict[str, set[str]] = {}
+
+            for verse_id in batch_ids:
+                src_tokens = source_verses.get(verse_id, [])
+                tgt_verse = target_verses.get(verse_id)
+                tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+
+                cands = {
+                    src_type: recs[verse_id]
+                    for src_type, recs in candidates_by_type.items()
+                    if verse_id in recs
+                }
+                verse_source_ids[verse_id] = {t.id for t in src_tokens}
+                verse_target_ids[verse_id] = {t.id for t in tgt_tokens}
+                verse_batch.append((verse_id, src_tokens, tgt_tokens, cands))
+
+            all_src = [t for _, src, _, _ in verse_batch for t in src]
+            phenomena = detect_phenomena(all_src)
+            system_msg = build_system_prompt(phenomena, target_language)
+            user_msg = build_batch_message(verse_batch, target_language)
+
+            print(
+                f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
+                f"calling LLM ({len(batch_ids)} verses) ...", flush=True,
+            )
+            results, errors, san_details = llm_client.call_batch(
+                system_prompt=system_msg,
+                user_message=user_msg,
+                verse_source_ids=verse_source_ids,
+                verse_target_ids=verse_target_ids,
+                max_retries=max_retries,
+            )
+
+            n_records = sum(len(r) for r in results.values())
+            status = f"{len(results)}/{len(batch_ids)} verses, {n_records} records"
+            if errors:
+                status += f", {len(errors)} error(s)"
+            print(f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: {status}")
+
+            for recs in results.values():
+                chapter_records.extend(recs)
+            chapter_errors.extend(errors)
+            chapter_san.extend(san_details)
+
+        out_path = _write_chapter_file(
+            chapter_id, chapter_records, corpus_id, target_edition, output_dir,
+            creator, llm_provider, llm_model, reasoning_effort,
+        )
+        n_neq = sum(1 for r in chapter_records if (r.get("meta") or {}).get("rel") == "NEQ")
+        print(
+            f"  → {out_path.name}  "
+            f"({len(chapter_records)} records, {n_neq} NEQ)"
+        )
+
+        total_records += len(chapter_records)
+        all_errors_total.extend(chapter_errors)
+        all_san_details_total.extend(chapter_san)
+
+    # Summary
+    print(f"\n  Total: {total_records} records across {len(chapters)} chapter(s)")
+
+    n_sanitized = len(all_san_details_total)
     if n_sanitized:
-        san_pct = n_sanitized / n_reg * 100 if n_reg else 0
-        san_msg = f"     {n_sanitized} record(s) sanitized — {san_pct:.1f}% of records"
+        san_pct = n_sanitized / total_records * 100 if total_records else 0
+        san_msg = f"  {n_sanitized} record(s) sanitized — {san_pct:.1f}% of records"
         if n_sanitized >= _SANITIZE_WARN_MIN and san_pct >= _SANITIZE_WARN_PCT * 100:
             print(f"  !! PROMPT REVIEW SUGGESTED: {san_msg.strip()}")
-            print(f"     Sanitization details:")
-            for detail in all_san_details:
+            for detail in all_san_details_total:
                 print(f"       {detail}")
         else:
             print(san_msg)
 
-    if all_errors:
-        print(f"     {len(all_errors)} unresolved validation error(s):")
-        for err in all_errors[:10]:
-            print(f"       {err}")
-        if len(all_errors) > 10:
-            print(f"       ... and {len(all_errors) - 10} more")
+    if all_errors_total:
+        print(f"  {len(all_errors_total)} unresolved validation error(s):")
+        for err in all_errors_total[:10]:
+            print(f"    {err}")
+        if len(all_errors_total) > 10:
+            print(f"    ... and {len(all_errors_total) - 10} more")
+
+
+def _process_corpus_async(
+    chapters: dict[str, list[str]],
+    source_verses: dict,
+    target_verses: dict,
+    candidates_by_type: dict[str, dict[str, list[dict]]],
+    corpus_id: str,
+    target_edition: str,
+    target_language: str,
+    target_tsv_dir: Path,
+    output_dir: Path,
+    sources_dir: Path,
+    corpus: str,
+    llm_client: LLMClient,
+    batch_size: int,
+    creator: str,
+    llm_provider: str,
+    llm_model: str,
+    reasoning_effort: str | None,
+    jobs_dir: Path,
+) -> None:
+    """Async path: build all request payloads and submit to provider batch API."""
+    if llm_provider != "google":
+        raise SystemExit(
+            f"Async batch mode is currently only supported for provider 'google', "
+            f"not {llm_provider!r}. Use --batch-mode sync or --llm-provider google."
+        )
+
+    from .async_batch import submit_google
+
+    chapter_batches: list[dict] = []
+
+    for chapter_id, chapter_verse_ids in chapters.items():
+        for batch_index, batch_start in enumerate(range(0, len(chapter_verse_ids), batch_size)):
+            batch_ids = chapter_verse_ids[batch_start:batch_start + batch_size]
+
+            verse_batch = []
+            for verse_id in batch_ids:
+                src_tokens = source_verses.get(verse_id, [])
+                tgt_verse = target_verses.get(verse_id)
+                tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+                cands = {
+                    src_type: recs[verse_id]
+                    for src_type, recs in candidates_by_type.items()
+                    if verse_id in recs
+                }
+                verse_batch.append((verse_id, src_tokens, tgt_tokens, cands))
+
+            all_src = [t for _, src, _, _ in verse_batch for t in src]
+            phenomena = detect_phenomena(all_src)
+            system_msg = build_system_prompt(phenomena, target_language)
+            user_msg = build_batch_message(verse_batch, target_language)
+
+            chapter_batches.append({
+                "chapter_id": chapter_id,
+                "batch_index": batch_index,
+                "verse_ids": batch_ids,
+                "system_prompt": system_msg,
+                "user_message": user_msg,
+            })
+
+    print(f"  Submitting {len(chapter_batches)} request(s) to Google batch API ...")
+
+    job_metadata_base = {
+        "target_edition": target_edition,
+        "target_language": target_language,
+        "corpus": corpus,
+        "corpus_id": corpus_id,
+        "output_dir": str(output_dir),
+        "creator": creator,
+        "sources_dir": str(sources_dir),
+        "target_tsv_dir": str(target_tsv_dir),
+    }
+
+    import os
+    from google import genai as _genai
+    genai_client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+    job_name, meta_path = submit_google(
+        genai_client=genai_client,
+        model=llm_model,
+        reasoning_effort=reasoning_effort,
+        chapter_batches=chapter_batches,
+        jobs_dir=jobs_dir,
+        job_metadata_base=job_metadata_base,
+    )
+
+    print(f"  Submitted: {job_name}")
+    print(f"  Job metadata: {meta_path}")
+    print(f"  Retrieve results with: fetch-batch {meta_path}")
 
 
 # ---------------------------------------------------------------------------
@@ -338,7 +564,8 @@ def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(
         description=(
             "Refine alignment candidates with an LLM, applying alignment-principles "
-            "guidelines (primary/secondary, idiom flags, NEQ)."
+            "guidelines (primary/secondary, idiom flags, NEQ). "
+            "Writes one JSON file per chapter."
         )
     )
     p.add_argument("--config", metavar="NAME",
@@ -377,14 +604,31 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-api-retries", type=int, default=4,
                    help="Retry attempts on transient API errors (429/503) with "
                         "exponential backoff — 2s, 4s, 8s, … (default: 4)")
-    p.add_argument("--verse", default=None, metavar="BCV",
-                   help="Process a single verse BCV for testing, e.g. 41004003")
-    p.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
-                   help="Process a BCV range, e.g. --verse-range 41004001 41004020")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
     p.add_argument("--from-scratch", action="store_true", default=False,
                    help="Skip candidate loading and align entirely from source/target tokens")
+    p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
+                   help="sync: call LLM and write results immediately (default); "
+                        "async: submit to provider batch API and exit "
+                        "(use fetch-batch to retrieve results)")
+    p.add_argument("--jobs-dir", default=_JOBS_DIR, type=Path,
+                   help=f"Directory for async batch job metadata (default: {_JOBS_DIR})")
+
+    # Range filtering — all mutually exclusive
+    range_group = p.add_mutually_exclusive_group()
+    range_group.add_argument("--verse", default=None, metavar="BCV",
+                             help="Process a single verse BCV for testing, e.g. 41004003")
+    range_group.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
+                             help="Process a BCV range, e.g. --verse-range 41004001 41004020")
+    range_group.add_argument("--book", default=None, metavar="BB",
+                             help="Process a single book, e.g. --book 41 (Mark)")
+    range_group.add_argument("--book-range", default=None, nargs=2, metavar=("START", "END"),
+                             help="Process a range of books, e.g. --book-range 41 44")
+    range_group.add_argument("--chapter", default=None, metavar="BBCCC",
+                             help="Process a single chapter, e.g. --chapter 41003 (Mark 3)")
+    range_group.add_argument("--chapter-range", default=None, nargs=2, metavar=("START", "END"),
+                             help="Process a range of chapters, e.g. --chapter-range 41001 41016")
 
     p.set_defaults(**config_defaults)
     args = p.parse_args()
@@ -392,9 +636,6 @@ def parse_args() -> argparse.Namespace:
 
     if args.alignment_sources is None:
         args.alignment_sources = ALIGNMENT_SOURCE_TYPES
-
-    if args.verse and args.verse_range:
-        raise SystemExit("error: --verse and --verse-range are mutually exclusive")
 
     return args
 
@@ -413,10 +654,21 @@ def main() -> None:
     else:
         print(f"  Sources:   {', '.join(args.alignment_sources)}")
     print(f"  Output:    {args.output_dir}")
+    print(f"  Mode:      {args.batch_mode}")
+
+    # Print active range filter
     if args.verse:
-        print(f"  Verse:     {args.verse} (single-verse mode)")
+        print(f"  Filter:    verse {args.verse}")
     elif args.verse_range:
-        print(f"  Range:     {args.verse_range[0]}–{args.verse_range[1]}")
+        print(f"  Filter:    verse range {args.verse_range[0]}–{args.verse_range[1]}")
+    elif args.book:
+        print(f"  Filter:    book {args.book}")
+    elif args.book_range:
+        print(f"  Filter:    book range {args.book_range[0]}–{args.book_range[1]}")
+    elif args.chapter:
+        print(f"  Filter:    chapter {args.chapter}")
+    elif args.chapter_range:
+        print(f"  Filter:    chapter range {args.chapter_range[0]}–{args.chapter_range[1]}")
 
     llm_client = LLMClient(
         provider=args.llm_provider,
@@ -442,9 +694,10 @@ def main() -> None:
             llm_provider=args.llm_provider,
             llm_model=args.llm_model,
             reasoning_effort=args.reasoning_effort,
-            single_verse=args.verse,
-            verse_range=tuple(args.verse_range) if args.verse_range else None,
+            args=args,
             from_scratch=args.from_scratch,
+            batch_mode=args.batch_mode,
+            jobs_dir=args.jobs_dir,
         )
 
 

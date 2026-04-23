@@ -1,0 +1,51 @@
+# APBRT.yaml — config for Aquifer Portuguese Reference Bible Text (APBRT)
+#
+# Invoke any tool with:  --config APBRT
+
+alignments_root: C:/git/Clear
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+target_language: por
+target_edition: APBRT
+target_edition_name: Aquifer Portuguese Reference Bible Text
+
+source_edition: JFA11
+source_language: por
+
+alignment_sources: [SIM-MIGRATED, DIFF-MIGRATED]
+alignment_suffix: LLM-REFINED
+from-scratch: true
+
+# Anthropic
+#llm_provider: anthropic
+#llm_model: claude-sonnet-4-6
+#llm_model: claude-opus-4-7
+#reasoning_effort: high
+# OpenAI
+#llm_provider: openai
+#llm_model: gpt-5.4-mini
+#llm_model: gpt-5.4
+#reasoning_effort: low
+# Google
+reasoning_effort: high
+llm_provider: google
+#llm_model: gemini-3-flash-preview
+llm_model: gemini-3.1-pro-preview
+
+# ---------------------------------------------------------------------------
+# ACAI and trabina
+# ---------------------------------------------------------------------------
+
+acai_data_dir: C:/git/BibleAquifer/ACAI
+trabina_dir: C:/git/BN-Content/trabina/data/weighted
+
+# ---------------------------------------------------------------------------
+# sim-migrate settings
+# ---------------------------------------------------------------------------
+
+model: sentence-transformers/LaBSE
+min_similarity: 0.7
+max_word_distance: 8

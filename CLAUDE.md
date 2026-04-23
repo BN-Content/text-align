@@ -22,10 +22,12 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment CLI
-│   ├── prompt/    # language-aware prompt system (see below)
-│   ├── llm.py     # LLMClient: OpenAI / Anthropic / Google
-│   └── refine.py  # CLI entry point
+├── refine/        # refine-alignment + fetch-batch CLIs
+│   ├── prompt/       # language-aware prompt system (see below)
+│   ├── llm.py        # LLMClient: OpenAI / Anthropic / Google (sync)
+│   ├── async_batch.py # provider batch-API helpers (Google first; others stubbed)
+│   ├── refine.py     # refine-alignment CLI entry point
+│   └── fetch_batch.py # fetch-batch CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
 
@@ -107,6 +109,72 @@ edition abbreviation + full name, LLM provider/model/reasoning_effort (read from
 - `--target-edition-name` CLI arg (also `target_edition_name` in YAML) supplies the
   full translation name; the edition abbreviation comes from `--alignment-edition`.
 
+## refine-alignment output granularity
+
+Output is one JSON file per chapter, not one per corpus:
+
+```
+SBLGNT-OENGB-41-003-manual.json   ← Mark 3 (book 41, chapter 003)
+SBLGNT-OENGB-41-004-manual.json
+```
+
+Format: `{corpus_id}-{edition}-{BB}-{CCC}-manual.json`.
+The internal SB 0.4 JSON structure is identical to the old corpus-level file;
+it just covers one chapter.
+
+## refine-alignment range filtering
+
+New args narrow which verses are processed. All are mutually exclusive with
+each other and with `--verse` / `--verse-range`.
+
+| Arg | Format | Example |
+|-----|--------|---------|
+| `--book BB` | 2-digit book number | `--book 41` |
+| `--book-range BB BB` | inclusive book range | `--book-range 41 44` |
+| `--chapter BBCCC` | 5-digit chapter | `--chapter 41003` |
+| `--chapter-range BBCCC BBCCC` | inclusive chapter range | `--chapter-range 41001 41016` |
+
+Filtering uses string-prefix comparison on 8-char `BBCCCVVV` verse IDs
+(`vid[:2]` = book, `vid[:5]` = chapter); no extra biblelib imports needed.
+
+## Async batch mode (`refine/async_batch.py`)
+
+`refine-alignment --batch-mode async` submits all LLM calls to the provider's
+batch API (currently Google only; Anthropic and OpenAI are stubbed) and exits,
+writing a job metadata JSON to `jobs/{provider}/{job_id}.json`.
+
+`fetch-batch <job-metadata-file>` retrieves completed results and writes
+chapter JSON files. Flags: `--poll` (print status, exit), `--wait` (block
+until done).
+
+Job metadata format: see `docs/batch-api-plan.md`.
+
+Google batch API: `client.batches.create(src=types.BatchJobSource(inlined_requests=[...]))`.
+Each `InlinedRequest` carries `metadata={"request_index": "N"}` for result
+matching; responses come back as `job.dest.inlined_responses`.
+
+## render-alignment chapter-file detection (`render/html.py`)
+
+The renderer auto-detects chapter files. When `--alignment-dir` contains files
+matching `{sourceid}-{edition}-??-???-manual.json`, it merges them via
+`AlignmentsReader.from_chapter_files()` and skips the single-file load path.
+Falls back to the single-file behavior when no chapter files are found.
+
+Implementation details:
+- `AlignmentsReader.from_chapter_files(paths, alignmentset)` — class method in
+  `burrito/alignments.py`. Merges `groups[0].records` and `nonEquivalent` sets
+  from all chapter files; takes `group_meta` from the first. Accepts an optional
+  `_preloaded_data` dict via the regular constructor to bypass the file read.
+- `AlignmentSet.__post_init__` — assertion `alignmentpath.exists()` now only
+  fires when no `alignmentpath_override` is given. When chapter files are used,
+  `alignmentpath_override` is set to the first chapter file (a real existing
+  file), so the assertion still passes.
+- `Manager.__init__` — accepts optional `preloaded_reader: AlignmentsReader`.
+  When supplied, it skips creating its own reader and uses the provided one
+  (still calls `clean_alignments` on it).
+
+Full design: `docs/batch-api-plan.md`.
+
 ## Testing
 
 Run tests with:
@@ -115,4 +183,5 @@ poetry run pytest
 ```
 
 For a quick smoke test of a specific LLM provider, use `test_gemini.py` (not committed —
-local scratch file) or pass `--verse` to `refine-alignment`.
+local scratch file) or pass `--verse 41004003` or `--chapter 41004` to `refine-alignment`
+to limit scope. `--chapter` is the natural unit for both sync and async modes.

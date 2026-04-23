@@ -48,7 +48,7 @@ class AlignmentSet:
             self.alignmentpath = (
                 self.langdatapath / f"alignments/{self.targetid}/{self.identifier}.json"
             )
-        assert self.alignmentpath.exists(), f"No such alignment file: {self.alignmentpath}"
+            assert self.alignmentpath.exists(), f"No such alignment file: {self.alignmentpath}"
         self.tomlpath = self.langdatapath / f"alignments/{self.targetid}/{self.identifier}.toml"
 
     def __repr__(self) -> str:

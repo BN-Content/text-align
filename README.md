@@ -70,7 +70,9 @@ src/text_align/
 │   │   ├── spa.py       #   Latin American Spanish (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google)
-│   └── refine.py        # refine-alignment CLI
+│   ├── async_batch.py   # Provider batch-API helpers (Google implemented; others stubbed)
+│   ├── refine.py        # refine-alignment CLI
+│   └── fetch_batch.py   # fetch-batch CLI
 └── render/
     └── html.py          # render-alignment CLI
 ```
@@ -128,7 +130,9 @@ acai-align \
 
 ### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI, Anthropic, or Google). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes a refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI, Anthropic, or Google). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+
+Output is **one file per chapter**: `SBLGNT-<edition>-<BB>-<CCC>-manual.json` (NT) or `WLCM-<edition>-<BB>-<CCC>-manual.json` (OT). For example, Mark 3 produces `SBLGNT-OENGB-41-003-manual.json`.
 
 Requires the appropriate API key in the environment:
 - `OPENAI_API_KEY` for OpenAI models
@@ -142,7 +146,7 @@ refine-alignment \
   --target-tsv-dir  path/to/alignments-eng/data/targets/OENGB \
   --output-dir      path/to/alignments-eng/exp/OENGB/LLM-REFINED \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
-  [--from-scratch]               # align without candidates; no --alignment-sources needed
+  [--from-scratch]               # align without candidates
   [--corpora ot nt] \
   [--llm-provider openai]        # openai | anthropic | google
   [--llm-model gpt-5.4-mini] \
@@ -151,19 +155,62 @@ refine-alignment \
                                  #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
   [--batch-size 5] \
   [--max-retries 2] \
-  [--max-api-retries 4]           # retries on 429/503 with exponential backoff
-  [--verse 41004003]              # single verse (testing)
-  [--verse-range 41004001 41020]  # BCV range
+  [--max-api-retries 4]          # retries on 429/503 with exponential backoff
+  [--batch-mode sync]            # sync (default) | async (Google batch API)
+  [--jobs-dir jobs/]             # where async job metadata is stored
 ```
 
-Candidate source types (default: all five — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERGED, FASTALIGN):
+Range filtering — all mutually exclusive:
+
+| Flag | Format | Example |
+|------|--------|---------|
+| `--verse BCV` | 8-digit BBCCCVVV | `--verse 41004003` |
+| `--verse-range START END` | BCV pair | `--verse-range 41004001 41004020` |
+| `--book BB` | 2-digit book number | `--book 41` |
+| `--book-range START END` | book pair | `--book-range 41 44` |
+| `--chapter BBCCC` | 5-digit chapter | `--chapter 41003` |
+| `--chapter-range START END` | chapter pair | `--chapter-range 41001 41016` |
+
+Candidate source types (default: all — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERGED, FASTALIGN, REVISED):
 - `ACAI` — entity alignments from `acai-align`
 - `SIM-MIGRATED` — similarity-migrated alignments from `sim-migrate`
 - `DIFF-MIGRATED` — diff-migrated alignments from `diff-migrate`
 - `MERGED` — a pre-merged candidate file
 - `FASTALIGN` — fast_align output
+- `REVISED` — manually revised alignments
 
-Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely and align from the source/target token universe alone. Output files are written to `--output-dir` as `WLCM-<edition>-manual.json` (OT) and `SBLGNT-<edition>-manual.json` (NT).
+Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely.
+
+#### Async batch mode (Google Gemini only)
+
+Pass `--batch-mode async` to submit all LLM calls to Google's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/google/`); the process then exits. Retrieve results later with `fetch-batch`.
+
+```bash
+# Submit
+refine-alignment --config OENGB --book 41 \
+  --llm-provider google --llm-model gemini-2.0-flash-001 \
+  --batch-mode async
+
+# Check status
+fetch-batch jobs/google/batches_abc123.json --poll
+
+# Block until done and write chapter files
+fetch-batch jobs/google/batches_abc123.json --wait
+```
+
+### `fetch-batch`
+
+Retrieve results from an async `refine-alignment` batch job and write the chapter output files.
+
+```
+fetch-batch <job-metadata-file> [--poll] [--wait] [--wait-interval SECONDS]
+```
+
+| Flag | Behaviour |
+|------|-----------|
+| *(none)* | Fetch once; exit with error if job not yet complete |
+| `--poll` | Print current status and exit (no error if still running) |
+| `--wait` | Block, sleeping `--wait-interval` seconds (default 60) between checks |
 
 ### `render-alignment`
 
@@ -201,11 +248,25 @@ data/targets/<edition>/
     nt_<edition>.tsv
 
 data/alignments/<edition>/
-    WLCM-<edition>-manual.json    # OT
-    SBLGNT-<edition>-manual.json  # NT
+    WLCM-<edition>-manual.json      # OT (legacy single-file or hand-curated)
+    SBLGNT-<edition>-manual.json    # NT (legacy single-file or hand-curated)
+
+exp/<edition>/LLM-REFINED/
+    SBLGNT-<edition>-41-001-manual.json   # NT chapter files from refine-alignment
+    SBLGNT-<edition>-41-002-manual.json
+    ...
+    WLCM-<edition>-01-001-manual.json     # OT chapter files
+    ...
+
+jobs/
+    google/<job-id>.json    # async batch job metadata (from --batch-mode async)
+    anthropic/              # (planned)
+    openai/                 # (planned)
 ```
 
 Source TSVs (`SBLGNT.tsv`, `WLCM.tsv`) live in `data/sources/`.
+
+`render-alignment` auto-detects chapter files when `--alignment-dir` is pointed at the `LLM-REFINED` (or similar) directory. If `{sourceid}-{edition}-??-???-manual.json` files are present they are merged on the fly; otherwise the tool falls back to the single-file path.
 
 ## Alignment format extensions
 

@@ -26,6 +26,7 @@ class Manager(UserDict):
         creator: str = "text-align",
         keeptargetwordpart: bool = False,
         keepbadrecords: bool = False,
+        preloaded_reader: AlignmentsReader | None = None,
     ) -> None:
         super().__init__()
         self.keeptargetwordpart = keeptargetwordpart
@@ -41,11 +42,14 @@ class Manager(UserDict):
                 list(self.targetitems.values()), bcvfn=lambda t: t.source_verse
             ),
         }
-        self.alignmentsreader: AlignmentsReader = AlignmentsReader(
-            alignmentset=alignmentset,
-            keeptargetwordpart=self.keeptargetwordpart,
-            keepbadrecords=self.keepbadrecords,
-        )
+        if preloaded_reader is not None:
+            self.alignmentsreader = preloaded_reader
+        else:
+            self.alignmentsreader = AlignmentsReader(
+                alignmentset=alignmentset,
+                keeptargetwordpart=self.keeptargetwordpart,
+                keepbadrecords=self.keepbadrecords,
+            )
         self.alignmentsreader.clean_alignments(self.sourceitems, self.targetitems)
         self.bcv["records"] = groupby_bcv(
             list(self.alignmentsreader.alignmentgroup.records), lambda r: r.source_bcv

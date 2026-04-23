@@ -397,7 +397,7 @@ def _process_corpus_sync(
             all_src = [t for _, src, _, _ in verse_batch for t in src]
             phenomena = detect_phenomena(all_src)
             system_msg = build_system_prompt(phenomena, target_language)
-            user_msg = build_batch_message(verse_batch, target_language)
+            user_msg, batch_maps = build_batch_message(verse_batch, target_language)
 
             print(
                 f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
@@ -408,6 +408,7 @@ def _process_corpus_sync(
                 user_message=user_msg,
                 verse_source_ids=verse_source_ids,
                 verse_target_ids=verse_target_ids,
+                verse_token_maps=batch_maps,
                 max_retries=max_retries,
             )
 
@@ -479,13 +480,13 @@ def _process_corpus_async(
     jobs_dir: Path,
 ) -> None:
     """Async path: build all request payloads and submit to provider batch API."""
-    if llm_provider != "google":
+    if llm_provider not in ("google", "openai"):
         raise SystemExit(
-            f"Async batch mode is currently only supported for provider 'google', "
-            f"not {llm_provider!r}. Use --batch-mode sync or --llm-provider google."
+            f"Async batch mode is not supported for provider {llm_provider!r}. "
+            f"Use --batch-mode sync or --llm-provider google/openai."
         )
 
-    from .async_batch import submit_google
+    from .async_batch import submit_google, submit_openai
 
     chapter_batches: list[dict] = []
 
@@ -508,7 +509,7 @@ def _process_corpus_async(
             all_src = [t for _, src, _, _ in verse_batch for t in src]
             phenomena = detect_phenomena(all_src)
             system_msg = build_system_prompt(phenomena, target_language)
-            user_msg = build_batch_message(verse_batch, target_language)
+            user_msg, _batch_maps = build_batch_message(verse_batch, target_language)
 
             chapter_batches.append({
                 "chapter_id": chapter_id,
@@ -518,7 +519,9 @@ def _process_corpus_async(
                 "user_message": user_msg,
             })
 
-    print(f"  Submitting {len(chapter_batches)} request(s) to Google batch API ...")
+    print(f"  Submitting {len(chapter_batches)} request(s) to {llm_provider} batch API ...")
+
+    import os
 
     job_metadata_base = {
         "target_edition": target_edition,
@@ -531,20 +534,30 @@ def _process_corpus_async(
         "target_tsv_dir": str(target_tsv_dir),
     }
 
-    import os
-    from google import genai as _genai
-    genai_client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+    if llm_provider == "google":
+        from google import genai as _genai
+        genai_client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        job_id, meta_path = submit_google(
+            genai_client=genai_client,
+            model=llm_model,
+            reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches,
+            jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+        )
+    else:
+        import openai as _openai
+        openai_client = _openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        job_id, meta_path = submit_openai(
+            openai_client=openai_client,
+            model=llm_model,
+            reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches,
+            jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+        )
 
-    job_name, meta_path = submit_google(
-        genai_client=genai_client,
-        model=llm_model,
-        reasoning_effort=reasoning_effort,
-        chapter_batches=chapter_batches,
-        jobs_dir=jobs_dir,
-        job_metadata_base=job_metadata_base,
-    )
-
-    print(f"  Submitted: {job_name}")
+    print(f"  Submitted: {job_id}")
     print(f"  Job metadata: {meta_path}")
     print(f"  Retrieve results with: fetch-batch {meta_path}")
 

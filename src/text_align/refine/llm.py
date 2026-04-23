@@ -14,6 +14,8 @@ import json
 import os
 import time
 
+from .prompt.core import reverse_map_records
+
 # ---------------------------------------------------------------------------
 # Tool schema
 # ---------------------------------------------------------------------------
@@ -50,22 +52,31 @@ _NEUTRAL_TOOL_SCHEMA: dict = {
                                 "properties": {
                                     "source": {
                                         "type": "array",
-                                        "items": {"type": "string"},
-                                        "description": "Source token IDs.",
+                                        "items": {"type": "integer"},
+                                        "description": "Local source token numbers (1-based integers from the verse block).",
                                     },
                                     "target": {
                                         "type": "array",
-                                        "items": {"type": "string"},
-                                        "description": "Target token IDs.",
+                                        "items": {"type": "integer"},
+                                        "description": "Local target token numbers (1-based integers from the verse block).",
                                     },
                                     "meta": {
                                         "type": "object",
                                         "properties": {
                                             "secondary": {
                                                 "type": "object",
+                                                "description": "Grammatically implied tokens with no direct lexical/semantic link. Each list must be a strict subset of this same record's source/target arrays.",
                                                 "properties": {
-                                                    "source": {"type": "array", "items": {"type": "string"}},
-                                                    "target": {"type": "array", "items": {"type": "string"}},
+                                                    "source": {
+                                                        "type": "array",
+                                                        "items": {"type": "integer"},
+                                                        "description": "Subset of this record's source integers — only numbers already in this record's 'source' array.",
+                                                    },
+                                                    "target": {
+                                                        "type": "array",
+                                                        "items": {"type": "integer"},
+                                                        "description": "Subset of this record's target integers — only numbers already in this record's 'target' array.",
+                                                    },
                                                 },
                                             },
                                             "is_idiom": {"type": "boolean"},
@@ -454,6 +465,7 @@ class LLMClient:
         user_message: str,
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None = None,
         max_retries: int = 2,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
         """Call the LLM for a verse batch with forced tool use, validate, and retry.
@@ -463,6 +475,8 @@ class LLMClient:
             user_message: Batch message from ``prompt.build_batch_message()``.
             verse_source_ids: ``verse_id → set`` of valid source token IDs.
             verse_target_ids: ``verse_id → set`` of valid target token IDs.
+            verse_token_maps: ``verse_id → (source_map, target_map)`` for converting
+                local token numbers back to full IDs (from build_batch_message).
             max_retries: Maximum retry attempts on validation failure.
 
         Returns:
@@ -473,15 +487,18 @@ class LLMClient:
         """
         if self.provider == "openai":
             return self._call_openai(
-                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+                system_prompt, user_message, verse_source_ids, verse_target_ids,
+                verse_token_maps, max_retries
             )
         elif self.provider == "anthropic":
             return self._call_anthropic(
-                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+                system_prompt, user_message, verse_source_ids, verse_target_ids,
+                verse_token_maps, max_retries
             )
         else:
             return self._call_gemini(
-                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+                system_prompt, user_message, verse_source_ids, verse_target_ids,
+                verse_token_maps, max_retries
             )
 
     # ------------------------------------------------------------------
@@ -494,11 +511,13 @@ class LLMClient:
         user_message: str,
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
         if self.reasoning_effort is not None:
             return self._call_openai_responses(
-                system_prompt, user_message, verse_source_ids, verse_target_ids, max_retries
+                system_prompt, user_message, verse_source_ids, verse_target_ids,
+                verse_token_maps, max_retries
             )
 
         messages: list[dict] = [
@@ -550,6 +569,10 @@ class LLMClient:
 
                 tc_errors: list[str] = []
                 for verse_id, records in _iter_verse_entries(data, all_errors):
+                    if verse_token_maps:
+                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
+                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -604,6 +627,7 @@ class LLMClient:
         user_message: str,
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
         """Use /v1/responses API — required when reasoning_effort is set."""
@@ -667,6 +691,10 @@ class LLMClient:
 
                 tc_errors: list[str] = []
                 for verse_id, records in _iter_verse_entries(data, all_errors):
+                    if verse_token_maps:
+                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
+                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -712,6 +740,7 @@ class LLMClient:
         user_message: str,
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
         messages: list[dict] = [{"role": "user", "content": user_message}]
@@ -750,6 +779,10 @@ class LLMClient:
             for block in tool_use_blocks:
                 block_errors: list[str] = []
                 for verse_id, records in _iter_verse_entries(block.input, all_errors):
+                    if verse_token_maps:
+                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
+                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),
@@ -798,6 +831,7 @@ class LLMClient:
         user_message: str,
         verse_source_ids: dict[str, set[str]],
         verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
         from google.genai import types
@@ -870,6 +904,10 @@ class LLMClient:
 
                 fc_errors: list[str] = []
                 for verse_id, records in _iter_verse_entries(data, all_errors):
+                    if verse_token_maps:
+                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
+                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
                     valid, errs, san_details = validate_records(
                         records,
                         verse_source_ids.get(verse_id, set()),

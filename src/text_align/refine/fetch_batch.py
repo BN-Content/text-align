@@ -88,6 +88,32 @@ _OPENAI_CANCELLED = "cancelled"
 _OPENAI_TERMINAL = {_OPENAI_SUCCEEDED, _OPENAI_FAILED, _OPENAI_EXPIRED, _OPENAI_CANCELLED}
 
 
+def _openai_progress(batch) -> str:
+    rc = getattr(batch, "request_counts", None)
+    if rc and getattr(rc, "total", 0):
+        done = getattr(rc, "completed", 0) + getattr(rc, "failed", 0)
+        failed = getattr(rc, "failed", 0)
+        suffix = f", {failed} failed" if failed else ""
+        return f"{batch.status}  {done}/{rc.total}{suffix}"
+    return batch.status
+
+
+def _anthropic_progress(batch) -> str:
+    rc = getattr(batch, "request_counts", None)
+    if rc:
+        succeeded = getattr(rc, "succeeded", 0)
+        errored = getattr(rc, "errored", 0)
+        expired = getattr(rc, "expired", 0)
+        canceled = getattr(rc, "canceled", 0)
+        processing = getattr(rc, "processing", 0)
+        total = succeeded + errored + expired + canceled + processing
+        done = succeeded + errored + expired + canceled
+        if total:
+            suffix = f", {errored} errored" if errored else ""
+            return f"{batch.processing_status}  {done}/{total}{suffix}"
+    return batch.processing_status
+
+
 def _cancel_google(job_meta: dict) -> None:
     from google import genai
 
@@ -217,17 +243,17 @@ def _fetch_openai(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
     state = batch.status
 
     if poll_only:
-        print(f"Batch {batch_id}: {state}")
+        print(f"Batch {batch_id}: {_openai_progress(batch)}")
         return
 
     if state not in _OPENAI_TERMINAL:
         if wait:
-            print(f"  Batch {batch_id}: {state} — waiting ...")
+            print(f"  Batch {batch_id}: {_openai_progress(batch)} — waiting ...")
             while state not in _OPENAI_TERMINAL:
                 time.sleep(wait_interval)
                 batch = client.batches.retrieve(batch_id)
                 state = batch.status
-                print(f"  Batch {batch_id}: {state}")
+                print(f"  Batch {batch_id}: {_openai_progress(batch)}")
         else:
             raise SystemExit(
                 f"Batch {batch_id} is not complete (status: {state}). "
@@ -324,17 +350,17 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
     state = batch.processing_status
 
     if poll_only:
-        print(f"Batch {batch_id}: {state}")
+        print(f"Batch {batch_id}: {_anthropic_progress(batch)}")
         return
 
     if state != "ended":
         if wait:
-            print(f"  Batch {batch_id}: {state} — waiting ...")
+            print(f"  Batch {batch_id}: {_anthropic_progress(batch)} — waiting ...")
             while state != "ended":
                 time.sleep(wait_interval)
                 batch = client.messages.batches.retrieve(batch_id)
                 state = batch.processing_status
-                print(f"  Batch {batch_id}: {state}")
+                print(f"  Batch {batch_id}: {_anthropic_progress(batch)}")
         else:
             raise SystemExit(
                 f"Batch {batch_id} is not complete (status: {state}). "

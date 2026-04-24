@@ -150,6 +150,26 @@ JSON to `jobs/{provider}/{stem}.json`.
 chapter JSON files. Flags: `--poll` (print status, exit), `--wait` (block
 until done), `--cancel` (request cancellation).
 
+## fetch-batch progress display (`fetch_batch.py`)
+
+`--poll` and `--wait` show request-level progress counts for OpenAI and
+Anthropic (Google exposes only a coarse state enum, so it stays state-only).
+
+- `_openai_progress(batch)` — derives `done/total` from `request_counts.completed`
+  + `request_counts.failed`; appends `, N failed` when non-zero.
+- `_anthropic_progress(batch)` — sums `succeeded + errored + expired + canceled`
+  for `done`; total includes `processing`; appends `, N errored` when non-zero.
+
+Both helpers fall back to the bare status string if `request_counts` is absent
+or all zeros (guards against API objects that omit the field).
+
+Example output during `--wait`:
+```
+  Batch batch_abc123: in_progress  47/200 — waiting ...
+  Batch batch_abc123: in_progress  118/200
+  Batch batch_abc123: completed
+```
+
 Job metadata format: see `docs/batch-api-plan.md`.
 
 Google batch API: `client.batches.create(src=types.BatchJobSource(inlined_requests=[...]))`.

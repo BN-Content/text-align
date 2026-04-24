@@ -22,12 +22,15 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment + fetch-batch CLIs
+├── refine/        # refine-alignment + fetch-batch + retry-alignment CLIs
 │   ├── prompt/       # language-aware prompt system (see below)
 │   ├── llm.py        # LLMClient: OpenAI / Anthropic / Google (sync)
 │   ├── async_batch.py # provider batch-API helpers (Google, OpenAI, Anthropic)
+│   ├── coverage.py   # per-verse source-token coverage evaluation
 │   ├── refine.py     # refine-alignment CLI entry point
-│   └── fetch_batch.py # fetch-batch CLI entry point
+│   ├── fetch_batch.py # fetch-batch CLI entry point
+│   ├── retry.py      # verse merge/retry core logic
+│   └── retry_cli.py  # retry-alignment CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
 
@@ -199,6 +202,32 @@ Implementation details:
   (still calls `clean_alignments` on it).
 
 Full design: `docs/batch-api-plan.md`.
+
+## retry-alignment (`refine/retry_cli.py`, `refine/retry.py`, `refine/coverage.py`)
+
+Post-batch quality pass: identifies verses with too many unaligned source tokens
+and re-aligns them from scratch.
+
+**Detection** (`coverage.py`): a source token is covered if it appears in any
+record's `source` list OR in `nonEquivalent.source`. Verses with more than
+`--min-unaligned-src` (default 3) uncovered tokens are flagged.
+
+**Remedy**: flagged verses are sent to the LLM **blank-slate** — no prior
+alignment is passed as a candidate. Passing existing records as candidates caused
+the LLM to over-weight them and perpetuate bad alignments (including wrong
+token-swap errors, not just gaps). Blank-slate lets the LLM produce a clean
+realignment of the entire verse.
+
+**Merge** (`retry.py:merge_verse_results`): replaces only the flagged verse
+records in the existing chapter JSON. For non-replaced verses, regular records
+are kept as-is; NEQ entries are re-inflated into `{"meta": {"rel": "NEQ"}}`
+records so `build_output_alignment` can reprocess them uniformly. The resulting
+file is written in place.
+
+**Async support**: `--batch-mode async` submits retry verses to the provider
+batch API (same three providers as `refine-alignment`). Job metadata carries
+`"job_type": "retry"`. `fetch-batch` detects this and calls `merge_verse_results`
+instead of writing fresh chapter files.
 
 ## Testing
 

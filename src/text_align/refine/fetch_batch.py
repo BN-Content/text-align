@@ -22,6 +22,60 @@ from .async_batch import load_job_metadata, retrieve_anthropic, retrieve_google,
 from .refine import build_output_alignment
 from .source import load_source_verses
 
+
+def _write_chapter_results(
+    chapter_results: dict[str, dict[str, list[dict]]],
+    job_meta: dict,
+    output_dir: Path,
+    target_edition: str,
+) -> int:
+    """Write chapter results to disk, returning total record count.
+
+    For retry jobs (job_meta["job_type"] == "retry"), merges new verse records
+    into existing chapter files instead of writing fresh ones.
+    """
+    corpus_id = job_meta["corpus_id"]
+    creator = job_meta.get("creator", "text-align")
+    llm_provider = job_meta.get("provider")
+    llm_model = job_meta.get("model")
+    reasoning_effort = job_meta.get("reasoning_effort")
+    is_retry = job_meta.get("job_type") == "retry"
+
+    total_records = 0
+    for chapter_id in sorted(chapter_results):
+        verse_results = chapter_results[chapter_id]
+        records = [rec for recs in verse_results.values() for rec in recs]
+
+        book_id = chapter_id[:2]
+        chap_num = chapter_id[2:]
+        chapter_path = output_dir / f"{corpus_id}-{target_edition}-{book_id}-{chap_num}-manual.json"
+        n_neq = sum(1 for r in records if (r.get("meta") or {}).get("rel") == "NEQ")
+
+        if is_retry and chapter_path.exists():
+            from .retry import merge_verse_results
+            n_replaced = merge_verse_results(
+                chapter_path, verse_results,
+                corpus_id, target_edition, creator,
+                llm_provider, llm_model, reasoning_effort,
+            )
+            print(
+                f"  → {chapter_path.name}  "
+                f"({n_replaced} verse(s) replaced, {len(records)} new records, {n_neq} NEQ)"
+            )
+        else:
+            output = build_output_alignment(
+                records, corpus_id, target_edition, creator,
+                llm_provider=llm_provider,
+                llm_model=llm_model,
+                reasoning_effort=reasoning_effort,
+            )
+            write_alignment_json(output, chapter_path)
+            print(f"  → {chapter_path.name}  ({len(records)} records, {n_neq} NEQ)")
+
+        total_records += len(records)
+
+    return total_records
+
 _GOOGLE_SUCCEEDED = "JOB_STATE_SUCCEEDED"
 _GOOGLE_FAILED = "JOB_STATE_FAILED"
 _GOOGLE_CANCELLED = "JOB_STATE_CANCELLED"
@@ -122,36 +176,10 @@ def _fetch_google(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
         verse_token_maps=verse_token_maps,
     )
 
-    # Write chapter output files
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    corpus_id = job_meta["corpus_id"]
-    creator = job_meta.get("creator", "text-align")
-    llm_provider = job_meta.get("provider")
-    llm_model = job_meta.get("model")
-    reasoning_effort = job_meta.get("reasoning_effort")
-
-    total_records = 0
-    for chapter_id in sorted(chapter_results):
-        verse_results = chapter_results[chapter_id]
-        records = [rec for recs in verse_results.values() for rec in recs]
-
-        book_id = chapter_id[:2]
-        chap_num = chapter_id[2:]
-        out_path = output_dir / f"{corpus_id}-{target_edition}-{book_id}-{chap_num}-manual.json"
-
-        output = build_output_alignment(
-            records, corpus_id, target_edition, creator,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            reasoning_effort=reasoning_effort,
-        )
-        write_alignment_json(output, out_path)
-        n_neq = sum(1 for r in records if (r.get("meta") or {}).get("rel") == "NEQ")
-        print(f"  → {out_path.name}  ({len(records)} records, {n_neq} NEQ)")
-        total_records += len(records)
-
+    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
     n_chapters = len(chapter_results)
     print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
 
@@ -258,32 +286,7 @@ def _fetch_openai(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    corpus_id = job_meta["corpus_id"]
-    creator = job_meta.get("creator", "text-align")
-    llm_provider = job_meta.get("provider")
-    llm_model = job_meta.get("model")
-    reasoning_effort = job_meta.get("reasoning_effort")
-
-    total_records = 0
-    for chapter_id in sorted(chapter_results):
-        verse_results = chapter_results[chapter_id]
-        records = [rec for recs in verse_results.values() for rec in recs]
-
-        book_id = chapter_id[:2]
-        chap_num = chapter_id[2:]
-        out_path = output_dir / f"{corpus_id}-{target_edition}-{book_id}-{chap_num}-manual.json"
-
-        output = build_output_alignment(
-            records, corpus_id, target_edition, creator,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            reasoning_effort=reasoning_effort,
-        )
-        write_alignment_json(output, out_path)
-        n_neq = sum(1 for r in records if (r.get("meta") or {}).get("rel") == "NEQ")
-        print(f"  → {out_path.name}  ({len(records)} records, {n_neq} NEQ)")
-        total_records += len(records)
-
+    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
     n_chapters = len(chapter_results)
     print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
 
@@ -386,32 +389,7 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    corpus_id = job_meta["corpus_id"]
-    creator = job_meta.get("creator", "text-align")
-    llm_provider = job_meta.get("provider")
-    llm_model = job_meta.get("model")
-    reasoning_effort = job_meta.get("reasoning_effort")
-
-    total_records = 0
-    for chapter_id in sorted(chapter_results):
-        verse_results = chapter_results[chapter_id]
-        records = [rec for recs in verse_results.values() for rec in recs]
-
-        book_id = chapter_id[:2]
-        chap_num = chapter_id[2:]
-        out_path = output_dir / f"{corpus_id}-{target_edition}-{book_id}-{chap_num}-manual.json"
-
-        output = build_output_alignment(
-            records, corpus_id, target_edition, creator,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            reasoning_effort=reasoning_effort,
-        )
-        write_alignment_json(output, out_path)
-        n_neq = sum(1 for r in records if (r.get("meta") or {}).get("rel") == "NEQ")
-        print(f"  → {out_path.name}  ({len(records)} records, {n_neq} NEQ)")
-        total_records += len(records)
-
+    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
     n_chapters = len(chapter_results)
     print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
 

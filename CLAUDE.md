@@ -25,7 +25,7 @@ src/text_align/
 ├── refine/        # refine-alignment + fetch-batch CLIs
 │   ├── prompt/       # language-aware prompt system (see below)
 │   ├── llm.py        # LLMClient: OpenAI / Anthropic / Google (sync)
-│   ├── async_batch.py # provider batch-API helpers (Google first; others stubbed)
+│   ├── async_batch.py # provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── refine.py     # refine-alignment CLI entry point
 │   └── fetch_batch.py # fetch-batch CLI entry point
 └── render/        # render-alignment HTML visualizer
@@ -140,12 +140,12 @@ Filtering uses string-prefix comparison on 8-char `BBCCCVVV` verse IDs
 ## Async batch mode (`refine/async_batch.py`)
 
 `refine-alignment --batch-mode async` submits all LLM calls to the provider's
-batch API (Google and OpenAI implemented; Anthropic stubbed) and exits, writing
-a job metadata JSON to `jobs/{provider}/{stem}.json`.
+batch API (all three providers implemented) and exits, writing a job metadata
+JSON to `jobs/{provider}/{stem}.json`.
 
 `fetch-batch <job-metadata-file>` retrieves completed results and writes
 chapter JSON files. Flags: `--poll` (print status, exit), `--wait` (block
-until done).
+until done), `--cancel` (request cancellation).
 
 Job metadata format: see `docs/batch-api-plan.md`.
 
@@ -157,6 +157,12 @@ OpenAI batch API: JSONL file uploaded via `files.create`, then submitted with
 `batches.create(input_file_id=..., endpoint=..., completion_window="24h")`.
 Uses `/v1/responses` when `reasoning_effort` is set, `/v1/chat/completions`
 otherwise.
+
+Anthropic batch API: `client.messages.batches.create(requests=[...])` where
+each request carries a `custom_id` (the request index as a string) and `params`
+matching the `messages.create` schema. Terminal state: `processing_status ==
+"ended"`. Individual result types: `"succeeded"`, `"errored"`, `"expired"`,
+`"canceled"`. Results retrieved via `client.messages.batches.results(batch_id)`.
 
 ## Sync/async generation parameter parity (`refine/llm.py`, `async_batch.py`)
 

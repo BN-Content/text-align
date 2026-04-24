@@ -186,11 +186,11 @@ Candidate source types (default: all — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERG
 
 Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely.
 
-#### Async batch mode (Google and OpenAI)
+#### Async batch mode (Google, OpenAI, and Anthropic)
 
 Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results later with `fetch-batch`.
 
-Supported providers: `google`, `openai`. Anthropic batch is not yet implemented.
+All three providers are supported: `google`, `openai`, `anthropic`.
 
 ```bash
 # Submit (Google)
@@ -201,6 +201,11 @@ refine-alignment --config OENGB --book 41 \
 # Submit (OpenAI)
 refine-alignment --config OENGB --book 41 \
   --llm-provider openai --llm-model gpt-5.4-mini \
+  --batch-mode async
+
+# Submit (Anthropic)
+refine-alignment --config OENGB --book 41 \
+  --llm-provider anthropic --llm-model claude-haiku-4-5-20251001 \
   --batch-mode async
 
 # Check status
@@ -273,7 +278,7 @@ exp/<edition>/LLM-REFINED/
 jobs/
     google/<stem>.json      # async batch job metadata (from --batch-mode async)
     openai/<stem>.json      # stem = {edition}-{corpus}-{YYYYMMDD}-{short_id}
-    anthropic/              # (planned)
+    anthropic/<stem>.json
 ```
 
 Source TSVs (`SBLGNT.tsv`, `WLCM.tsv`) live in `data/sources/`.

@@ -1,6 +1,6 @@
 """Provider batch-API helpers for refine-alignment async mode.
 
-Google Gemini is fully implemented.  Anthropic and OpenAI are stubbed.
+Google Gemini, OpenAI, and Anthropic are fully implemented.
 
 A "chapter batch" is a list of dicts, one per LLM call:
     {
@@ -25,6 +25,7 @@ from typing import Any
 from .llm import (
     TOOL_NAME,
     _NEUTRAL_TOOL_SCHEMA,
+    _anthropic_tool_schema,
     _gemini_tool_schema,
     _openai_tool_schema,
     _openai_responses_tool_schema,
@@ -538,20 +539,81 @@ def retrieve_openai(
 
 
 # ---------------------------------------------------------------------------
-# Anthropic (stubbed)
+# Anthropic batch API
 # ---------------------------------------------------------------------------
+
+_ANTHROPIC_ENDED = "ended"
+
 
 def submit_anthropic(
     anthropic_client: Any,
     model: str,
+    reasoning_effort: str | None,
     chapter_batches: list[dict],
     jobs_dir: Path,
     job_metadata_base: dict,
+    temperature: float | None = None,
+    max_output_tokens: int = 32000,
 ) -> tuple[str, Path]:
-    raise NotImplementedError(
-        "Anthropic batch API submission is not yet implemented. "
-        "Use --batch-mode sync or --llm-provider google."
-    )
+    """Submit chapter_batches to Anthropic's Message Batches API.
+
+    Returns (batch_id, metadata_file_path).
+    """
+    tool_schema = [_anthropic_tool_schema(_NEUTRAL_TOOL_SCHEMA)]
+
+    requests = []
+    for idx, cb in enumerate(chapter_batches):
+        params: dict = {
+            "model": model,
+            "max_tokens": max_output_tokens,
+            "system": cb["system_prompt"],
+            "messages": [{"role": "user", "content": cb["user_message"]}],
+            "tools": tool_schema,
+            "tool_choice": {"type": "tool", "name": TOOL_NAME},
+        }
+        if temperature is not None:
+            params["temperature"] = temperature
+        requests.append({"custom_id": str(idx), "params": params})
+
+    batch = anthropic_client.messages.batches.create(requests=requests)
+    batch_id: str = batch.id
+
+    edition = job_metadata_base.get("target_edition", "unknown")
+    corpus = job_metadata_base.get("corpus", "")
+    date_str = datetime.date.today().strftime("%Y%m%d")
+    short_id = batch_id[-8:]
+    stem = f"{edition}-{corpus}-{date_str}-{short_id}"
+
+    request_meta = [
+        {
+            "request_index": idx,
+            "chapter_id": cb["chapter_id"],
+            "batch_index": cb["batch_index"],
+            "verse_ids": cb["verse_ids"],
+        }
+        for idx, cb in enumerate(chapter_batches)
+    ]
+
+    metadata = {
+        **job_metadata_base,
+        "provider": "anthropic",
+        "model": model,
+        "reasoning_effort": reasoning_effort,
+        "temperature": temperature,
+        "max_output_tokens": max_output_tokens,
+        "batch_id": batch_id,
+        "submitted_at": datetime.datetime.now().isoformat(),
+        "requests": request_meta,
+    }
+
+    path = save_job_metadata(jobs_dir, "anthropic", stem, metadata)
+    return batch_id, path
+
+
+def poll_anthropic(anthropic_client: Any, batch_id: str) -> str:
+    """Return the current processing_status for an Anthropic batch job."""
+    batch = anthropic_client.messages.batches.retrieve(batch_id)
+    return batch.processing_status
 
 
 def retrieve_anthropic(
@@ -560,7 +622,70 @@ def retrieve_anthropic(
     requests_meta: list[dict],
     verse_source_ids: dict[str, set[str]],
     verse_target_ids: dict[str, set[str]],
+    verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None = None,
 ) -> tuple[dict[str, dict[str, list[dict]]], list[str], list[str]]:
-    raise NotImplementedError("Anthropic batch API retrieval is not yet implemented.")
+    """Fetch completed Anthropic batch results and validate alignment records.
+
+    Returns:
+        ({chapter_id: {verse_id: [records]}}, error_messages, san_details)
+    """
+    index_map: dict[int, dict] = {r["request_index"]: r for r in requests_meta}
+
+    chapter_results: dict[str, dict[str, list[dict]]] = {}
+    all_errors: list[str] = []
+    all_san: list[str] = []
+
+    for result in anthropic_client.messages.batches.results(batch_id):
+        try:
+            req_idx = int(result.custom_id)
+        except (TypeError, ValueError):
+            all_errors.append(f"Cannot parse custom_id {result.custom_id!r} — skipping")
+            continue
+
+        req = index_map.get(req_idx)
+        if req is None:
+            all_errors.append(f"Response has unknown request_index {req_idx!r} — skipping")
+            continue
+
+        chapter_id = req["chapter_id"]
+
+        result_type = result.result.type
+        if result_type != "succeeded":
+            all_errors.append(
+                f"Chapter {chapter_id} batch {req['batch_index']}: "
+                f"result type {result_type!r}"
+            )
+            continue
+
+        message = result.result.message
+
+        if message.stop_reason == "max_tokens":
+            print(
+                f"  WARNING: Chapter {chapter_id} batch {req['batch_index']} truncated "
+                f"(stop_reason=max_tokens) — some verses may be missing."
+            )
+
+        tool_use_blocks = [b for b in message.content if b.type == "tool_use"]
+
+        for block in tool_use_blocks:
+            block_errors: list[str] = []
+            for verse_id, records in _iter_verse_entries(block.input, block_errors):
+                if verse_token_maps:
+                    src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+                    records, map_errors = reverse_map_records(records, src_map, tgt_map)
+                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
+                valid, errs, san = validate_records(
+                    records,
+                    verse_source_ids.get(verse_id, set()),
+                    verse_target_ids.get(verse_id, set()),
+                )
+                all_san.extend(f"VERSE {verse_id}: {d}" for d in san)
+                if valid:
+                    chapter_results.setdefault(chapter_id, {})[verse_id] = valid
+                if errs:
+                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+            all_errors.extend(block_errors)
+
+    return chapter_results, all_errors, all_san
 
 

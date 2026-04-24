@@ -480,13 +480,13 @@ def _process_corpus_async(
     jobs_dir: Path,
 ) -> None:
     """Async path: build all request payloads and submit to provider batch API."""
-    if llm_provider not in ("google", "openai"):
+    if llm_provider not in ("google", "openai", "anthropic"):
         raise SystemExit(
             f"Async batch mode is not supported for provider {llm_provider!r}. "
-            f"Use --batch-mode sync or --llm-provider google/openai."
+            f"Use --batch-mode sync or --llm-provider google/openai/anthropic."
         )
 
-    from .async_batch import submit_google, submit_openai
+    from .async_batch import submit_anthropic, submit_google, submit_openai
 
     chapter_batches: list[dict] = []
 
@@ -547,11 +547,24 @@ def _process_corpus_async(
             temperature=llm_client.temperature,
             max_output_tokens=llm_client.max_output_tokens,
         )
-    else:
+    elif llm_provider == "openai":
         import openai as _openai
         openai_client = _openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         job_id, meta_path = submit_openai(
             openai_client=openai_client,
+            model=llm_model,
+            reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches,
+            jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+            temperature=llm_client.temperature,
+            max_output_tokens=llm_client.max_output_tokens,
+        )
+    else:
+        import anthropic as _anthropic
+        anthropic_client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        job_id, meta_path = submit_anthropic(
+            anthropic_client=anthropic_client,
             model=llm_model,
             reasoning_effort=reasoning_effort,
             chapter_batches=chapter_batches,

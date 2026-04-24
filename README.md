@@ -156,7 +156,12 @@ refine-alignment \
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4]          # retries on 429/503 with exponential backoff
-  [--batch-mode sync]            # sync (default) | async (Google batch API)
+  [--temperature 1]              # sampling temperature (default: 1); explicit value
+                                 #   ensures sync and async batch calls are identical
+                                 #   not applied to OpenAI reasoning models
+  [--max-output-tokens 32000]    # token budget (default: 32000); matches Anthropic's
+                                 #   hardcoded budget and gives thinking models headroom
+  [--batch-mode sync]            # sync (default) | async (Google/OpenAI batch API)
   [--jobs-dir jobs/]             # where async job metadata is stored
 ```
 
@@ -181,21 +186,28 @@ Candidate source types (default: all — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERG
 
 Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely.
 
-#### Async batch mode (Google Gemini only)
+#### Async batch mode (Google and OpenAI)
 
-Pass `--batch-mode async` to submit all LLM calls to Google's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/google/`); the process then exits. Retrieve results later with `fetch-batch`.
+Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results later with `fetch-batch`.
+
+Supported providers: `google`, `openai`. Anthropic batch is not yet implemented.
 
 ```bash
-# Submit
+# Submit (Google)
 refine-alignment --config OENGB --book 41 \
   --llm-provider google --llm-model gemini-2.0-flash-001 \
   --batch-mode async
 
+# Submit (OpenAI)
+refine-alignment --config OENGB --book 41 \
+  --llm-provider openai --llm-model gpt-5.4-mini \
+  --batch-mode async
+
 # Check status
-fetch-batch jobs/google/batches_abc123.json --poll
+fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --poll
 
 # Block until done and write chapter files
-fetch-batch jobs/google/batches_abc123.json --wait
+fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --wait
 ```
 
 ### `fetch-batch`
@@ -259,9 +271,9 @@ exp/<edition>/LLM-REFINED/
     ...
 
 jobs/
-    google/<job-id>.json    # async batch job metadata (from --batch-mode async)
+    google/<stem>.json      # async batch job metadata (from --batch-mode async)
+    openai/<stem>.json      # stem = {edition}-{corpus}-{YYYYMMDD}-{short_id}
     anthropic/              # (planned)
-    openai/                 # (planned)
 ```
 
 Source TSVs (`SBLGNT.tsv`, `WLCM.tsv`) live in `data/sources/`.

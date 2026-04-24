@@ -140,8 +140,8 @@ Filtering uses string-prefix comparison on 8-char `BBCCCVVV` verse IDs
 ## Async batch mode (`refine/async_batch.py`)
 
 `refine-alignment --batch-mode async` submits all LLM calls to the provider's
-batch API (currently Google only; Anthropic and OpenAI are stubbed) and exits,
-writing a job metadata JSON to `jobs/{provider}/{job_id}.json`.
+batch API (Google and OpenAI implemented; Anthropic stubbed) and exits, writing
+a job metadata JSON to `jobs/{provider}/{stem}.json`.
 
 `fetch-batch <job-metadata-file>` retrieves completed results and writes
 chapter JSON files. Flags: `--poll` (print status, exit), `--wait` (block
@@ -152,6 +152,25 @@ Job metadata format: see `docs/batch-api-plan.md`.
 Google batch API: `client.batches.create(src=types.BatchJobSource(inlined_requests=[...]))`.
 Each `InlinedRequest` carries `metadata={"request_index": "N"}` for result
 matching; responses come back as `job.dest.inlined_responses`.
+
+OpenAI batch API: JSONL file uploaded via `files.create`, then submitted with
+`batches.create(input_file_id=..., endpoint=..., completion_window="24h")`.
+Uses `/v1/responses` when `reasoning_effort` is set, `/v1/chat/completions`
+otherwise.
+
+## Sync/async generation parameter parity (`refine/llm.py`, `async_batch.py`)
+
+Batch API infrastructure may apply different defaults than the sync path
+(different temperature, lower token limits), causing consistent quality
+degradation on the async path. Fix: `LLMClient` now always sends `temperature`
+and `max_output_tokens` explicitly on every call — both sync and async.
+
+Defaults: `temperature=1`, `max_output_tokens=32000`. The 32 000 token budget
+matches the Anthropic hardcoded value (`ANTHROPIC_MAX_TOKENS`) and gives
+thinking models (OpenAI reasoning, Gemini with `thinkingLevel`) enough headroom
+before the tool call output. Temperature is not sent for OpenAI reasoning
+models (it is fixed by the API). Overridable via `--temperature` and
+`--max-output-tokens` CLI flags (also settable in YAML config files).
 
 ## render-alignment chapter-file detection (`render/html.py`)
 

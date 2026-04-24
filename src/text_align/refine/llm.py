@@ -416,6 +416,13 @@ class LLMClient:
         provider: ``"openai"``, ``"anthropic"``, or ``"google"``.
         model: Model name, e.g. ``"gpt-5.4-mini"``, ``"claude-sonnet-4-6"``,
             or ``"gemini-3.1-flash"``.
+        temperature: Sampling temperature passed explicitly to the provider.
+            ``None`` (default) lets the provider use its own default.  Set this
+            to match the value you use in sync calls so async batch requests
+            receive identical generation parameters.
+        max_output_tokens: Hard cap on response tokens.  ``None`` uses the
+            provider default.  Align this with batch submissions to avoid
+            silent truncation differences.
     """
 
     #: Anthropic max_tokens for alignment batch calls.
@@ -428,6 +435,8 @@ class LLMClient:
         model: str,
         reasoning_effort: str | None = None,
         max_api_retries: int = 4,
+        temperature: float = 1,
+        max_output_tokens: int = 32000,
     ) -> None:
         if provider not in ("openai", "anthropic", "google"):
             raise ValueError(
@@ -437,6 +446,8 @@ class LLMClient:
         self.model = model
         self.reasoning_effort = reasoning_effort  # OpenAI only; None = use model default
         self.max_api_retries = max_api_retries
+        self.temperature = temperature
+        self.max_output_tokens = max_output_tokens
         self._client = self._init_client()
 
     def _init_client(self):
@@ -532,13 +543,18 @@ class LLMClient:
         all_san_details: list[str] = []
 
         for attempt in range(max_retries + 1):
+            _oa_kwargs: dict = dict(
+                model=self.model,
+                messages=messages,
+                tools=tool_schema,
+                tool_choice=tool_choice,
+            )
+            if self.temperature is not None:
+                _oa_kwargs["temperature"] = self.temperature
+            if self.max_output_tokens is not None:
+                _oa_kwargs["max_tokens"] = self.max_output_tokens
             response = _api_call_with_backoff(
-                lambda: self._client.chat.completions.create(
-                    model=self.model,
-                    messages=messages,
-                    tools=tool_schema,
-                    tool_choice=tool_choice,
-                ),
+                lambda: self._client.chat.completions.create(**_oa_kwargs),
                 self.max_api_retries,
                 "OpenAI",
             )
@@ -655,6 +671,8 @@ class LLMClient:
             )
             if previous_response_id is not None:
                 kwargs["previous_response_id"] = previous_response_id
+            if self.max_output_tokens is not None:
+                kwargs["max_output_tokens"] = self.max_output_tokens
             response = _api_call_with_backoff(
                 lambda: self._client.responses.create(**kwargs),
                 self.max_api_retries,
@@ -840,7 +858,7 @@ class LLMClient:
         thinking_config = None
         if self.reasoning_effort and self.reasoning_effort != "none":
             thinking_config = types.ThinkingConfig(thinking_level=self.reasoning_effort)
-        gen_config = types.GenerateContentConfig(
+        _gemini_cfg: dict = dict(
             system_instruction=system_prompt,
             tools=[tool],
             tool_config=types.ToolConfig(
@@ -851,6 +869,11 @@ class LLMClient:
             ),
             thinking_config=thinking_config,
         )
+        if self.temperature is not None:
+            _gemini_cfg["temperature"] = self.temperature
+        if self.max_output_tokens is not None:
+            _gemini_cfg["max_output_tokens"] = self.max_output_tokens
+        gen_config = types.GenerateContentConfig(**_gemini_cfg)
 
         contents: list = [
             types.Content(role="user", parts=[types.Part(text=user_message)])

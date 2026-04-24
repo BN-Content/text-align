@@ -67,7 +67,11 @@ def load_job_metadata(path: Path) -> dict:
 # Google (Gemini) batch API
 # ---------------------------------------------------------------------------
 
-def _build_gemini_gen_config(reasoning_effort: str | None):
+def _build_gemini_gen_config(
+    reasoning_effort: str | None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
+):
     """Build a GenerateContentConfig for use in InlinedRequest.config."""
     from google.genai import types
 
@@ -75,7 +79,7 @@ def _build_gemini_gen_config(reasoning_effort: str | None):
     thinking_config = None
     if reasoning_effort and reasoning_effort != "none":
         thinking_config = types.ThinkingConfig(thinking_level=reasoning_effort)
-    return types.GenerateContentConfig(
+    cfg: dict = dict(
         tools=[tool],
         tool_config=types.ToolConfig(
             function_calling_config=types.FunctionCallingConfig(
@@ -85,16 +89,23 @@ def _build_gemini_gen_config(reasoning_effort: str | None):
         ),
         thinking_config=thinking_config,
     )
+    if temperature is not None:
+        cfg["temperature"] = temperature
+    if max_output_tokens is not None:
+        cfg["max_output_tokens"] = max_output_tokens
+    return types.GenerateContentConfig(**cfg)
 
 
 def _build_google_inlined_requests(
     chapter_batches: list[dict],
     reasoning_effort: str | None,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> list[Any]:
     """Convert chapter_batches to a list of InlinedRequest objects."""
     from google.genai import types
 
-    base_config = _build_gemini_gen_config(reasoning_effort)
+    base_config = _build_gemini_gen_config(reasoning_effort, temperature, max_output_tokens)
     requests = []
     for idx, cb in enumerate(chapter_batches):
         per_request_config = types.GenerateContentConfig(
@@ -102,6 +113,8 @@ def _build_google_inlined_requests(
             tools=base_config.tools,
             tool_config=base_config.tool_config,
             thinking_config=base_config.thinking_config,
+            **({"temperature": temperature} if temperature is not None else {}),
+            **({"max_output_tokens": max_output_tokens} if max_output_tokens is not None else {}),
         )
         requests.append(types.InlinedRequest(
             contents=[types.Content(role="user", parts=[types.Part(text=cb["user_message"])])],
@@ -118,6 +131,8 @@ def submit_google(
     chapter_batches: list[dict],
     jobs_dir: Path,
     job_metadata_base: dict,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> tuple[str, Path]:
     """Submit chapter_batches to Google's batch API.
 
@@ -127,7 +142,9 @@ def submit_google(
     """
     from google.genai import types
 
-    inlined = _build_google_inlined_requests(chapter_batches, reasoning_effort)
+    inlined = _build_google_inlined_requests(
+        chapter_batches, reasoning_effort, temperature, max_output_tokens
+    )
 
     batch_job = genai_client.batches.create(
         model=model,
@@ -157,6 +174,8 @@ def submit_google(
         "provider": "google",
         "model": model,
         "reasoning_effort": reasoning_effort,
+        "temperature": temperature,
+        "max_output_tokens": max_output_tokens,
         "job_name": job_name,
         "submitted_at": datetime.datetime.now().isoformat(),
         "requests": request_meta,
@@ -289,6 +308,8 @@ def submit_openai(
     chapter_batches: list[dict],
     jobs_dir: Path,
     job_metadata_base: dict,
+    temperature: float | None = None,
+    max_output_tokens: int | None = None,
 ) -> tuple[str, Path]:
     """Submit chapter_batches to OpenAI's batch API.
 
@@ -313,6 +334,9 @@ def submit_openai(
                 "tool_choice": {"type": "function", "name": TOOL_NAME},
                 "reasoning": {"effort": reasoning_effort},
             }
+            # temperature is fixed for reasoning models; only pass max_output_tokens
+            if max_output_tokens is not None:
+                body["max_output_tokens"] = max_output_tokens
         else:
             body = {
                 "model": model,
@@ -323,6 +347,10 @@ def submit_openai(
                 "tools": [_openai_tool_schema(_NEUTRAL_TOOL_SCHEMA)],
                 "tool_choice": {"type": "function", "function": {"name": TOOL_NAME}},
             }
+            if temperature is not None:
+                body["temperature"] = temperature
+            if max_output_tokens is not None:
+                body["max_tokens"] = max_output_tokens
         lines.append(json.dumps({
             "custom_id": str(idx),
             "method": "POST",
@@ -366,6 +394,8 @@ def submit_openai(
         "provider": "openai",
         "model": model,
         "reasoning_effort": reasoning_effort,
+        "temperature": temperature,
+        "max_output_tokens": max_output_tokens,
         "use_responses_api": use_responses,
         "batch_id": batch_id,
         "input_file_id": input_file_id,

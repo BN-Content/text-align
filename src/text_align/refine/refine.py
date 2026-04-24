@@ -544,6 +544,8 @@ def _process_corpus_async(
             chapter_batches=chapter_batches,
             jobs_dir=jobs_dir,
             job_metadata_base=job_metadata_base,
+            temperature=llm_client.temperature,
+            max_output_tokens=llm_client.max_output_tokens,
         )
     else:
         import openai as _openai
@@ -555,6 +557,8 @@ def _process_corpus_async(
             chapter_batches=chapter_batches,
             jobs_dir=jobs_dir,
             job_metadata_base=job_metadata_base,
+            temperature=llm_client.temperature,
+            max_output_tokens=llm_client.max_output_tokens,
         )
 
     print(f"  Submitted: {job_id}")
@@ -617,6 +621,16 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--max-api-retries", type=int, default=4,
                    help="Retry attempts on transient API errors (429/503) with "
                         "exponential backoff — 2s, 4s, 8s, … (default: 4)")
+    p.add_argument("--temperature", type=float, default=1,
+                   help="Sampling temperature sent explicitly to the provider "
+                        "(default: 1).  Fixing this value ensures sync and async "
+                        "batch runs use identical generation parameters.  "
+                        "Not applied to OpenAI reasoning models.")
+    p.add_argument("--max-output-tokens", type=int, default=32000,
+                   help="Hard cap on response tokens (default: 32000).  Matches "
+                        "the Anthropic budget and gives thinking models headroom "
+                        "before the tool call output.  Explicit matching prevents "
+                        "silent truncation differences between sync and async batch runs.")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
     p.add_argument("--from-scratch", action="store_true", default=False,
@@ -688,6 +702,8 @@ def main() -> None:
         model=args.llm_model,
         reasoning_effort=args.reasoning_effort,
         max_api_retries=args.max_api_retries,
+        temperature=args.temperature,
+        max_output_tokens=args.max_output_tokens,
     )
 
     for corpus in args.corpora:

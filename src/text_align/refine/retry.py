@@ -1,0 +1,191 @@
+"""Core retry logic for retry-alignment.
+
+Finds chapter JSON files, evaluates source-token coverage, re-aligns flagged
+verses from a blank slate, and merges the results back into the chapter files.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from text_align.migrate.alignment_io import load_alignment_json, write_alignment_json
+
+from .coverage import VerseRetrySpec
+from .llm import LLMClient
+from .prompt import build_batch_message, build_system_prompt, detect_phenomena
+from .refine import build_output_alignment
+
+
+_CHAPTER_GLOB = "*-*-??-???-manual.json"
+
+
+def discover_chapter_files(alignment_dir: Path) -> list[Path]:
+    """Return all chapter JSON files in alignment_dir, sorted by path."""
+    return sorted(alignment_dir.glob(_CHAPTER_GLOB))
+
+
+def merge_verse_results(
+    chapter_json_path: Path,
+    new_records_by_verse: dict[str, list[dict]],
+    corpus_id: str,
+    target_edition: str,
+    creator: str,
+    llm_provider: str | None,
+    llm_model: str | None,
+    reasoning_effort: str | None,
+) -> int:
+    """Merge LLM results for flagged verses into an existing chapter JSON file.
+
+    Replaces all records (and NEQ entries) belonging to each verse in
+    new_records_by_verse; all other verses are preserved unchanged.
+
+    Returns the number of verses replaced.
+    """
+    data = load_alignment_json(chapter_json_path)
+    groups = data.get("groups", [])
+    if not groups:
+        return 0
+
+    group = groups[0]
+    old_records: list[dict] = group.get("records", [])
+    neq_meta: dict = group.get("meta", {}).get("nonEquivalent", {})
+    old_neq_source: list[str] = neq_meta.get("source", [])
+    old_neq_target: list[str] = neq_meta.get("target", [])
+
+    replaced_verse_ids = set(new_records_by_verse.keys())
+
+    # Keep regular records for non-replaced verses
+    kept: list[dict] = []
+    for rec in old_records:
+        src_ids = rec.get("source") or []
+        vid = src_ids[0][:8] if src_ids else None
+        if vid not in replaced_verse_ids:
+            kept.append(rec)
+
+    # Re-inflate NEQ entries for non-replaced verses so build_output_alignment
+    # can reprocess them uniformly (it separates NEQ from regular records).
+    for sid in old_neq_source:
+        if sid[:8] not in replaced_verse_ids:
+            kept.append({"source": [sid], "target": [], "meta": {"rel": "NEQ"}})
+    for tid in old_neq_target:
+        if tid[:8] not in replaced_verse_ids:
+            kept.append({"source": [], "target": [tid], "meta": {"rel": "NEQ"}})
+
+    # Add fresh LLM records for replaced verses
+    for recs in new_records_by_verse.values():
+        kept.extend(recs)
+
+    output = build_output_alignment(
+        kept, corpus_id, target_edition, creator,
+        llm_provider=llm_provider,
+        llm_model=llm_model,
+        reasoning_effort=reasoning_effort,
+    )
+    write_alignment_json(output, chapter_json_path)
+    return len(replaced_verse_ids)
+
+
+def retry_chapter_sync(
+    chapter_json_path: Path,
+    retry_specs: list[VerseRetrySpec],
+    source_verses: dict[str, list],
+    target_verses: dict,
+    target_language: str,
+    llm_client: LLMClient,
+    batch_size: int,
+    max_retries: int,
+    corpus_id: str,
+    target_edition: str,
+    creator: str,
+    llm_provider: str | None,
+    llm_model: str | None,
+    reasoning_effort: str | None,
+) -> tuple[int, list[str]]:
+    """Re-align flagged verses in one chapter file via the sync LLM path.
+
+    Each verse is sent from a blank slate (no candidates). Returns
+    (n_verses_replaced, error_messages).
+    """
+    verse_ids = [spec.verse_id for spec in retry_specs]
+    new_records_by_verse: dict[str, list[dict]] = {}
+    all_errors: list[str] = []
+
+    for batch_start in range(0, len(verse_ids), batch_size):
+        batch_ids = verse_ids[batch_start:batch_start + batch_size]
+
+        verse_batch = []
+        verse_source_ids: dict[str, set[str]] = {}
+        verse_target_ids: dict[str, set[str]] = {}
+
+        for verse_id in batch_ids:
+            src_tokens = source_verses.get(verse_id, [])
+            tgt_verse = target_verses.get(verse_id)
+            tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+            verse_source_ids[verse_id] = {t.id for t in src_tokens}
+            verse_target_ids[verse_id] = {t.id for t in tgt_tokens}
+            verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))  # blank-slate cands
+
+        all_src = [t for _, src, _, _ in verse_batch for t in src]
+        phenomena = detect_phenomena(all_src)
+        system_msg = build_system_prompt(phenomena, target_language)
+        user_msg, batch_maps = build_batch_message(verse_batch, target_language)
+
+        results, errors, _san = llm_client.call_batch(
+            system_prompt=system_msg,
+            user_message=user_msg,
+            verse_source_ids=verse_source_ids,
+            verse_target_ids=verse_target_ids,
+            verse_token_maps=batch_maps,
+            max_retries=max_retries,
+        )
+
+        new_records_by_verse.update(results)
+        all_errors.extend(errors)
+
+    if not new_records_by_verse:
+        return 0, all_errors
+
+    n = merge_verse_results(
+        chapter_json_path, new_records_by_verse,
+        corpus_id, target_edition, creator,
+        llm_provider, llm_model, reasoning_effort,
+    )
+    return n, all_errors
+
+
+def build_retry_chapter_batches(
+    retry_specs_by_chapter: dict[str, list[VerseRetrySpec]],
+    source_verses: dict[str, list],
+    target_verses: dict,
+    target_language: str,
+    batch_size: int,
+) -> list[dict]:
+    """Build chapter_batches payload for async submission of retry verses."""
+    chapter_batches: list[dict] = []
+
+    for chapter_id, specs in sorted(retry_specs_by_chapter.items()):
+        verse_ids = [spec.verse_id for spec in specs]
+        for batch_index, batch_start in enumerate(range(0, len(verse_ids), batch_size)):
+            batch_ids = verse_ids[batch_start:batch_start + batch_size]
+
+            verse_batch = []
+            for verse_id in batch_ids:
+                src_tokens = source_verses.get(verse_id, [])
+                tgt_verse = target_verses.get(verse_id)
+                tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+                verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))
+
+            all_src = [t for _, src, _, _ in verse_batch for t in src]
+            phenomena = detect_phenomena(all_src)
+            system_msg = build_system_prompt(phenomena, target_language)
+            user_msg, _batch_maps = build_batch_message(verse_batch, target_language)
+
+            chapter_batches.append({
+                "chapter_id": chapter_id,
+                "batch_index": batch_index,
+                "verse_ids": batch_ids,
+                "system_prompt": system_msg,
+                "user_message": user_msg,
+            })
+
+    return chapter_batches

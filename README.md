@@ -70,9 +70,12 @@ src/text_align/
 │   │   ├── spa.py       #   Latin American Spanish (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google)
-│   ├── async_batch.py   # Provider batch-API helpers (Google implemented; others stubbed)
+│   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
+│   ├── coverage.py      # Per-verse source-token coverage evaluation
 │   ├── refine.py        # refine-alignment CLI
-│   └── fetch_batch.py   # fetch-batch CLI
+│   ├── fetch_batch.py   # fetch-batch CLI
+│   ├── retry.py         # Verse merge/retry core logic
+│   └── retry_cli.py     # retry-alignment CLI
 └── render/
     └── html.py          # render-alignment CLI
 ```
@@ -156,7 +159,12 @@ refine-alignment \
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4]          # retries on 429/503 with exponential backoff
-  [--batch-mode sync]            # sync (default) | async (Google batch API)
+  [--temperature 1]              # sampling temperature (default: 1); explicit value
+                                 #   ensures sync and async batch calls are identical
+                                 #   not applied to OpenAI reasoning models
+  [--max-output-tokens 32000]    # token budget (default: 32000); matches Anthropic's
+                                 #   hardcoded budget and gives thinking models headroom
+  [--batch-mode sync]            # sync (default) | async (Google/OpenAI batch API)
   [--jobs-dir jobs/]             # where async job metadata is stored
 ```
 
@@ -181,26 +189,38 @@ Candidate source types (default: all — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERG
 
 Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely.
 
-#### Async batch mode (Google Gemini only)
+#### Async batch mode (Google, OpenAI, and Anthropic)
 
-Pass `--batch-mode async` to submit all LLM calls to Google's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/google/`); the process then exits. Retrieve results later with `fetch-batch`.
+Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results later with `fetch-batch`.
+
+All three providers are supported: `google`, `openai`, `anthropic`.
 
 ```bash
-# Submit
+# Submit (Google)
 refine-alignment --config OENGB --book 41 \
   --llm-provider google --llm-model gemini-2.0-flash-001 \
   --batch-mode async
 
+# Submit (OpenAI)
+refine-alignment --config OENGB --book 41 \
+  --llm-provider openai --llm-model gpt-5.4-mini \
+  --batch-mode async
+
+# Submit (Anthropic)
+refine-alignment --config OENGB --book 41 \
+  --llm-provider anthropic --llm-model claude-haiku-4-5-20251001 \
+  --batch-mode async
+
 # Check status
-fetch-batch jobs/google/batches_abc123.json --poll
+fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --poll
 
 # Block until done and write chapter files
-fetch-batch jobs/google/batches_abc123.json --wait
+fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --wait
 ```
 
 ### `fetch-batch`
 
-Retrieve results from an async `refine-alignment` batch job and write the chapter output files.
+Retrieve results from an async `refine-alignment` or `retry-alignment` batch job and write the chapter output files.
 
 ```
 fetch-batch <job-metadata-file> [--poll] [--wait] [--wait-interval SECONDS]
@@ -211,6 +231,68 @@ fetch-batch <job-metadata-file> [--poll] [--wait] [--wait-interval SECONDS]
 | *(none)* | Fetch once; exit with error if job not yet complete |
 | `--poll` | Print current status and exit (no error if still running) |
 | `--wait` | Block, sleeping `--wait-interval` seconds (default 60) between checks |
+| `--cancel` | Request cancellation of the job and exit |
+
+For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
+
+### `retry-alignment`
+
+After `fetch-batch` writes chapter JSON files, `retry-alignment` identifies verses where more than N source tokens are unaligned and re-aligns them from a **blank slate** — no prior alignment is passed as a candidate (to avoid the LLM perpetuating bad alignments).
+
+A source token is considered covered if it appears in any record's `source` list or in `nonEquivalent.source`. The default threshold is `> 3` unaligned source tokens; use `--min-unaligned-src` to adjust.
+
+Use `--dry-run` first to inspect which verses would be flagged before making any LLM calls.
+
+```
+retry-alignment \
+  --alignment-dir path/to/alignments-eng/exp/OENGB/LLM-REFINED \
+  --corpus nt \
+  --target-language eng \
+  --target-edition OENGB \
+  --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
+  [--sources-dir data/sources/] \
+  [--llm-provider anthropic]     # openai | anthropic | google (default: anthropic)
+  [--llm-model claude-opus-4-7] \
+  [--reasoning-effort high] \
+  [--min-unaligned-src 3]        # flag verses with more than N unaligned source tokens
+  [--batch-size 5] \
+  [--max-retries 2] \
+  [--max-api-retries 4] \
+  [--temperature 1] \
+  [--max-output-tokens 32000] \
+  [--batch-mode sync]            # sync (default) | async
+  [--jobs-dir jobs/] \
+  [--dry-run]                    # report flagged verses without calling the LLM
+  [--config OENGB]
+```
+
+Range filtering (same flags as `refine-alignment`, minus `--verse` / `--verse-range`):
+
+| Flag | Example |
+|------|---------|
+| `--book BB` | `--book 66` |
+| `--book-range START END` | `--book-range 65 66` |
+| `--chapter BBCCC` | `--chapter 66007` |
+| `--chapter-range START END` | `--chapter-range 66001 66022` |
+
+Typical workflow:
+
+```bash
+# 1. Check what would be retried
+retry-alignment --config OENGB --corpus nt --book 66 --dry-run
+
+# 2. Re-align flagged verses (sync)
+retry-alignment --config OENGB --corpus nt --book 66 \
+  --llm-provider anthropic --llm-model claude-opus-4-7 --reasoning-effort high
+
+# 2. Or submit async
+retry-alignment --config OENGB --corpus nt --book 66 \
+  --llm-provider anthropic --llm-model claude-opus-4-7 --reasoning-effort high \
+  --batch-mode async
+
+# 3. Fetch and merge async results
+fetch-batch jobs/anthropic/OENGB-nt-20260424-abc12345.json --wait
+```
 
 ### `render-alignment`
 
@@ -259,9 +341,9 @@ exp/<edition>/LLM-REFINED/
     ...
 
 jobs/
-    google/<job-id>.json    # async batch job metadata (from --batch-mode async)
-    anthropic/              # (planned)
-    openai/                 # (planned)
+    google/<stem>.json      # async batch job metadata (from --batch-mode async)
+    openai/<stem>.json      # stem = {edition}-{corpus}-{YYYYMMDD}-{short_id}
+    anthropic/<stem>.json
 ```
 
 Source TSVs (`SBLGNT.tsv`, `WLCM.tsv`) live in `data/sources/`.

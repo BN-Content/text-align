@@ -22,12 +22,15 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment + fetch-batch CLIs
+├── refine/        # refine-alignment + fetch-batch + retry-alignment CLIs
 │   ├── prompt/       # language-aware prompt system (see below)
 │   ├── llm.py        # LLMClient: OpenAI / Anthropic / Google (sync)
-│   ├── async_batch.py # provider batch-API helpers (Google first; others stubbed)
+│   ├── async_batch.py # provider batch-API helpers (Google, OpenAI, Anthropic)
+│   ├── coverage.py   # per-verse source-token coverage evaluation
 │   ├── refine.py     # refine-alignment CLI entry point
-│   └── fetch_batch.py # fetch-batch CLI entry point
+│   ├── fetch_batch.py # fetch-batch CLI entry point
+│   ├── retry.py      # verse merge/retry core logic
+│   └── retry_cli.py  # retry-alignment CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
 
@@ -140,18 +143,43 @@ Filtering uses string-prefix comparison on 8-char `BBCCCVVV` verse IDs
 ## Async batch mode (`refine/async_batch.py`)
 
 `refine-alignment --batch-mode async` submits all LLM calls to the provider's
-batch API (currently Google only; Anthropic and OpenAI are stubbed) and exits,
-writing a job metadata JSON to `jobs/{provider}/{job_id}.json`.
+batch API (all three providers implemented) and exits, writing a job metadata
+JSON to `jobs/{provider}/{stem}.json`.
 
 `fetch-batch <job-metadata-file>` retrieves completed results and writes
 chapter JSON files. Flags: `--poll` (print status, exit), `--wait` (block
-until done).
+until done), `--cancel` (request cancellation).
 
 Job metadata format: see `docs/batch-api-plan.md`.
 
 Google batch API: `client.batches.create(src=types.BatchJobSource(inlined_requests=[...]))`.
 Each `InlinedRequest` carries `metadata={"request_index": "N"}` for result
 matching; responses come back as `job.dest.inlined_responses`.
+
+OpenAI batch API: JSONL file uploaded via `files.create`, then submitted with
+`batches.create(input_file_id=..., endpoint=..., completion_window="24h")`.
+Uses `/v1/responses` when `reasoning_effort` is set, `/v1/chat/completions`
+otherwise.
+
+Anthropic batch API: `client.messages.batches.create(requests=[...])` where
+each request carries a `custom_id` (the request index as a string) and `params`
+matching the `messages.create` schema. Terminal state: `processing_status ==
+"ended"`. Individual result types: `"succeeded"`, `"errored"`, `"expired"`,
+`"canceled"`. Results retrieved via `client.messages.batches.results(batch_id)`.
+
+## Sync/async generation parameter parity (`refine/llm.py`, `async_batch.py`)
+
+Batch API infrastructure may apply different defaults than the sync path
+(different temperature, lower token limits), causing consistent quality
+degradation on the async path. Fix: `LLMClient` now always sends `temperature`
+and `max_output_tokens` explicitly on every call — both sync and async.
+
+Defaults: `temperature=1`, `max_output_tokens=32000`. The 32 000 token budget
+matches the Anthropic hardcoded value (`ANTHROPIC_MAX_TOKENS`) and gives
+thinking models (OpenAI reasoning, Gemini with `thinkingLevel`) enough headroom
+before the tool call output. Temperature is not sent for OpenAI reasoning
+models (it is fixed by the API). Overridable via `--temperature` and
+`--max-output-tokens` CLI flags (also settable in YAML config files).
 
 ## render-alignment chapter-file detection (`render/html.py`)
 
@@ -174,6 +202,32 @@ Implementation details:
   (still calls `clean_alignments` on it).
 
 Full design: `docs/batch-api-plan.md`.
+
+## retry-alignment (`refine/retry_cli.py`, `refine/retry.py`, `refine/coverage.py`)
+
+Post-batch quality pass: identifies verses with too many unaligned source tokens
+and re-aligns them from scratch.
+
+**Detection** (`coverage.py`): a source token is covered if it appears in any
+record's `source` list OR in `nonEquivalent.source`. Verses with more than
+`--min-unaligned-src` (default 3) uncovered tokens are flagged.
+
+**Remedy**: flagged verses are sent to the LLM **blank-slate** — no prior
+alignment is passed as a candidate. Passing existing records as candidates caused
+the LLM to over-weight them and perpetuate bad alignments (including wrong
+token-swap errors, not just gaps). Blank-slate lets the LLM produce a clean
+realignment of the entire verse.
+
+**Merge** (`retry.py:merge_verse_results`): replaces only the flagged verse
+records in the existing chapter JSON. For non-replaced verses, regular records
+are kept as-is; NEQ entries are re-inflated into `{"meta": {"rel": "NEQ"}}`
+records so `build_output_alignment` can reprocess them uniformly. The resulting
+file is written in place.
+
+**Async support**: `--batch-mode async` submits retry verses to the provider
+batch API (same three providers as `refine-alignment`). Job metadata carries
+`"job_type": "retry"`. `fetch-batch` detects this and calls `merge_verse_results`
+instead of writing fresh chapter files.
 
 ## Testing
 

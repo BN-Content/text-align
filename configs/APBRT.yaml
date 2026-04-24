@@ -20,8 +20,8 @@ alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # Anthropic
-#llm_provider: anthropic
-#llm_model: claude-sonnet-4-6
+llm_provider: anthropic
+llm_model: claude-sonnet-4-6
 #llm_model: claude-opus-4-7
 #reasoning_effort: high
 # OpenAI
@@ -30,10 +30,10 @@ from-scratch: true
 #llm_model: gpt-5.4
 #reasoning_effort: low
 # Google
-reasoning_effort: high
-llm_provider: google
+#reasoning_effort: high
+#llm_provider: google
 #llm_model: gemini-3-flash-preview
-llm_model: gemini-3.1-pro-preview
+#llm_model: gemini-3.1-pro-preview
 
 # ---------------------------------------------------------------------------
 # ACAI and trabina

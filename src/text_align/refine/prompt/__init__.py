@@ -8,10 +8,12 @@ from .core import (
     LanguagePromptConfig,
     build_batch_message,
     build_system_prompt,
+    build_verse_token_maps,
     detect_phenomena,
     format_verse_block,
     get_language_config,
     register_language,
+    reverse_map_records,
 )
 from . import eng as _eng  # noqa: F401 — registers English config
 from . import por as _por  # noqa: F401 — registers Portuguese config
@@ -21,8 +23,10 @@ __all__ = [
     "LanguagePromptConfig",
     "build_batch_message",
     "build_system_prompt",
+    "build_verse_token_maps",
     "detect_phenomena",
     "format_verse_block",
     "get_language_config",
     "register_language",
+    "reverse_map_records",
 ]

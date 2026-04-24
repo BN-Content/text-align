@@ -8,13 +8,12 @@ Key differences from English (eng.py):
                       ao/à/pelo/pela) and conditional proper-name article alignment.
                     — Branch B: proper-name bullet replaced by cross-reference to
                       Branch A; contracted-form bullet added.
-    GLOSS FIELDS    — glosses are in English; note their use as a semantic bridge.
   PASSIVE_BLOCK     — adds reflexive passive (se + verb).
   INFINITIVE_BLOCK  — adds personal infinitive note.
   HINA_BLOCK        — adds subjunctive note for purpose clauses.
 
 Blocks unchanged from English: IMPERSONAL, PARTICIPLE, COMPARATIVE, AUTOS, HOTI,
-CONDITIONAL, NEGATION.
+CONDITIONAL, NEGATION, VERBAL_ASPECT.
 """
 
 from .core import LanguagePromptConfig, register_language
@@ -28,6 +27,7 @@ from .eng import (
     NEGATION_BLOCK,
     HOTI_BLOCK,
     PARTICIPLE_BLOCK,
+    VERBAL_ASPECT_BLOCK,
 )
 
 
@@ -135,6 +135,10 @@ or has a primary/secondary relationship with another token — never both.
 **Greek articles (POS T-*) are never NEQ.** When an article has no Portuguese
 correspondent, it is always secondary to its head noun or name. See ARTICLES → Branch B.
 
+**Supplied copulas:** When a copula ("é", "são", "era", "eram") appears in the
+translation but no Greek εἶναι token is present in the verse, the copula →
+NEQ target (Greek uses verbless clauses; the translator supplied the copula).
+
 ## SURFACE FORM DIFFERENCES
 
 Morphological differences between source and target — tense, voice, number, aspect —
@@ -147,46 +151,8 @@ lexical and semantic correspondence exists, not whether the surface forms match.
 The alignment candidates provided are initial word-level suggestions from automated
 tools. They contain no secondary classification, no idiom flags, and some will be
 wrong. Restructure, split, merge, or discard them freely. Use them as a rough starting
-point, not as a framework to preserve.
-
-## GLOSS FIELDS
-
-Source token lines may include two gloss fields:
-
-- **gloss**: contextual meaning in English, including grammatical role words
-  (prepositions, articles, case markers). Example: "of [the] genealogy".
-- **lexeme**: the bare English lexeme meaning, stripped of role words. Example:
-  "genealogy".
-
-The gloss fields are in **English**. Use them to understand the Greek token's semantic
-content, then identify which Portuguese word(s) in the translation carry that meaning —
-those are the primary alignment candidates.
-
-## SBLGNT MORPH CODES
-
-Format: POS-TENSE_VOICE_MOOD-CASE_NUMBER_GENDER
-
-  Tense:  P=present  A=aorist  F=future  I=imperfect  X=perfect  Y=pluperfect
-  Voice:  A=active  M=middle  P=passive
-  Mood:   I=indicative  S=subjunctive  M=imperative  P=participle  N=infinitive  O=optative
-  Case:   N=nominative  G=genitive  D=dative  A=accusative  V=vocative
-  Number: S=singular  P=plural
-  Gender: M=masculine  F=feminine  N=neuter
-  POS prefix: V=verb  T=article  N=noun  A=adjective  D=adverb  P=pronoun
-              C=conjunction  I=interjection  X=particle
-
-Examples:
-  V-PAI-3S  = verb, present active indicative, 3rd singular
-  V-APP-NSM = verb, aorist passive participle, nominative singular masculine
-  V-PAN     = verb, present active infinitive
-  N-NSM     = noun, nominative singular masculine
-  N-GPF     = noun, genitive plural feminine
-  A-NSM     = adjective, nominative singular masculine
-  A-GSN-C   = adjective, genitive singular neuter, comparative
-  A-NSM-S   = adjective, nominative singular masculine, superlative
-  T-NSM     = article, nominative singular masculine
-  P-NSM     = pronoun, nominative singular masculine
-  P-GSM     = pronoun, genitive singular masculine
+point, not as a framework to preserve. Align to semantic correspondents regardless of
+word order or clause position.
 
 ## ARTICLES
 
@@ -312,29 +278,7 @@ entirely of conjunctions (POS C-*), particles (POS X-*), or prepositions — eve
 aligning to multiple target tokens — do not mark it as an idiom. These function words
 are semantically flexible and need not match their literal glosses to be primary
 alignments. Instead, produce a standard record with the translation correspondent(s)
-as primary tokens.
-
-## VERBAL ASPECT
-
-Greek aspect is encoded in the verb morphology, not as a separate token. When a
-translator renders aspect explicitly — through an auxiliary or modal ("estava fazendo",
-"tentou", "começou a") — both the aspect-expressing element and the main verb element
-are primary to the single Greek verb. The Greek token carries the combined meaning;
-the translation distributes it across words.
-
-## ELLIPSIS OF εἶναι
-
-When a copula ("é", "são", "era", "eram") appears in the translation but no Greek
-εἶναι token is present in the verse, the copula has no source correspondent → NEQ
-target. This applies when the copula is genuinely supplied by the translator with no
-implied Greek verb behind it. When εἶναι is present in the source, align normally.
-
-## DISCOURSE RESTRUCTURING
-
-Translations sometimes reorder clauses, shift boundaries, or change syntactic structure
-relative to the Greek. Align tokens to their semantic correspondents regardless of word
-order or clause position. Do not force artificial alignments to compensate for
-restructuring — if no genuine correspondence exists, mark NEQ.\
+as primary tokens.\
 """
 
 PASSIVE_BLOCK = """\
@@ -471,16 +415,17 @@ Example — ἵνα σῴζῃ → "para salvar" (infinitive rendering):
 # ---------------------------------------------------------------------------
 
 CONDITIONAL_BLOCKS: dict[str, str] = {
-    "PASSIVE":     PASSIVE_BLOCK,
-    "IMPERSONAL":  IMPERSONAL_BLOCK,
-    "PARTICIPLE":  PARTICIPLE_BLOCK,
-    "INFINITIVE":  INFINITIVE_BLOCK,
-    "HINA":        HINA_BLOCK,
-    "COMPARATIVE": COMPARATIVE_BLOCK,
-    "AUTOS":       AUTOS_BLOCK,
-    "HOTI":        HOTI_BLOCK,
-    "CONDITIONAL": CONDITIONAL_BLOCK,
-    "NEGATION":    NEGATION_BLOCK,
+    "PASSIVE":        PASSIVE_BLOCK,
+    "IMPERSONAL":     IMPERSONAL_BLOCK,
+    "PARTICIPLE":     PARTICIPLE_BLOCK,
+    "INFINITIVE":     INFINITIVE_BLOCK,
+    "HINA":           HINA_BLOCK,
+    "COMPARATIVE":    COMPARATIVE_BLOCK,
+    "AUTOS":          AUTOS_BLOCK,
+    "HOTI":           HOTI_BLOCK,
+    "CONDITIONAL":    CONDITIONAL_BLOCK,
+    "NEGATION":       NEGATION_BLOCK,
+    "VERBAL_ASPECT":  VERBAL_ASPECT_BLOCK,
 }
 
 POR_CONFIG = LanguagePromptConfig(
@@ -489,7 +434,6 @@ POR_CONFIG = LanguagePromptConfig(
     conditional_blocks=CONDITIONAL_BLOCKS,
     block_order=BLOCK_ORDER,
     forced_inclusions=FORCED_INCLUSIONS,
-    show_gloss=True,
 )
 
 register_language(POR_CONFIG)

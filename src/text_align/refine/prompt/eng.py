@@ -105,6 +105,10 @@ or has a primary/secondary relationship with another token — never both.
 correspondent — most commonly when it precedes a proper name — it is always
 secondary to its head noun or name. See ARTICLES → Branch B.
 
+**Supplied copulas:** When a copula ("is", "are", "was", "were") appears in the
+translation but no Greek εἶναι token is present in the verse, the copula →
+NEQ target (Greek uses verbless clauses; the translator supplied the copula).
+
 ## SURFACE FORM DIFFERENCES
 
 Morphological differences between source and target — tense, voice, number, aspect —
@@ -117,45 +121,8 @@ lexical and semantic correspondence exists, not whether the surface forms match.
 The alignment candidates provided are initial word-level suggestions from automated
 tools. They contain no secondary classification, no idiom flags, and some will be
 wrong. Restructure, split, merge, or discard them freely. Use them as a rough starting
-point, not as a framework to preserve.
-
-## GLOSS FIELDS
-
-Source token lines may include two gloss fields:
-
-- **gloss**: contextual meaning, including grammatical role words the English requires
-  (prepositions, articles, case markers). Example: "of [the] genealogy".
-- **lexeme**: the bare lexeme meaning, stripped of role words. Example: "genealogy".
-
-When **lexeme** is present, it identifies English word(s) with a direct lexical or
-strong semantic connection to the source token — these are candidates for primary
-alignment.
-
-## SBLGNT MORPH CODES
-
-Format: POS-TENSE_VOICE_MOOD-CASE_NUMBER_GENDER
-
-  Tense:  P=present  A=aorist  F=future  I=imperfect  X=perfect  Y=pluperfect
-  Voice:  A=active  M=middle  P=passive
-  Mood:   I=indicative  S=subjunctive  M=imperative  P=participle  N=infinitive  O=optative
-  Case:   N=nominative  G=genitive  D=dative  A=accusative  V=vocative
-  Number: S=singular  P=plural
-  Gender: M=masculine  F=feminine  N=neuter
-  POS prefix: V=verb  T=article  N=noun  A=adjective  D=adverb  P=pronoun
-              C=conjunction  I=interjection  X=particle
-
-Examples:
-  V-PAI-3S  = verb, present active indicative, 3rd singular
-  V-APP-NSM = verb, aorist passive participle, nominative singular masculine
-  V-PAN     = verb, present active infinitive
-  N-NSM     = noun, nominative singular masculine
-  N-GPF     = noun, genitive plural feminine
-  A-NSM     = adjective, nominative singular masculine
-  A-GSN-C   = adjective, genitive singular neuter, comparative
-  A-NSM-S   = adjective, nominative singular masculine, superlative
-  T-NSM     = article, nominative singular masculine
-  P-NSM     = pronoun, nominative singular masculine
-  P-GSM     = pronoun, genitive singular masculine
+point, not as a framework to preserve. Align to semantic correspondents regardless of
+word order or clause position.
 
 ## ARTICLES
 
@@ -264,29 +231,7 @@ as primary tokens.
 Example — καὶ ἐγένετο → "Now it came to pass":
   Wrong:  source=[καὶ, ἐγένετο], target=["Now","it","came","to","pass"], meta.is_idiom: true
   Better: source=[καὶ], target=["Now"] — primary 1:1 (καὶ here marks a narrative transition)
-          source=[ἐγένετο], target=["it","came","to","pass"] — primary: "came"; secondary: "it", "to", "pass"
-
-## VERBAL ASPECT
-
-Greek aspect is encoded in the verb morphology, not as a separate token. When a
-translator renders aspect explicitly — through an auxiliary or modal ("was doing",
-"tried to", "began to") — both the aspect-expressing element and the main verb element
-are primary to the single Greek verb. The Greek token carries the combined meaning;
-the translation distributes it across words.
-
-## ELLIPSIS OF εἶναι
-
-When a copula ("is", "are", "was", "were") appears in the translation but no Greek
-εἶναι token is present in the verse, the copula has no source correspondent → NEQ
-target. This applies when the copula is genuinely supplied by the translator with no
-implied Greek verb behind it. When εἶναι is present in the source, align normally.
-
-## DISCOURSE RESTRUCTURING
-
-Translations sometimes reorder clauses, shift boundaries, or change syntactic structure
-relative to the Greek. Align tokens to their semantic correspondents regardless of word
-order or clause position. Do not force artificial alignments to compensate for
-restructuring — if no genuine correspondence exists, mark NEQ.\
+          source=[ἐγένετο], target=["it","came","to","pass"] — primary: "came"; secondary: "it", "to", "pass"\
 """
 
 PASSIVE_BLOCK = """\
@@ -689,6 +634,16 @@ is emphatic, not canceling. English absorbs the extra negation into "ever" or "a
 - Main verb auxiliaries → secondary to the verb, not part of the negation record\
 """
 
+VERBAL_ASPECT_BLOCK = """\
+## VERBAL ASPECT
+
+Greek aspect is encoded in the verb morphology, not as a separate token. When a
+translator renders aspect explicitly — through an auxiliary or modal ("was doing",
+"tried to", "began to") — both the aspect-expressing element and the main verb element
+are primary to the single Greek verb. The Greek token carries the combined meaning;
+the translation distributes it across words.\
+"""
+
 
 # ---------------------------------------------------------------------------
 # Block registry and config
@@ -705,19 +660,21 @@ BLOCK_ORDER = [
     "HOTI",
     "CONDITIONAL",
     "NEGATION",
+    "VERBAL_ASPECT",
 ]
 
 CONDITIONAL_BLOCKS: dict[str, str] = {
-    "PASSIVE":     PASSIVE_BLOCK,
-    "IMPERSONAL":  IMPERSONAL_BLOCK,
-    "PARTICIPLE":  PARTICIPLE_BLOCK,
-    "INFINITIVE":  INFINITIVE_BLOCK,
-    "HINA":        HINA_BLOCK,
-    "COMPARATIVE": COMPARATIVE_BLOCK,
-    "AUTOS":       AUTOS_BLOCK,
-    "HOTI":        HOTI_BLOCK,
-    "CONDITIONAL": CONDITIONAL_BLOCK,
-    "NEGATION":    NEGATION_BLOCK,
+    "PASSIVE":        PASSIVE_BLOCK,
+    "IMPERSONAL":     IMPERSONAL_BLOCK,
+    "PARTICIPLE":     PARTICIPLE_BLOCK,
+    "INFINITIVE":     INFINITIVE_BLOCK,
+    "HINA":           HINA_BLOCK,
+    "COMPARATIVE":    COMPARATIVE_BLOCK,
+    "AUTOS":          AUTOS_BLOCK,
+    "HOTI":           HOTI_BLOCK,
+    "CONDITIONAL":    CONDITIONAL_BLOCK,
+    "NEGATION":       NEGATION_BLOCK,
+    "VERBAL_ASPECT":  VERBAL_ASPECT_BLOCK,
 }
 
 FORCED_INCLUSIONS: dict[str, set[str]] = {
@@ -731,7 +688,6 @@ ENG_CONFIG = LanguagePromptConfig(
     conditional_blocks=CONDITIONAL_BLOCKS,
     block_order=BLOCK_ORDER,
     forced_inclusions=FORCED_INCLUSIONS,
-    show_gloss=True,
 )
 
 register_language(ENG_CONFIG)

@@ -66,8 +66,8 @@ body  { font-family: serif; font-size: 14px; }
 .sub  { font-size: 60%; }
 .tri  { font-size: 90%; vertical-align: 1px; }
 .acai-hl  { background: #d0e8ff; border-radius: 2px; padding: 0 1px; }
-.acai-tag { font-size: 55%; font-family: Arial, sans-serif; line-height: 2;
-            text-transform: uppercase; vertical-align: super;
+.acai-tag { font-size: 55%; font-family: Arial, sans-serif;
+            text-transform: uppercase; position: relative; top: -0.6em;
             margin-left: 0.4em; color: #446; }
 .file-meta { font-family: Arial, sans-serif; font-size: 12px; color: #666;
              margin: 2px 0 14px 0; letter-spacing: 0.01em; }
@@ -535,31 +535,54 @@ def write_verse(
         )
         src_cell = {"html": f"<div class='cell'>{tgt_row}{src_row}</div>", "source_ids": [unused_id]}
 
-        # insert before the first cell whose source is numerically adjacent
-        # (use first match so we don't split a multi-token group)
-        insert_before = cells[-1] if cells else None
-        found = False
+        # Determine insertion point by source-token ordering:
+        #   Rule 1: NEQ before all source cells → prepend.
+        #   Rule 2: NEQ after all source cells → append.
+        #   Rule 3: insert after the cell whose source is the highest value
+        #           still less than the NEQ — i.e., right after the preceding
+        #           Greek token's translation cell (the natural reading position).
+        #   Rule 4: fallback — insert before the nearest following source cell.
+        try:
+            neq_int = int(unused_id)
+        except (ValueError, AttributeError):
+            neq_int = None
+
+        best_after_cell = None   # cell for nearest preceding Greek token (rule 3)
+        best_after_int = -1
+        best_before_cell = None  # cell for nearest following Greek token (rule 4)
+        best_before_int: int | None = None
+
         for cell in cells:
-            if found:
-                break
-            for used_id in cell["source_ids"]:
+            for sid in cell["source_ids"]:
                 try:
-                    bcv_u = BCVWPID(used_id)
-                    bcv_n = BCVWPID(unused_id)
-                    if int(used_id) - int(unused_id) == 1:
-                        insert_before = cell
-                        found = True
-                        break
-                    if (int(bcv_u.word_ID) == int(bcv_n.word_ID)
-                            and int(bcv_u.part_ID) - int(bcv_n.part_ID) == 1):
-                        insert_before = cell
-                        found = True
-                        break
+                    sid_int = int(sid)
+                    if neq_int is not None:
+                        if sid_int < neq_int and sid_int > best_after_int:
+                            best_after_int = sid_int
+                            best_after_cell = cell
+                        elif sid_int > neq_int and (best_before_int is None or sid_int < best_before_int):
+                            best_before_int = sid_int
+                            best_before_cell = cell
                 except (ValueError, AttributeError):
                     pass
-        if insert_before is not None:
-            cells.insert(cells.index(insert_before), src_cell)
+
+        if best_after_cell is not None:
+            # Rule 3: after the nearest preceding source token's translation cell.
+            # Advance past any immediately following cells that belong to the same
+            # alignment unit (same source IDs) so we never split a contiguous group.
+            after_idx = cells.index(best_after_cell)
+            after_src_set = set(best_after_cell["source_ids"])
+            while after_idx + 1 < len(cells):
+                if after_src_set & set(cells[after_idx + 1]["source_ids"]):
+                    after_idx += 1
+                else:
+                    break
+            cells.insert(after_idx + 1, src_cell)
+        elif best_before_cell is not None:
+            # Rule 1: NEQ precedes all positioned tokens — before the first
+            cells.insert(cells.index(best_before_cell), src_cell)
         else:
+            # Rule 2 / no positioned cells yet: append
             cells.append(src_cell)
 
     for cell in cells:
@@ -789,7 +812,7 @@ def main() -> None:
                     alignmentpath_override=override,
                 )
                 managers.append(Manager(alset))
-        except AssertionError as exc:
+        except (AssertionError, FileNotFoundError) as exc:
             print(f"Skipping {canon.upper()} ({sourceid}): {exc}")
 
     for mgr in managers:
@@ -886,6 +909,10 @@ def main() -> None:
             if chapter_key != prev_chapter_key:
                 if html_out is not None:
                     end_chapter(html_out)
+                # Use this chapter's own meta when available (mixed-provider directories)
+                chapter_file_meta = mgr.alignmentsreader.per_chapter_meta.get(chapter_key)
+                if chapter_file_meta:
+                    meta_info["llm"] = chapter_file_meta.get("llm") or {}
                 html_out = start_new_chapter(html_out, current_bcv, viz_path, is_r2l, iso_date, meta_info)
                 prev_chapter_key = chapter_key
             else:

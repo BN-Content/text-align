@@ -67,6 +67,7 @@ class AlignmentsReader:
         self.neq_source: frozenset[str] = frozenset()
         self.neq_target: frozenset[str] = frozenset()
         self.group_meta: dict = {}
+        self.per_chapter_meta: dict[str, dict] = {}  # BB-CCC → group meta; set by from_chapter_files
         self.alignmentgroup: AlignmentGroup = self.read_alignments(
             keeprejected=keeprejected, data=_preloaded_data
         )
@@ -121,14 +122,21 @@ class AlignmentsReader:
         merged_neq_target: list[str] = []
         first_meta: Optional[dict] = None
         last_group: dict = {}
+        per_chapter_meta: dict[str, dict] = {}
 
         for path in sorted(paths):
             with path.open("rb") as f:
                 raw = json.load(f)
             group = raw["groups"][0] if "groups" in raw else raw
             last_group = group
+            file_meta = dict(group.get("meta", {}))
             if first_meta is None:
-                first_meta = dict(group.get("meta", {}))
+                first_meta = file_meta
+            # Derive BB-CCC chapter key from filename stem (e.g. WLCM-OENGB-66-007-manual → 66-007)
+            parts = path.stem.split("-")
+            if len(parts) >= 3:
+                chapter_key = f"{parts[-3]}-{parts[-2]}"
+                per_chapter_meta[chapter_key] = file_meta
             neq = group.get("meta", {}).get("nonEquivalent", {})
             merged_neq_source.extend(neq.get("source", []))
             merged_neq_target.extend(neq.get("target", []))
@@ -157,13 +165,15 @@ class AlignmentsReader:
             }],
         }
 
-        return cls(
+        reader = cls(
             alignmentset=alignmentset,
             keeptargetwordpart=keeptargetwordpart,
             keepbadrecords=keepbadrecords,
             keeprejected=keeprejected,
             _preloaded_data=merged_data,
         )
+        reader.per_chapter_meta = per_chapter_meta
+        return reader
 
     def read_alignments(self, keeprejected: bool = False, data: Optional[dict] = None) -> AlignmentGroup:
         if data is None:

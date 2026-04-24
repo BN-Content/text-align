@@ -909,6 +909,10 @@ def main() -> None:
             if chapter_key != prev_chapter_key:
                 if html_out is not None:
                     end_chapter(html_out)
+                # Use this chapter's own meta when available (mixed-provider directories)
+                chapter_file_meta = mgr.alignmentsreader.per_chapter_meta.get(chapter_key)
+                if chapter_file_meta:
+                    meta_info["llm"] = chapter_file_meta.get("llm") or {}
                 html_out = start_new_chapter(html_out, current_bcv, viz_path, is_r2l, iso_date, meta_info)
                 prev_chapter_key = chapter_key
             else:

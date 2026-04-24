@@ -229,9 +229,19 @@ fetch-batch <job-metadata-file> [--poll] [--wait] [--wait-interval SECONDS]
 | Flag | Behaviour |
 |------|-----------|
 | *(none)* | Fetch once; exit with error if job not yet complete |
-| `--poll` | Print current status and exit (no error if still running) |
-| `--wait` | Block, sleeping `--wait-interval` seconds (default 60) between checks |
+| `--poll` | Print current status (with request counts for OpenAI/Anthropic) and exit |
+| `--wait` | Block, printing progress each `--wait-interval` seconds (default 60) |
 | `--cancel` | Request cancellation of the job and exit |
+
+For OpenAI and Anthropic, `--poll` and `--wait` display request-level progress derived from the batch object's `request_counts`, e.g.:
+
+```
+Batch batch_abc123: in_progress  47/200
+Batch batch_abc123: in_progress  118/200, 2 failed
+Batch batch_abc123: completed
+```
+
+Google exposes only a coarse state enum (`JOB_STATE_PENDING` / `JOB_STATE_RUNNING` / `JOB_STATE_SUCCEEDED`), so its output remains state-only.
 
 For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
 

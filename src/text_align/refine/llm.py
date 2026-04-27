@@ -413,9 +413,9 @@ class LLMClient:
     """Provider-agnostic client for refine-alignment LLM calls.
 
     Args:
-        provider: ``"openai"``, ``"anthropic"``, or ``"google"``.
+        provider: ``"openai"``, ``"anthropic"``, ``"google"``, or ``"openrouter"``.
         model: Model name, e.g. ``"gpt-5.4-mini"``, ``"claude-sonnet-4-6"``,
-            or ``"gemini-3.1-flash"``.
+            ``"gemini-3.1-flash"``, or any OpenRouter model slug.
         temperature: Sampling temperature passed explicitly to the provider.
             ``None`` (default) lets the provider use its own default.  Set this
             to match the value you use in sync calls so async batch requests
@@ -438,9 +438,10 @@ class LLMClient:
         temperature: float = 1,
         max_output_tokens: int = 32000,
     ) -> None:
-        if provider not in ("openai", "anthropic", "google"):
+        if provider not in ("openai", "anthropic", "google", "openrouter"):
             raise ValueError(
-                f"Unknown provider {provider!r}. Use 'openai', 'anthropic', or 'google'."
+                f"Unknown provider {provider!r}. "
+                f"Use 'openai', 'anthropic', 'google', or 'openrouter'."
             )
         self.provider = provider
         self.model = model
@@ -449,6 +450,7 @@ class LLMClient:
         self.temperature = temperature
         self.max_output_tokens = max_output_tokens
         self._client = self._init_client()
+        self.session_cost: float = 0.0
 
     def _init_client(self):
         if self.provider == "openai":
@@ -463,12 +465,40 @@ class LLMClient:
             except ImportError:
                 raise ImportError("Install the anthropic package: poetry add anthropic")
             return anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        elif self.provider == "openrouter":
+            try:
+                import openai
+            except ImportError:
+                raise ImportError("Install the openai package: poetry add openai")
+            return openai.OpenAI(
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                base_url="https://openrouter.ai/api/v1",
+            )
         else:
             try:
                 from google import genai
             except ImportError:
                 raise ImportError("Install the google-genai package: poetry add google-genai")
             return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+
+    def _track_openrouter_cost(self, response) -> None:
+        """Accumulate per-call cost from an OpenRouter response and print running total."""
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        extra = getattr(usage, "model_extra", None) or {}
+        cost = extra.get("cost") or extra.get("total_cost")
+        if cost is None:
+            return
+        try:
+            cost = float(cost)
+        except (TypeError, ValueError):
+            return
+        self.session_cost += cost
+        print(
+            f"  [OpenRouter cost: ${cost:.4f} | session: ${self.session_cost:.4f}]",
+            flush=True,
+        )
 
     def call_batch(
         self,
@@ -496,7 +526,7 @@ class LLMClient:
             that remained after all retries, and ``san_details`` is a list of
             human-readable strings describing each sanitization event.
         """
-        if self.provider == "openai":
+        if self.provider in ("openai", "openrouter"):
             return self._call_openai(
                 system_prompt, user_message, verse_source_ids, verse_target_ids,
                 verse_token_maps, max_retries
@@ -525,7 +555,7 @@ class LLMClient:
         verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
-        if self.reasoning_effort is not None:
+        if self.reasoning_effort is not None and self.provider != "openrouter":
             return self._call_openai_responses(
                 system_prompt, user_message, verse_source_ids, verse_target_ids,
                 verse_token_maps, max_retries
@@ -558,6 +588,9 @@ class LLMClient:
                 self.max_api_retries,
                 "OpenAI",
             )
+
+            if self.provider == "openrouter":
+                self._track_openrouter_cost(response)
 
             choice = response.choices[0]
             if choice.finish_reason == "length":

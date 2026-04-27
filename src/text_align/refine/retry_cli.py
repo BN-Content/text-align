@@ -51,7 +51,8 @@ def parse_args() -> argparse.Namespace:
                    help=f"Directory containing SBLGNT.tsv and WLCM.tsv (default: {_SOURCES_DIR})")
     p.add_argument("--corpus", default=None, choices=["ot", "nt"],
                    help="Corpus: 'nt' for SBLGNT, 'ot' for WLCM")
-    p.add_argument("--llm-provider", default="anthropic", choices=["openai", "anthropic", "google"],
+    p.add_argument("--llm-provider", default="anthropic",
+                   choices=["openai", "anthropic", "google", "openrouter"],
                    help="LLM provider (default: anthropic)")
     p.add_argument("--llm-model", default=None,
                    help="Model name for the chosen provider")
@@ -207,6 +208,9 @@ def main() -> None:
             retry_specs_by_chapter, chapter_paths, llm_client,
         )
 
+    if args.llm_provider == "openrouter" and llm_client.session_cost:
+        print(f"\nOpenRouter session cost: ${llm_client.session_cost:.4f}")
+
 
 def _run_sync(
     args: argparse.Namespace,
@@ -269,6 +273,11 @@ def _run_async(
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]],
     llm_client: LLMClient,
 ) -> None:
+    if args.llm_provider not in ("google", "openai", "anthropic"):
+        raise SystemExit(
+            f"Async batch mode is not supported for provider {args.llm_provider!r}. "
+            f"Use --batch-mode sync, or switch to google/openai/anthropic for async."
+        )
     from .async_batch import submit_anthropic, submit_google, submit_openai
 
     chapter_batches = build_retry_chapter_batches(

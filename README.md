@@ -69,7 +69,7 @@ src/text_align/
 │   │   ├── por.py       #   Portuguese (auto-registered)
 │   │   ├── spa.py       #   Latin American Spanish (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
-│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google)
+│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # Per-verse source-token coverage evaluation
 │   ├── refine.py        # refine-alignment CLI
@@ -133,7 +133,7 @@ acai-align \
 
 ### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI, Anthropic, or Google). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, or any model via OpenRouter). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
 Output is **one file per chapter**: `SBLGNT-<edition>-<BB>-<CCC>-manual.json` (NT) or `WLCM-<edition>-<BB>-<CCC>-manual.json` (OT). For example, Mark 3 produces `SBLGNT-OENGB-41-003-manual.json`.
 
@@ -141,6 +141,7 @@ Requires the appropriate API key in the environment:
 - `OPENAI_API_KEY` for OpenAI models
 - `ANTHROPIC_API_KEY` for Anthropic models
 - `GEMINI_API_KEY` for Google Gemini models
+- `OPENROUTER_API_KEY` for OpenRouter (access to Qwen, Kimi, GLM, Mistral, and 200+ other models via a single account)
 
 ```
 refine-alignment \
@@ -151,11 +152,12 @@ refine-alignment \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
   [--from-scratch]               # align without candidates
   [--corpora ot nt] \
-  [--llm-provider openai]        # openai | anthropic | google
-  [--llm-model gpt-5.4-mini] \
+  [--llm-provider openai]        # openai | anthropic | google | openrouter
+  [--llm-model gpt-5.4-mini] \  #   openrouter: use any model slug, e.g. qwen/qwen3-235b-a22b
   [--reasoning-effort high]      # none/minimal/low/medium/high
                                  #   OpenAI gpt-5.x → reasoning_effort (Responses API)
                                  #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
+                                 #   ignored for openrouter (always uses chat completions)
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4]          # retries on 429/503 with exponential backoff
@@ -164,7 +166,7 @@ refine-alignment \
                                  #   not applied to OpenAI reasoning models
   [--max-output-tokens 32000]    # token budget (default: 32000); matches Anthropic's
                                  #   hardcoded budget and gives thinking models headroom
-  [--batch-mode sync]            # sync (default) | async (Google/OpenAI batch API)
+  [--batch-mode sync]            # sync (default) | async (google/openai/anthropic only)
   [--jobs-dir jobs/]             # where async job metadata is stored
 ```
 
@@ -193,7 +195,7 @@ Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` 
 
 Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results later with `fetch-batch`.
 
-All three providers are supported: `google`, `openai`, `anthropic`.
+Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter`** — use `--batch-mode sync` with OpenRouter.
 
 ```bash
 # Submit (Google)
@@ -216,6 +218,22 @@ fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --poll
 
 # Block until done and write chapter files
 fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --wait
+```
+
+#### OpenRouter (sync only)
+
+[OpenRouter](https://openrouter.ai/) provides a single OpenAI-compatible API that routes to 200+ models — Qwen, Kimi, GLM, Mistral, Llama, and more — without requiring separate accounts. Set `OPENROUTER_API_KEY` and pass `--llm-provider openrouter` with any OpenRouter model slug.
+
+Per-call cost (USD) is printed after each verse batch and a session total is printed at the end of the run.
+
+```bash
+# Qwen 3 235B via OpenRouter
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider openrouter --llm-model qwen/qwen3-235b-a22b
+
+# Kimi K2 via OpenRouter
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider openrouter --llm-model moonshotai/kimi-k2
 ```
 
 ### `fetch-batch`
@@ -261,7 +279,7 @@ retry-alignment \
   --target-edition OENGB \
   --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
   [--sources-dir data/sources/] \
-  [--llm-provider anthropic]     # openai | anthropic | google (default: anthropic)
+  [--llm-provider anthropic]     # openai | anthropic | google | openrouter (default: anthropic)
   [--llm-model claude-opus-4-7] \
   [--reasoning-effort high] \
   [--min-unaligned-src 3]        # flag verses with more than N unaligned source tokens
@@ -378,7 +396,7 @@ Group-level extensions (in `meta` on the group, alongside `creator` and `conform
 |-------|------|---------|
 | `meta.nonEquivalent.source` | `string[]` | Source token IDs positively determined to have no translation equivalent |
 | `meta.nonEquivalent.target` | `string[]` | Target token IDs positively determined to have no source correspondent |
-| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`) |
+| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`) |
 | `meta.llm.model` | `string` | Model name, e.g. `gpt-5.4-mini` |
 | `meta.llm.reasoning_effort` | `string` | Reasoning effort level if set, e.g. `high` |
 

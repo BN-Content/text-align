@@ -483,7 +483,7 @@ def _process_corpus_async(
     if llm_provider not in ("google", "openai", "anthropic"):
         raise SystemExit(
             f"Async batch mode is not supported for provider {llm_provider!r}. "
-            f"Use --batch-mode sync or --llm-provider google/openai/anthropic."
+            f"Use --batch-mode sync, or switch to google/openai/anthropic for async."
         )
 
     from .async_batch import submit_anthropic, submit_google, submit_openai
@@ -619,7 +619,8 @@ def parse_args() -> argparse.Namespace:
                         f"{', '.join(ALIGNMENT_SOURCE_TYPES)})")
     p.add_argument("--corpora", default=["ot", "nt"], nargs="+", choices=["ot", "nt"],
                    help="Corpora to process (default: ot nt)")
-    p.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "google"],
+    p.add_argument("--llm-provider", default="openai",
+                   choices=["openai", "anthropic", "google", "openrouter"],
                    help="LLM provider (default: openai)")
     p.add_argument("--llm-model", default="gpt-5.4-mini",
                    help="Model name for the chosen provider (default: gpt-5.4-mini)")
@@ -741,6 +742,9 @@ def main() -> None:
             batch_mode=args.batch_mode,
             jobs_dir=args.jobs_dir,
         )
+
+    if args.llm_provider == "openrouter" and llm_client.session_cost:
+        print(f"\nOpenRouter session cost: ${llm_client.session_cost:.4f}")
 
 
 if __name__ == "__main__":

@@ -69,9 +69,20 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 | `openai` | `OPENAI_API_KEY` | Uses Responses API for reasoning models |
 | `anthropic` | `ANTHROPIC_API_KEY` | Extended thinking via `thinking` block |
 | `google` | `GEMINI_API_KEY` | Gemini 3+ `thinkingLevel` via `ThinkingConfig` |
+| `openrouter` | `OPENROUTER_API_KEY` | OpenAI-compatible proxy to 200+ models (Qwen, Kimi, GLM, …); sync-only; per-call cost tracked in `LLMClient.session_cost` |
 
 `reasoning_effort` (none/minimal/low/medium/high) maps to `reasoning_effort` for OpenAI
-and `thinkingLevel` for Google. Omitting it sends no thinking config.
+and `thinkingLevel` for Google. Omitting it sends no thinking config. Ignored for
+`openrouter` (always uses the chat completions path).
+
+## OpenRouter cost tracking (`refine/llm.py`)
+
+`LLMClient.session_cost` accumulates the USD cost of all OpenRouter calls made during
+the session. `_track_openrouter_cost(response)` reads `response.usage.model_extra["cost"]`
+(Pydantic captures extra fields OpenRouter adds to the standard usage object) and prints
+a per-call + running total after each API call. A session total is printed at the end of
+`refine-alignment` and `retry-alignment` when `--llm-provider openrouter` is active.
+Async batch mode is not supported for `openrouter`.
 
 ## Model names
 

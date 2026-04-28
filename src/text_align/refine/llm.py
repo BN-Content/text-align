@@ -571,23 +571,33 @@ class LLMClient:
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
         all_san_details: list[str] = []
+        _tool_choice_dropped = False
 
         for attempt in range(max_retries + 1):
             _oa_kwargs: dict = dict(
                 model=self.model,
                 messages=messages,
                 tools=tool_schema,
-                tool_choice=tool_choice,
             )
+            if not _tool_choice_dropped:
+                _oa_kwargs["tool_choice"] = tool_choice
             if self.temperature is not None:
                 _oa_kwargs["temperature"] = self.temperature
             if self.max_output_tokens is not None:
                 _oa_kwargs["max_tokens"] = self.max_output_tokens
-            response = _api_call_with_backoff(
-                lambda: self._client.chat.completions.create(**_oa_kwargs),
-                self.max_api_retries,
-                "OpenAI",
-            )
+            try:
+                response = _api_call_with_backoff(
+                    lambda: self._client.chat.completions.create(**_oa_kwargs),
+                    self.max_api_retries,
+                    "OpenAI",
+                )
+            except RuntimeError as exc:
+                msg = str(exc)
+                if not _tool_choice_dropped and "tool_choice" in msg and "thinking" in msg.lower():
+                    print("  NOTE: model rejected tool_choice in thinking mode — retrying without it")
+                    _tool_choice_dropped = True
+                    continue
+                raise
 
             if self.provider == "openrouter":
                 self._track_openrouter_cost(response)
@@ -600,6 +610,16 @@ class LLMClient:
                 )
             assistant_msg = choice.message
             tool_calls = assistant_msg.tool_calls or []
+
+            if not tool_calls:
+                if attempt < max_retries:
+                    print("  NOTE: model returned no tool call — nudging to retry")
+                    messages.append({"role": "assistant", "content": assistant_msg.content or ""})
+                    messages.append({"role": "user", "content": "You did not call the alignment tool. You must call it now to provide the verse alignments."})
+                    continue
+                else:
+                    all_errors.append("model returned no tool call after all retries")
+                    break
 
             verse_errors: dict[str, list[str]] = {}
             tool_results: list[dict] = []

@@ -21,19 +21,29 @@ from-scratch: true
 
 # Anthropic
 #llm_provider: anthropic
-#llm_model: claude-sonnet-4-6
+##llm_model: claude-sonnet-4-6
 #llm_model: claude-opus-4-7
-#reasoning_effort: medium
+#reasoning_effort: high
 # OpenAI
-llm_provider: openai
+#llm_provider: openai
 #llm_model: gpt-5.4-mini
-llm_model: gpt-5.4
-reasoning_effort: medium
+#llm_model: gpt-5.4
+#reasoning_effort: high
 # Google
 #reasoning_effort: high
 #llm_provider: google
 ##llm_model: gemini-3-flash-preview
 #llm_model: gemini-3.1-pro-preview
+# openrouter
+llm_provider: openrouter
+#reasoning_effort: medium
+#llm_model: google/gemma-4-26b-a4b-it
+#llm_model: moonshotai/kimi-k2.5
+#llm_model: moonshotai/kimi-k2.6
+#batch_size: 4
+#llm_model: qwen/qwen3.6-plus
+#llm_model: z-ai/glm-5.1
+llm_model: deepseek/deepseek-v4-pro
 
 # ---------------------------------------------------------------------------
 # ACAI and trabina

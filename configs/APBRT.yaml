@@ -20,15 +20,15 @@ alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # Anthropic
-llm_provider: anthropic
-llm_model: claude-sonnet-4-6
+#llm_provider: anthropic
+#llm_model: claude-sonnet-4-6
 #llm_model: claude-opus-4-7
 #reasoning_effort: high
 # OpenAI
-#llm_provider: openai
+llm_provider: openai
 #llm_model: gpt-5.4-mini
-#llm_model: gpt-5.4
-#reasoning_effort: low
+llm_model: gpt-5.4
+reasoning_effort: high
 # Google
 #reasoning_effort: high
 #llm_provider: google

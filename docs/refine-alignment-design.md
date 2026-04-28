@@ -10,7 +10,7 @@
 automated alignment tools (ACAI, SIM-MIGRATED, DIFF-MIGRATED, …) for a given target edition,
 presents each verse's source tokens, target tokens, and all candidate alignment records to an
 LLM, and produces a single refined alignment JSON that applies the principles in
-`alignment-principles.md`.
+`alignment-principles-nt.md` (NT) or `alignment-principles-ot.md` (OT).
 
 Output lands in `exp/<trg_ed>/<output-suffix>/` — a new experimental folder alongside the
 automated tool outputs.
@@ -60,7 +60,7 @@ verses, so lookups across source and target are consistent.
 
 ### System prompt
 
-A condensed rendering of `alignment-principles.md` covering:
+A condensed rendering of `alignment-principles-nt.md` (or the OT equivalent) covering:
 
 - Alignment direction: translation → source
 - Primary vs secondary definitions and the common cases (prepositions from case, helping

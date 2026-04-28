@@ -3,7 +3,8 @@
 Imported by prompt/__init__.py to register the English config automatically.
 """
 
-from .core import LanguagePromptConfig, register_language
+from text_align.refine.prompt.common import LanguagePromptConfig
+from .core import register_nt_language
 
 
 # ---------------------------------------------------------------------------
@@ -690,4 +691,4 @@ ENG_CONFIG = LanguagePromptConfig(
     forced_inclusions=FORCED_INCLUSIONS,
 )
 
-register_language(ENG_CONFIG)
+register_nt_language(ENG_CONFIG)

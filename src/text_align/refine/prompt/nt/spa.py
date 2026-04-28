@@ -19,7 +19,8 @@ Blocks unchanged from English: IMPERSONAL, PARTICIPLE, COMPARATIVE, AUTOS, HOTI,
 CONDITIONAL, NEGATION, VERBAL_ASPECT.
 """
 
-from .core import LanguagePromptConfig, register_language
+from text_align.refine.prompt.common import LanguagePromptConfig
+from .core import register_nt_language
 from .eng import (
     AUTOS_BLOCK,
     COMPARATIVE_BLOCK,
@@ -425,4 +426,4 @@ SPA_CONFIG = LanguagePromptConfig(
     forced_inclusions=FORCED_INCLUSIONS,
 )
 
-register_language(SPA_CONFIG)
+register_nt_language(SPA_CONFIG)

@@ -14,7 +14,7 @@ import json
 import os
 import time
 
-from .prompt.core import reverse_map_records
+from .prompt import reverse_map_records
 
 # ---------------------------------------------------------------------------
 # Tool schema

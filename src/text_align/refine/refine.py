@@ -23,7 +23,7 @@ from text_align.migrate.alignment_io import load_alignment_json, write_alignment
 from text_align.migrate.tsv import process_usfm_tsv
 
 from .llm import LLMClient
-from .prompt import build_batch_message, build_system_prompt, detect_phenomena
+from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
 from .source import load_source_verses
 
 
@@ -395,9 +395,10 @@ def _process_corpus_sync(
                 verse_batch.append((verse_id, src_tokens, tgt_tokens, cands))
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]
+            testament = infer_testament(all_src)
             phenomena = detect_phenomena(all_src)
-            system_msg = build_system_prompt(phenomena, target_language)
-            user_msg, batch_maps = build_batch_message(verse_batch, target_language)
+            system_msg = build_system_prompt(phenomena, target_language, testament=testament)
+            user_msg, batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
 
             print(
                 f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
@@ -507,9 +508,10 @@ def _process_corpus_async(
                 verse_batch.append((verse_id, src_tokens, tgt_tokens, cands))
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]
+            testament = infer_testament(all_src)
             phenomena = detect_phenomena(all_src)
-            system_msg = build_system_prompt(phenomena, target_language)
-            user_msg, _batch_maps = build_batch_message(verse_batch, target_language)
+            system_msg = build_system_prompt(phenomena, target_language, testament=testament)
+            user_msg, _batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
 
             chapter_batches.append({
                 "chapter_id": chapter_id,

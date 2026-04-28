@@ -286,6 +286,7 @@ def _run_async(
         target_verses=target_verses,
         target_language=args.target_language,
         batch_size=args.batch_size,
+        corpus_id=corpus_id,
     )
 
     print(f"\n  Submitting {len(chapter_batches)} request(s) to {args.llm_provider} batch API ...")

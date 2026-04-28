@@ -32,7 +32,7 @@ from .llm import (
     _iter_verse_entries,
     validate_records,
 )
-from .prompt.core import reverse_map_records
+from .prompt import reverse_map_records
 
 
 # ---------------------------------------------------------------------------

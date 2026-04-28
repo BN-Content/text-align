@@ -1,51 +1,25 @@
-"""Portuguese target-language prompt config for refine-alignment.
+# Alignment Principles — Portuguese (por)
 
-Key differences from English (eng.py):
-  BASE_BLOCK
-    TOKEN ROLES     — pro-drop: supplied subject pronouns are usually absent; no
-                      secondary token expected when the translation has none.
-    ARTICLES        — Branch A: contracted preposition+article forms (do/da/no/na/
-                      ao/à/pelo/pela) and conditional proper-name article alignment.
-                    — Branch B: proper-name bullet replaced by cross-reference to
-                      Branch A; contracted-form bullet added.
-  PASSIVE_BLOCK     — adds reflexive passive (se + verb).
-  INFINITIVE_BLOCK  — adds personal infinitive note.
-  HINA_BLOCK        — adds subjunctive note for purpose clauses.
+Guidelines used by `refine-alignment` when aligning Bible translations into Portuguese
+against the Greek New Testament (SBLGNT) source.
 
-Blocks unchanged from English: IMPERSONAL, PARTICIPLE, COMPARATIVE, AUTOS, HOTI,
-CONDITIONAL, NEGATION, VERBAL_ASPECT.
-"""
+Sections marked **[por]** contain Portuguese-specific rules or examples. Unmarked
+sections are shared with the English guidelines (`alignment-principles-nt.md` and
+`prompt/eng.py`).
 
-from .core import LanguagePromptConfig, register_language
-from .eng import (
-    AUTOS_BLOCK,
-    COMPARATIVE_BLOCK,
-    CONDITIONAL_BLOCK,
-    BLOCK_ORDER,
-    FORCED_INCLUSIONS,
-    IMPERSONAL_BLOCK,
-    NEGATION_BLOCK,
-    HOTI_BLOCK,
-    PARTICIPLE_BLOCK,
-    VERBAL_ASPECT_BLOCK,
-)
+Source files: `src/text_align/refine/prompt/por.py`, `src/text_align/refine/prompt/eng.py`
 
+---
 
-# ---------------------------------------------------------------------------
-# Portuguese-specific prompt blocks
-# ---------------------------------------------------------------------------
-
-BASE_BLOCK = """\
-You are refining word-level alignments between a Bible translation and its Greek source
-text (SBLGNT).
-
-## ALIGNMENT DIRECTION
+## ALIGNMENT DIRECTION **[por]**
 
 Alignments map translation → source. Each record associates one or more target tokens
 with one or more source tokens. The direction matters: you are asking what Greek word(s)
 are behind each translation word, not the reverse.
 
-## ALIGNMENT PHILOSOPHY
+---
+
+## ALIGNMENT PHILOSOPHY **[por]**
 
 Alignments are generous. When a translation word exists because of Greek grammar — a
 preposition implied by a noun's case, a pronoun implied by a verb's person and number,
@@ -53,7 +27,9 @@ an article implied by context — it belongs in an alignment record. The goal is
 account for as many tokens as the Greek justifies, not to restrict alignment to strict
 lexical equivalents.
 
-## TOKEN ROLES
+---
+
+## TOKEN ROLES **[por]**
 
 Every token in a record is either primary or secondary. For each Portuguese word, ask:
 
@@ -114,7 +90,9 @@ be the only token on its side and also be marked secondary.
 Each target token ID must appear in exactly one record per verse. Do not assign the same
 target token to two records, even as secondary in one and primary in another.
 
-## NEQ (NON-EQUIVALENT)
+---
+
+## NEQ (NON-EQUIVALENT) **[por]**
 
 For each token without an obvious alignment, ask:
 
@@ -139,12 +117,16 @@ correspondent, it is always secondary to its head noun or name. See ARTICLES →
 translation but no Greek εἶναι token is present in the verse, the copula →
 NEQ target (Greek uses verbless clauses; the translator supplied the copula).
 
+---
+
 ## SURFACE FORM DIFFERENCES
 
 Morphological differences between source and target — tense, voice, number, aspect —
 do not prevent alignment. A Greek present indicative rendered as a past tense, or an
 active rendered as a passive, may still be a valid alignment. The question is whether
 lexical and semantic correspondence exists, not whether the surface forms match.
+
+---
 
 ## CANDIDATES
 
@@ -154,7 +136,9 @@ wrong. Restructure, split, merge, or discard them freely. Use them as a rough st
 point, not as a framework to preserve. Align to semantic correspondents regardless of
 word order or clause position.
 
-## ARTICLES
+---
+
+## ARTICLES **[por]**
 
 Greek has a definite article (ὁ/ἡ/τό); Portuguese has both definite (o/a/os/as) and
 indefinite (um/uma/uns/umas). For every Greek article token (POS T-*), ask one question:
@@ -252,7 +236,9 @@ record.
   Example: ἄνθρωπος → "um homem":
     source=[ἄνθρωπος], target=["um", "homem"] — primary: "homem"; secondary.target: ["um"]
 
-## CONJUNCTIONS AND PARTICLES
+---
+
+## CONJUNCTIONS AND PARTICLES **[por]**
 
 When a conjunction or particle has a clear lexical correspondent in the translation,
 align it. When multiple translation words together render a single conjunction or
@@ -262,7 +248,9 @@ correspondent exists, the conjunction or particle → NEQ. When a translation wo
 plausibly align to either a conjunction/particle or a content word, the content word
 has priority.
 
-## IDIOMS
+---
+
+## IDIOMS **[por]**
 
 When a phrase-level correspondence has no token-level equivalent, use
 meta.is_idiom: true. All tokens in the record are implicitly primary; meta.secondary
@@ -278,11 +266,11 @@ entirely of conjunctions (POS C-*), particles (POS X-*), or prepositions — eve
 aligning to multiple target tokens — do not mark it as an idiom. These function words
 are semantically flexible and need not match their literal glosses to be primary
 alignments. Instead, produce a standard record with the translation correspondent(s)
-as primary tokens.\
-"""
+as primary tokens.
 
-PASSIVE_BLOCK = """\
-## PASSIVE VOICE
+---
+
+## PASSIVE VOICE **[por]**
 
 When a Greek passive verb is rendered with an auxiliary + past participle ("foi enviado",
 "está escrito", "foi cumprido"), the past participle is primary to the Greek verb.
@@ -295,7 +283,7 @@ and discourse context. Because Portuguese is pro-drop, an explicit subject prono
 passive is rarer and more likely to be emphatic; still classify it as secondary when no
 separate Greek pronoun is present.
 
-### Reflexive passive (se + verb)
+### Reflexive passive (se + verb) **[por]**
 
 Portuguese also expresses passive with a reflexive marker: *se escreveu* ("it was
 written"), *se vendeu* ("it was sold"), *se cumpriu* ("it was fulfilled"). The main
@@ -313,11 +301,85 @@ has no Greek correspondent at all and is NEQ. Portuguese pro-drop means this sup
 
 Example — γέγραπται → "está escrito":
   source=[γέγραπται], target=["está", "escrito"]
-    primary: "escrito";  secondary: "está"\
-"""
+    primary: "escrito";  secondary: "está"
 
-INFINITIVE_BLOCK = """\
-## INFINITIVAL CONSTRUCTIONS
+---
+
+## IMPERSONAL VERBS
+
+Some Greek verbs are used impersonally — they have no real subject, only a grammatical
+placeholder. Common examples: δεῖ ("it is necessary"), ἔξεστιν ("it is
+lawful/permitted"), πρέπει ("it is fitting"), συμφέρει ("it is better/profitable"),
+δοκεῖ ("it seems").
+
+When these are rendered with a dummy subject "it" in the translation, that "it" has no
+Greek correspondent — there is no implied subject behind it, only a grammatical
+convention of English. The dummy "it" → NEQ target.
+
+The complementary infinitive that typically follows (δεῖ + infinitive, "it is necessary
+to do") is a separate alignment: the infinitive is primary to the Greek infinitive; "to"
+is secondary. The impersonal verb itself aligns to its translation equivalent in the
+normal way.
+
+Contrast with the passive supplied subject (see PASSIVE VOICE above): a passive supplied
+"it" is secondary because it represents the implied grammatical subject of the verb. An
+impersonal "it" is NEQ because no subject — implied or otherwise — exists in the Greek.
+
+Example — δεῖ → "it is necessary":
+  source=[δεῖ], target=["is", "necessary"] — "is" and "necessary" both primary to δεῖ
+  "it" → NEQ target (no Greek correspondent; no subject is implied)
+
+  Or rendered compactly:
+  source=[δεῖ], target=["must"] — primary
+
+---
+
+## PARTICIPIAL CONSTRUCTIONS
+
+Greek participles are verbal adjectives. First identify the participle's syntactic role,
+then apply the rule for that role.
+
+**What syntactic function is the participle serving?**
+
+### Adverbial (circumstantial)
+
+The participle modifies the main verb, expressing time, cause, concession, or manner.
+The translation renders it as a subordinate clause introduced by a conjunction or adverb
+("quando", "enquanto", "depois de", "porque", "embora").
+
+The introductory conjunction/adverb is **secondary** to the participle — it makes
+explicit the logical relationship Greek encodes in the participle's aspect and context.
+A supplied subject pronoun is secondary if implied by the participle's case agreement.
+
+  source=[ἀκούσας], target=["quando", "ouviu"]
+    primary: "ouviu";  secondary: "quando"
+
+### Genitive absolute
+
+The participle and its genitive nominal element together express a circumstantial idea
+external to the main clause. Align each element to its translation correspondent.
+Supplied conjunctions or adverbs introducing the rendered clause are secondary to the
+participle.
+
+### Substantive
+
+The participle functions as a noun phrase. Apply ARTICLES rules to the article if
+present (→ "os"/"aquele" if Portuguese has it; secondary to participle otherwise).
+Relative pronouns or connectors ("que") introduced in Portuguese are secondary to the
+participle.
+
+  source=[πιστεύων], target=["quem", "crê"]
+    primary: "crê";  secondary: "quem"
+
+### Discourse particle adjacent to a participle
+
+When δέ, καί, οὖν or similar appears near a participle but has no correspondent in the
+participle's rendering, consider NEQ — only when confident the particle has no
+translation equivalent anywhere in the surrounding clause.
+
+---
+
+## INFINITIVAL CONSTRUCTIONS **[por]**
 
 The Greek infinitive is a verbal noun. Portuguese renders it with an infinitive, often
 introduced by "para" (purpose) or "de/a" (governed by a preceding verb or noun).
@@ -354,7 +416,7 @@ Example — ἐν τῷ σπείρειν αὐτόν → "ao semear":
   source=[αὐτόν],  target=["ele"]    — primary (if pronoun is present in translation)
   source=[σπείρειν], target=["semear"] — primary 1:1
 
-### Personal infinitive
+### Personal infinitive **[por]**
 
 Portuguese has a personal infinitive — an infinitive with person/number endings
 (fazermos, fazerem, etc.). These endings carry the same grammatical information as
@@ -371,11 +433,11 @@ Example — λέγει αὐτὸν εἶναι → "diz que ele é":
   source=[λέγει],  target=["diz"]       — primary
   source=[αὐτόν], target=["ele"]        — primary
   source=[εἶναι], target=["que", "é"]
-    primary: "é" (infinitive → finite verb);  secondary: "que"\
-"""
+    primary: "é" (infinitive → finite verb);  secondary: "que"
 
-HINA_BLOCK = """\
-## ἵνα CLAUSES
+---
+
+## ἵνα CLAUSES **[por]**
 
 ἵνα introduces purpose or result clauses. Portuguese regularly renders purpose and
 result with the subjunctive mood, using conjunctions such as "para que", "a fim de
@@ -406,34 +468,219 @@ Example — ἵνα σωθῇ → "para que seja salvo":
 
 Example — ἵνα σῴζῃ → "para salvar" (infinitive rendering):
   source=[ἵνα],   target=["para"]  — primary (purpose marker)
-  source=[σῴζῃ], target=["salvar"] — primary\
-"""
+  source=[σῴζῃ], target=["salvar"] — primary
 
+---
 
-# ---------------------------------------------------------------------------
-# Block registry and config
-# ---------------------------------------------------------------------------
+## COMPARATIVES AND SUPERLATIVES
 
-CONDITIONAL_BLOCKS: dict[str, str] = {
-    "PASSIVE":        PASSIVE_BLOCK,
-    "IMPERSONAL":     IMPERSONAL_BLOCK,
-    "PARTICIPLE":     PARTICIPLE_BLOCK,
-    "INFINITIVE":     INFINITIVE_BLOCK,
-    "HINA":           HINA_BLOCK,
-    "COMPARATIVE":    COMPARATIVE_BLOCK,
-    "AUTOS":          AUTOS_BLOCK,
-    "HOTI":           HOTI_BLOCK,
-    "CONDITIONAL":    CONDITIONAL_BLOCK,
-    "NEGATION":       NEGATION_BLOCK,
-    "VERBAL_ASPECT":  VERBAL_ASPECT_BLOCK,
-}
+Greek comparatives and superlatives are encoded morphologically in the adjective or
+adverb (degree marker `-C` for comparative, `-S` for superlative). Translations
+typically render them with degree words ("mais", "o mais", "menos", "melhor", "maior")
+or suffixes.
 
-POR_CONFIG = LanguagePromptConfig(
-    language_code="por",
-    base_block=BASE_BLOCK,
-    conditional_blocks=CONDITIONAL_BLOCKS,
-    block_order=BLOCK_ORDER,
-    forced_inclusions=FORCED_INCLUSIONS,
-)
+### Comparative
 
-register_language(POR_CONFIG)
+When a Greek comparative adjective or adverb is rendered with a degree word + base form
+("mais claramente", "maior do que"), both the degree word ("mais", "maior") and the base
+form ("claramente") are primary to the single Greek comparative token — the Greek encodes
+degree morphologically; Portuguese distributes it across words.
+
+The standard of comparison ("do que X") aligns to the Greek construction expressing it
+(ἤ + noun, or genitive of comparison). "do que" is secondary to the noun or adjective
+it governs in the comparison.
+
+### Superlative
+
+The same principle applies: degree word + base form ("mais claramente", "o maior") are
+both primary to the single Greek superlative token. An elative superlative (muito +
+adjective) follows the same pattern.
+
+Example — μείζων → "maior":
+  source=[μείζων], target=["maior"] — primary 1:1
+
+Example — ἁγιώτατος → "santíssimo" or "mui santo":
+  source=[ἁγιώτατος], target=["santíssimo"] — primary 1:1
+  source=[ἁγιώτατος], target=["mui", "santo"] — both primary
+
+---
+
+## αὐτός
+
+First identify the grammatical function αὐτός is serving in the clause:
+
+**What is αὐτός doing here?**
+
+### Intensive (attributive position — adds emphasis to a noun or pronoun)
+
+αὐτός stands beside a noun/pronoun to emphasize it ("o próprio homem", "o próprio
+Jesus"). Align to the intensive pronoun; the noun it modifies gets its own record.
+
+  source=[αὐτός],   target=["próprio"] — primary 1:1
+  source=[Ἰησοῦς], target=["Jesus"]   — primary 1:1 (separate record)
+
+### Reflexive (object refers back to the subject)
+
+αὐτός functions as a reflexive pronoun. Align to the reflexive in translation
+("a si mesmo", "a si mesma", "a eles mesmos").
+
+  source=[αὐτόν], target=["a", "si", "mesmo"] — all primary
+
+### Third-person pronoun (most common use)
+
+αὐτός serves as a simple third-person pronoun. Align to the corresponding pronoun
+("ele", "ela", "o/a", "lhe", "deles/delas"). When the translation substitutes
+a proper name for clarity, the name is primary to αὐτός; any additionally supplied
+subject pronoun is secondary.
+
+  source=[αὐτόν], target=["o"]     — primary 1:1
+  source=[αὐτοῦ], target=["Jesus"] — primary (name substituted for pronoun)
+
+### No translation correspondent
+
+αὐτός is absorbed into surrounding structure or stylistically omitted → NEQ source,
+but only when confident no translation element corresponds to it.
+
+---
+
+## ὅτι
+
+ὅτι serves two distinct functions in Greek, and its alignment depends on which it
+is performing.
+
+### ὅτι as conjunction ("que", "porque", "pois")
+
+When ὅτι introduces indirect discourse or a causal clause, its translation
+correspondent ("que", "porque", "pois") is primary to ὅτι. When the translation
+omits the conjunction and moves directly into the indirect statement or clause,
+ὅτι → NEQ source.
+
+### ὅτι as quotation marker (recitativum)
+
+When ὅτι introduces direct speech (ὅτι recitativum), it functions as a quotation
+marker with no translation equivalent — Portuguese uses punctuation (a colon or
+quotation marks) rather than a word. In this use ὅτι → NEQ source.
+
+### Distinguishing the two
+
+The function is usually clear from context: ὅτι recitativum follows a verb of saying
+or asking and introduces direct speech; ὅτι as conjunction introduces an indirect
+statement or a causal clause. When the distinction is genuinely ambiguous, prefer the
+conjunction reading and align if a correspondent exists.
+
+Example — ὅτι (conjunction) → "que":
+  source=[ὅτι], target=["que"] — primary 1:1
+
+Example — ὅτι (recitativum) → quotation marks only:
+  source=[ὅτι] → NEQ source
+
+---
+
+## CONDITIONAL CONSTRUCTIONS
+
+Greek conditionals are introduced by εἰ (simple or contrary-to-fact) or ἐάν (with
+subjunctive, more probable). The alignment of the conditional elements follows the
+general conjunction guidelines, but several features of conditional sentences are
+worth noting.
+
+### The conditional particle
+
+εἰ and ἐάν typically correspond to "se" in translation, but translators render
+conditional force in many ways — "a menos que", "mesmo que", "se", "quando", and others.
+Look for the translation element that carries the conditional or hypothetical force
+of the clause and align to that. When you are confident no translation element
+corresponds to the conditional particle's force, NEQ source is appropriate.
+
+### Apodosis markers
+
+Greek sometimes introduces the apodosis (the "then" clause) with a particle (τότε,
+ἄρα, οὖν) or leaves it unmarked. When the translation supplies "então" with no Greek
+correspondent, "então" → NEQ target. When a Greek apodosis particle is present, align
+it to its translation correspondent if one exists.
+
+### Contrary-to-fact conditions
+
+εἰ with indicative in past tense (contrary-to-fact) may be rendered with modal
+constructions ("teria", "poderia ter") in the apodosis. Those auxiliaries are
+primary to the Greek verb they render — Greek encodes counterfactuality through mood
+and tense rather than separate modal words; Portuguese distributes that meaning across
+words.
+
+### Everything else
+
+Supplied pronouns, helping verbs, conjunctions, and particles within the protasis and
+apodosis follow the general guidelines for those constructions.
+
+Example — εἰ → "se":
+  source=[εἰ], target=["se"] — primary 1:1
+
+Example — contrary-to-fact apodosis verb → "teria conhecido":
+  source=[verb], target=["teria", "conhecido"]
+    both primary — Greek encodes counterfactuality through mood and tense;
+    Portuguese distributes that meaning across auxiliary + main verb
+
+---
+
+## NEGATION
+
+### Simple negation
+
+Greek negation particles (οὐ, οὐκ, οὐχ, μή and related forms) are discrete tokens
+separate from the verb they negate. Look for the Portuguese "não" and align it
+directly to the negation particle as a **primary** 1:1 record.
+
+The negated verb aligns to its Portuguese correspondent — main verb and auxiliaries —
+**without** including "não." Because Portuguese typically places "não" before the verb,
+the verb record may be **discontiguous** when auxiliaries intervene between "não" and
+the main verb. This discontiguous verb record is expected and correct.
+
+Do not include "não" as a secondary token within the verb record. It has its own
+source token and belongs in its own record.
+
+Example — οὐκ ἔρχεται → "não está vindo":
+  source=[οὐκ],      target=["não"]             — primary 1:1
+  source=[ἔρχεται], target=["está", "vindo"]
+    primary: "vindo";  secondary: "está"
+
+### Emphatic negation
+
+οὐ μή + subjunctive expresses strong emphatic negation. Translations render it as
+"nunca", "de modo algum", "jamais", or similar. Both particles are **primary** in a
+single record against the emphatic Portuguese expression.
+
+Example — οὐ μή + subjunctive verb → "nunca [verb]":
+  source=[οὐ, μή],  target=["nunca"]          — both particles primary
+  source=[verb],    target=["[verb]"]          — primary
+
+### Compound negation tokens
+
+Some Greek forms are single tokens encoding negation together with another element.
+All Portuguese words in the rendered phrase are **primary** to the single Greek token:
+
+- οὐδέ / μηδέ ("nem") — single token aligns to full phrase
+- οὐκέτι / μηκέτι ("não mais", "já não") — single token aligns to full phrase
+- οὔπω / μήπω ("ainda não") — single token aligns to full phrase
+
+Example — οὐκέτι → "não mais":
+  source=[οὐκέτι], target=["não", "mais"] — both primary
+
+### Negation with negative pronouns
+
+When a clause contains both a negative pronoun (οὐδείς → "ninguém", "nada";
+μηδείς → "ninguém", "nada") and emphatic negation (οὐ μή), Greek double negation
+is emphatic, not canceling. Portuguese typically resolves this into a single strong
+negation.
+
+- οὐδείς / μηδείς → "ninguém" / "nada" — primary
+- οὐ + μή combined force → absorbed into the negative pronoun or adverb
+- Main verb auxiliaries → secondary to the verb, not part of the negation record
+
+---
+
+## VERBAL ASPECT
+
+Greek aspect is encoded in the verb morphology, not as a separate token. When a
+translator renders aspect explicitly — through an auxiliary or modal ("estava fazendo",
+"tentou", "começou a") — both the aspect-expressing element and the main verb element
+are primary to the single Greek verb. The Greek token carries the combined meaning;
+the translation distributes it across words.

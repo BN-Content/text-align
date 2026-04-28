@@ -13,7 +13,7 @@ with project-specific `meta` extensions (primary/secondary, NEQ, idiom).
 - **Primary vs secondary:** primary = direct lexical/semantic connection; secondary =
   grammatically implied with no separate source token.
 - **NEQ:** a positive claim of non-equivalence — never use as a fallback for uncertainty.
-- See `docs/alignment-principles.md` for the full specification.
+- See `docs/alignment-principles-nt.md` (NT/Greek) and `docs/alignment-principles-ot.md` (OT/Hebrew) for the full specification.
 
 ## Package layout
 

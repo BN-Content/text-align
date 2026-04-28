@@ -2,7 +2,7 @@
 
 Tools to create and improve word-level textual alignments of Bible translations.
 
-Alignments map tokens in a translation to tokens in the source text (Greek NT or Hebrew OT). The direction is always **translation → source**. The format is [Scripture Burrito alignment spec v0.4](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) with project-specific extensions documented in [docs/alignment-principles.md](docs/alignment-principles.md).
+Alignments map tokens in a translation to tokens in the source text (Greek NT or Hebrew OT). The direction is always **translation → source**. The format is [Scripture Burrito alignment spec v0.4](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) with project-specific extensions documented in [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek) and [docs/alignment-principles-ot.md](docs/alignment-principles-ot.md) (OT/Hebrew).
 
 ## Source texts
 
@@ -402,11 +402,11 @@ Group-level extensions (in `meta` on the group, alongside `creator` and `conform
 
 `AlignmentsReader.group_meta` exposes the full raw group meta dict so downstream tools (e.g. `render-alignment`) can read back fields like `llm` without re-parsing the JSON.
 
-All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivalent` tokens are distinct from simply unrecorded tokens — they represent a positive determination of non-equivalence (see §3.5 of alignment-principles). See [docs/alignment-principles.md](docs/alignment-principles.md) for full specification.
+All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivalent` tokens are distinct from simply unrecorded tokens — they represent a positive determination of non-equivalence (see §3.5 of alignment-principles). See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) for full specification.
 
 ## Alignment principles
 
-See [docs/alignment-principles.md](docs/alignment-principles.md) for the complete alignment specification, including:
+See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek) and [docs/alignment-principles-ot.md](docs/alignment-principles-ot.md) (OT/Hebrew) for the complete alignment specification, including:
 
 - Generous alignment philosophy
 - Three-state model: aligned / NEQ (non-equivalent) / unrecorded

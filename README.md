@@ -78,7 +78,7 @@ src/text_align/
 │   ├── fetch_batch.py   # fetch-batch CLI
 │   ├── retry.py         # Verse merge/retry core logic
 │   ├── retry_cli.py     # retry-alignment CLI
-│   └── score_alignments.py  # score-alignments CLI
+│   └── score_alignments.py  # score-alignment CLI
 └── render/
     └── html.py          # render-alignment CLI
 ```
@@ -266,14 +266,14 @@ Google exposes only a coarse state enum (`JOB_STATE_PENDING` / `JOB_STATE_RUNNIN
 
 For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
 
-### `score-alignments`
+### `score-alignment`
 
 Scores alignment quality for existing chapter JSON files and writes a per-verse TSV report. Does **not** call the LLM — use this between `refine-alignment` and `retry-alignment` to inspect quality and tune the retry threshold before committing to API spend.
 
 Each verse receives a composite penalty score (0–1, higher = worse) from five signals: weighted source-token coverage, translation content-word coverage, NEQ overuse, token smearing (N:M records where both sides have multiple primary tokens), and per-verse deviation from chapter mean. Verses above the threshold are flagged `needs_retry=True`.
 
 ```
-score-alignments \
+score-alignment \
   --alignment-dir path/to/alignments-eng/exp/OENGB/LLM-REFINED \
   --corpus nt \
   --target-language eng \
@@ -334,7 +334,7 @@ refine-alignment --config OENGB --corpus nt \
   --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
 
 # 2. Audit scores (no LLM call)
-score-alignments --config OENGB --corpus nt --flagged-only --output scores.tsv
+score-alignment --config OENGB --corpus nt --flagged-only --output scores.tsv
 
 # 3. Re-align flagged verses with a better model
 retry-alignment --config OENGB --corpus nt \

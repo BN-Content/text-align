@@ -83,12 +83,16 @@ def build_output_alignment(
     llm_provider: str | None = None,
     llm_model: str | None = None,
     reasoning_effort: str | None = None,
+    prior_llm: dict | None = None,
 ) -> dict[str, Any]:
     """Build an SB 0.4 groups alignment structure from LLM-refined records.
 
     NEQ records (``meta.rel == "NEQ"``) are separated from regular records and
     their token IDs are written into ``meta.nonEquivalent`` at the group level.
     The output file contains no ``meta.rel`` fields.
+
+    When ``prior_llm`` is supplied (retry pass), it is stored as ``"llm"`` (the
+    original refine-pass model) and the new model info goes in ``"retry_llm"``.
     """
     neq_source: list[str] = []
     neq_target: list[str] = []
@@ -130,7 +134,13 @@ def build_output_alignment(
             model_info["model"] = llm_model
         if reasoning_effort:
             model_info["reasoning_effort"] = reasoning_effort
-        group_meta["llm"] = model_info
+        if prior_llm:
+            group_meta["llm"] = prior_llm
+            group_meta["retry_llm"] = model_info
+        else:
+            group_meta["llm"] = model_info
+    elif prior_llm:
+        group_meta["llm"] = prior_llm
     if neq_source or neq_target:
         non_equiv: dict = {}
         if neq_source:

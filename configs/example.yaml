@@ -101,7 +101,7 @@ creator: text-align
 # retry_llm_model: claude-sonnet-4-6
 # retry_reasoning_effort: high
 
-# Alignment quality scoring threshold for retry-alignment and score-alignments.
+# Alignment quality scoring threshold for retry-alignment and score-alignment.
 # Verses with a composite penalty score above this value are flagged for retry.
 # Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
 # score_retry_threshold: 0.25

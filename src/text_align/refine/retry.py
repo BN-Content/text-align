@@ -48,9 +48,11 @@ def merge_verse_results(
 
     group = groups[0]
     old_records: list[dict] = group.get("records", [])
-    neq_meta: dict = group.get("meta", {}).get("nonEquivalent", {})
+    old_group_meta: dict = group.get("meta", {})
+    neq_meta: dict = old_group_meta.get("nonEquivalent", {})
     old_neq_source: list[str] = neq_meta.get("source", [])
     old_neq_target: list[str] = neq_meta.get("target", [])
+    prior_llm: dict | None = old_group_meta.get("llm") or None
 
     replaced_verse_ids = set(new_records_by_verse.keys())
 
@@ -80,6 +82,7 @@ def merge_verse_results(
         llm_provider=llm_provider,
         llm_model=llm_model,
         reasoning_effort=reasoning_effort,
+        prior_llm=prior_llm,
     )
     write_alignment_json(output, chapter_json_path)
     return len(replaced_verse_ids)

@@ -1,10 +1,10 @@
-"""score-alignments: audit alignment quality without running the LLM.
+"""score-alignment: audit alignment quality without running the LLM.
 
 Reads chapter JSON files, scores each verse using the composite penalty scorer,
 and writes a TSV report to stdout (or --output). Useful for deciding which
 chapters need retry-alignment and for tuning the scoring thresholds.
 
-CLI entry point: score-alignments
+CLI entry point: score-alignment
 """
 
 from __future__ import annotations
@@ -119,7 +119,7 @@ def main() -> None:
     if not chapter_files:
         raise SystemExit("No chapter JSON files found in --alignment-dir.")
 
-    print(f"score-alignments: {args.target_language}", file=sys.stderr)
+    print(f"score-alignment: {args.target_language}", file=sys.stderr)
     print(f"  Alignment dir:   {args.alignment_dir}", file=sys.stderr)
     print(f"  Retry threshold: {args.score_retry_threshold:.2f}", file=sys.stderr)
     print(f"  Chapters:        {len(chapter_files)}", file=sys.stderr)

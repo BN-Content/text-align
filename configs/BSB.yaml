@@ -1,0 +1,85 @@
+# BSB.yaml — config for Berean Standard Bible
+#
+# Invoke any tool with:  --config BSB
+
+alignments_root: C:/git/Clear
+
+# ---------------------------------------------------------------------------
+# Identity
+# ---------------------------------------------------------------------------
+
+target_language: eng
+target_edition: BSB
+target_edition_name: Berean Standard Bible
+
+# for migrating alignments from a reference edition (e.g. for diff-migrate or sim-migrate)
+source_edition: LEB
+source_language: eng
+
+alignment_sources: [SIM-MIGRATED, DIFF-MIGRATED]
+alignment_suffix: LLM-REFINED
+from-scratch: true
+
+# Anthropic
+#llm_provider: anthropic
+#llm_model: claude-sonnet-4-6
+#llm_model: claude-opus-4-7
+#reasoning_effort: high
+# OpenAI
+#llm_provider: openai
+#llm_model: gpt-5.4-mini
+#llm_model: gpt-5.4
+#reasoning_effort: high
+# Google
+#reasoning_effort: high
+#llm_provider: google
+##llm_model: gemini-3-flash-preview
+#llm_model: gemini-3.1-pro-preview
+# openrouter
+llm_provider: openrouter
+#reasoning_effort: medium
+#llm_model: google/gemma-4-26b-a4b-it
+#llm_model: moonshotai/kimi-k2.5
+#llm_model: moonshotai/kimi-k2.6
+#batch_size: 4
+#llm_model: qwen/qwen3.6-plus
+#llm_model: z-ai/glm-5.1
+llm_model: deepseek/deepseek-v4-pro
+#llm_model: mistralai/mistral-large-2512
+
+# ---------------------------------------------------------------------------
+# retry-alignment settings
+# ---------------------------------------------------------------------------
+
+# LLM provider and model for retry-alignment (the second-pass / quality-repair step).
+# If absent, retry-alignment falls back to the llm_provider / llm_model /
+# reasoning_effort values above. Set these to use a different (typically better)
+# model for the retry pass than the initial refine pass.
+retry_llm_provider: anthropic
+retry_llm_model: claude-sonnet-4-6
+retry_reasoning_effort: high
+
+# Alignment quality scoring threshold for retry-alignment and score-alignment.
+# Verses with a composite penalty score above this value are flagged for retry.
+# Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
+core_retry_threshold: 0.25
+
+# Legacy coverage threshold (deprecated; superseded by score_retry_threshold).
+# Flag verses with more than this many unaligned source tokens.
+min_unaligned_src: 2
+
+
+# ---------------------------------------------------------------------------
+# ACAI and trabina
+# ---------------------------------------------------------------------------
+
+acai_data_dir: C:/git/BibleAquifer/ACAI
+trabina_dir: C:/git/BN-Content/trabina/data/weighted
+
+# ---------------------------------------------------------------------------
+# sim-migrate settings
+# ---------------------------------------------------------------------------
+
+model: sentence-transformers/LaBSE
+min_similarity: 0.7
+max_word_distance: 8

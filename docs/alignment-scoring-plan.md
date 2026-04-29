@@ -272,14 +272,14 @@ new CLI flags.
 **Output JSON:** Optionally write `"score"` metadata per verse into the chapter JSON
 (behind a `--write-scores` flag) for offline analysis.
 
-### 5.5 New CLI: `score-alignments`
+### 5.5 New CLI: `score-alignment`
 
 Standalone command that reads existing chapter JSON files and emits a TSV or JSON
 report of per-verse scores — useful for auditing already-completed batches without
 re-running alignment.
 
 ```
-score-alignments \
+score-alignment \
   --alignment-dir output/SBLGNT-OENGB/ \
   --lang eng \
   --score-retry-threshold 0.25 \
@@ -302,7 +302,7 @@ adding retry-specific key variants with fallback logic in `retry_cli.py`.
 | `retry_llm_provider` | `retry-alignment` | new; falls back to `llm_provider` if absent |
 | `retry_llm_model` | `retry-alignment` | new; falls back to `llm_model` if absent |
 | `retry_reasoning_effort` | `retry-alignment` | new; falls back to `reasoning_effort` if absent |
-| `score_retry_threshold` | `retry-alignment`, `score-alignments` | new; default 0.25 |
+| `score_retry_threshold` | `retry-alignment`, `score-alignment` | new; default 0.25 |
 | `min_unaligned_src` | `retry-alignment` | existing; deprecated once scorer is trusted |
 
 **Fallback logic in `retry_cli.py`:** after `p.set_defaults(**config_defaults)`, resolve
@@ -344,7 +344,7 @@ score_retry_threshold: 0.25
 
 Before deploying the scorer as a retry gate:
 
-1. Run `score-alignments` against a set of manually reviewed chapters (gold standard).
+1. Run `score-alignment` against a set of manually reviewed chapters (gold standard).
 2. Compare `needs_retry` predictions to known-bad verses identified by human review.
 3. Adjust per-signal weights and the retry threshold to maximize recall of genuinely bad
    verses while keeping false-positive rate low (false positives = wasted retry calls).
@@ -357,7 +357,7 @@ Before deploying the scorer as a retry gate:
 
 - **POS storage in output JSON:** decide whether to embed POS in chapter output at
   refinement time, or re-derive from corpus at scoring time. Embedding is faster and
-  avoids a corpus dependency in `score-alignments`; re-derivation keeps the output
+  avoids a corpus dependency in `score-alignment`; re-derivation keeps the output
   leaner.
 - **Signal 5 across chapters:** deviation is currently intra-chapter. Consider whether a
   cross-chapter baseline (e.g., per-book mean) would improve detection of books with

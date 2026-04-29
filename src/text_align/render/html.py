@@ -616,16 +616,30 @@ def _build_meta_row(meta_info: dict) -> str:
     elif name:
         parts.append(name)
 
+    def _llm_str(llm: dict, label: str = "") -> str:
+        provider = llm.get("provider", "")
+        model = llm.get("model", "")
+        effort = llm.get("reasoning_effort", "")
+        if not (provider or model):
+            return ""
+        s = f"{provider} / {model}" if provider and model else model
+        if effort:
+            s += f" effort:{effort}"
+        return f"{label}{s}" if label else s
+
     llm = meta_info.get("llm") or {}
-    provider = llm.get("provider", "")
-    model = llm.get("model", "")
-    effort = llm.get("reasoning_effort", "")
-    if provider and model:
-        parts.append(f"{provider} / {model}")
-    elif model:
-        parts.append(model)
-    if effort:
-        parts.append(f"effort: {effort}")
+    retry_llm = meta_info.get("retry_llm") or {}
+    if retry_llm:
+        s = _llm_str(llm, "Refined: ")
+        if s:
+            parts.append(s)
+        s = _llm_str(retry_llm, "Retried: ")
+        if s:
+            parts.append(s)
+    else:
+        s = _llm_str(llm)
+        if s:
+            parts.append(s)
 
     iso_date = meta_info.get("iso_date", "")
     if iso_date:
@@ -897,6 +911,7 @@ def main() -> None:
             "translation_name": args.target_edition_name or "",
             "iso_date": iso_date,
             "llm": mgr.alignmentsreader.group_meta.get("llm") or {},
+            "retry_llm": mgr.alignmentsreader.group_meta.get("retry_llm") or {},
         }
 
         html_out = None
@@ -913,6 +928,7 @@ def main() -> None:
                 chapter_file_meta = mgr.alignmentsreader.per_chapter_meta.get(chapter_key)
                 if chapter_file_meta:
                     meta_info["llm"] = chapter_file_meta.get("llm") or {}
+                    meta_info["retry_llm"] = chapter_file_meta.get("retry_llm") or {}
                 html_out = start_new_chapter(html_out, current_bcv, viz_path, is_r2l, iso_date, meta_info)
                 prev_chapter_key = chapter_key
             else:

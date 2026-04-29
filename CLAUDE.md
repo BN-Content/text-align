@@ -22,7 +22,7 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignments CLIs
+├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignment CLIs
 │   ├── prompt/          # language-aware prompt system (see below)
 │   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter (sync)
 │   ├── async_batch.py   # provider batch-API helpers (Google, OpenAI, Anthropic)
@@ -33,7 +33,7 @@ src/text_align/
 │   ├── fetch_batch.py   # fetch-batch CLI entry point
 │   ├── retry.py         # verse merge/retry core logic
 │   ├── retry_cli.py     # retry-alignment CLI entry point
-│   └── score_alignments.py  # score-alignments CLI entry point
+│   └── score_alignments.py  # score-alignment CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
 
@@ -273,14 +273,14 @@ deviation k, and retry threshold. All overridable; defaults work for NT English.
 YAML config keys: `score_retry_threshold` (default 0.25). Weights are code defaults;
 adjust via `ScoringConfig` if needed.
 
-## score-alignments (`refine/score_alignments.py`)
+## score-alignment (`refine/score_alignments.py`)
 
 Standalone audit tool. Reads chapter JSON files and writes a per-verse TSV report (columns:
 `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `structural_errors`) to
 stdout or `--output`. Does **not** call the LLM.
 
 ```bash
-score-alignments \
+score-alignment \
   --config OENGB --corpus nt \
   --alignment-dir path/to/LLM-REFINED \
   [--target-tsv-dir path/to/targets/OENGB]   # enables signal 2
@@ -301,7 +301,7 @@ refine-alignment --config MYEDITION --corpus nt \
   --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
 
 # 2. Audit scores (no LLM call)
-score-alignments --config MYEDITION --corpus nt --flagged-only --output scores.tsv
+score-alignment --config MYEDITION --corpus nt --flagged-only --output scores.tsv
 
 # 3. Retry flagged verses with a better model
 retry-alignment --config MYEDITION --corpus nt \

@@ -21,14 +21,14 @@ poetry install
 
 ## Project config files
 
-Each alignment project (source → target translation pair) can be described in a YAML file under `configs/`. All four CLI tools accept `--config <name>` (`.yaml` extension assumed), which loads that file as argument defaults. Any argument can still be overridden on the command line.
+Each alignment project (source → target translation pair) can be described in a YAML file under `configs/`. All CLI tools accept `--config <name>` (`.yaml` extension assumed), which loads that file as argument defaults. Any argument can still be overridden on the command line.
 
 ```bash
 # Run with everything from the config file
-sim-migrate --config bonbv
+refine-alignment --config OENGB
 
 # Override one setting on the fly
-sim-migrate --config bonbv --output-dir C:/tmp/test-run
+refine-alignment --config OENGB --output-dir C:/tmp/test-run
 ```
 
 Copy `configs/example.yaml` as a starting point — it documents every key with comments. Keys use underscores matching argparse dest names. Path values should be absolute.
@@ -52,13 +52,13 @@ src/text_align/
 │   ├── Target.py / TargetReader
 │   ├── VerseData.py
 │   └── alignments.py    # AlignmentsReader, write_alignment_group
-├── migrate/             # Alignment migration
+├── migrate/             # Alignment migration (see Appendix)
 │   ├── models.py        # MigrateTarget, MigrateVerse
 │   ├── tsv.py           # process_usfm_tsv, dump_verse_text, get_wordlist
 │   ├── alignment_io.py  # load/write alignment JSON, create_new_alignments
 │   ├── diff.py          # diff-migrate CLI
 │   └── sim.py           # sim-migrate CLI
-├── align/               # Alignment creation
+├── align/               # Alignment creation (see Appendix)
 │   ├── acai_common.py   # AcaiEntity, matching logic, trabina, populate_alignment
 │   └── acai.py          # acai-align CLI
 ├── refine/              # LLM-assisted alignment refinement
@@ -83,58 +83,32 @@ src/text_align/
     └── html.py          # render-alignment CLI
 ```
 
+## Recommended workflow
+
+The primary workflow runs a cheap/fast model over the corpus first, audits quality without any LLM calls, then re-aligns only the verses that scored below the threshold with a better model:
+
+```bash
+# 1. First pass — cheap/fast model
+refine-alignment --config OENGB --corpus nt \
+  --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
+
+# 2. Audit scores (no LLM call)
+score-alignment --config OENGB --corpus nt --flagged-only --output scores.tsv
+
+# 3. Re-align flagged verses with a better model
+retry-alignment --config OENGB --corpus nt \
+  --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
+```
+
+The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
+
+Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged before committing to any LLM spend. Use `--batch-mode async` with any of the three frontier providers (Anthropic, OpenAI, Google) for ~50% cost reduction on `refine-alignment` and `retry-alignment`.
+
 ## CLI tools
 
-All tools are installed by `poetry install` and available on the Poetry shell path.
+### Refinement pipeline
 
-### `diff-migrate`
-
-Migrate alignments from a reference translation to a similar translation using word-level text diffs ([diff_match_patch](https://github.com/google/diff-match-patch)).
-
-```
-diff-migrate \
-  --source-edition NIV11 \
-  --target-edition NIrV \
-  --source-tsv-dir  path/to/alignments-eng/data/targets/NIV11 \
-  --target-tsv-dir  path/to/alignments-eng/data/targets/NIrV \
-  --source-alignment-dir path/to/alignments-eng/data/alignments/NIV11 \
-  --output-dir path/to/alignments-eng/exp/NIrV/DIFF-MIGRATED
-```
-
-### `sim-migrate`
-
-Migrate alignments using multilingual sentence similarity. Supports [LaBSE](https://huggingface.co/sentence-transformers/LaBSE) (default, broad language coverage) and [SONAR_200](https://huggingface.co/cointegrated/SONAR_200_text_encoder) (useful for languages LaBSE does not cover, e.g. Lingala).
-
-```
-sim-migrate \
-  --source-edition NIV11 --source-language eng \
-  --target-edition BONBV --target-language spa \
-  --source-tsv-dir  path/to/alignments-eng/data/targets/NIV11 \
-  --target-tsv-dir  path/to/alignments-spa/data/targets/BONBV \
-  --source-alignment-dir path/to/alignments-eng/data/alignments/NIV11 \
-  --output-dir path/to/alignments-spa/exp/BONBV/SIM-MIGRATED \
-  [--model sentence-transformers/LaBSE] \
-  [--min-similarity 0.7] [--max-word-distance 8] \
-  [--no-stopword-filter]
-```
-
-### `acai-align`
-
-Create entity alignments (persons, places, groups, etc.) using [ACAI](https://github.com/BibleAquifer/ACAI) data. Matches entities to translation tokens via reference-list overlap and Jaro-Winkler string similarity, with [trabina](https://github.com/RickBrannan/trabina) name-translation data to improve cross-language matching.
-
-```
-acai-align \
-  --target-language spa \
-  --target-edition BONBV \
-  --targets-dir  path/to/alignments-spa/data/targets/BONBV \
-  --acai-data-dir C:/git/BibleAquifer/ACAI \
-  --trabina-dir  C:/git/BN-Content/trabina/data/weighted \
-  --output-dir   path/to/alignments-spa/exp/BONBV/ACAI \
-  [--include-secondaries] \
-  [--acai-types people places groups deities]
-```
-
-### `refine-alignment`
+#### `refine-alignment`
 
 Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, or any model via OpenRouter). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
@@ -194,9 +168,25 @@ Candidate source types (default: all — ACAI, SIM-MIGRATED, DIFF-MIGRATED, MERG
 
 Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` to skip candidate loading entirely.
 
-#### Async batch mode (Google, OpenAI, and Anthropic)
+##### OpenRouter (sync only)
 
-Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results later with `fetch-batch`.
+[OpenRouter](https://openrouter.ai/) provides a single OpenAI-compatible API that routes to 200+ models — Qwen, Kimi, GLM, Mistral, Llama, and more — without requiring separate accounts. Set `OPENROUTER_API_KEY` and pass `--llm-provider openrouter` with any OpenRouter model slug.
+
+Per-call cost (USD) is printed after each verse batch and a session total is printed at the end of the run.
+
+```bash
+# Qwen 3 235B via OpenRouter
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider openrouter --llm-model qwen/qwen3-235b-a22b
+
+# Kimi K2 via OpenRouter
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider openrouter --llm-model moonshotai/kimi-k2
+```
+
+##### Async batch mode
+
+Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results with `fetch-batch`.
 
 Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter`** — use `--batch-mode sync` with OpenRouter.
 
@@ -215,31 +205,9 @@ refine-alignment --config OENGB --book 41 \
 refine-alignment --config OENGB --book 41 \
   --llm-provider anthropic --llm-model claude-haiku-4-5-20251001 \
   --batch-mode async
-
-# Check status
-fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --poll
-
-# Block until done and write chapter files
-fetch-batch jobs/google/OENGB-nt-20260424-abc12345.json --wait
 ```
 
-#### OpenRouter (sync only)
-
-[OpenRouter](https://openrouter.ai/) provides a single OpenAI-compatible API that routes to 200+ models — Qwen, Kimi, GLM, Mistral, Llama, and more — without requiring separate accounts. Set `OPENROUTER_API_KEY` and pass `--llm-provider openrouter` with any OpenRouter model slug.
-
-Per-call cost (USD) is printed after each verse batch and a session total is printed at the end of the run.
-
-```bash
-# Qwen 3 235B via OpenRouter
-refine-alignment --config OENGB --chapter 41003 \
-  --llm-provider openrouter --llm-model qwen/qwen3-235b-a22b
-
-# Kimi K2 via OpenRouter
-refine-alignment --config OENGB --chapter 41003 \
-  --llm-provider openrouter --llm-model moonshotai/kimi-k2
-```
-
-### `fetch-batch`
+#### `fetch-batch`
 
 Retrieve results from an async `refine-alignment` or `retry-alignment` batch job and write the chapter output files.
 
@@ -266,7 +234,7 @@ Google exposes only a coarse state enum (`JOB_STATE_PENDING` / `JOB_STATE_RUNNIN
 
 For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
 
-### `score-alignment`
+#### `score-alignment`
 
 Scores alignment quality for existing chapter JSON files and writes a per-verse TSV report. Does **not** call the LLM — use this between `refine-alignment` and `retry-alignment` to inspect quality and tune the retry threshold before committing to API spend.
 
@@ -288,9 +256,9 @@ score-alignment \
 
 Output columns: `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `structural_errors`.
 
-### `retry-alignment`
+#### `retry-alignment`
 
-After `fetch-batch` writes chapter JSON files, `retry-alignment` scores each verse using the composite quality scorer and re-aligns flagged verses from a **blank slate** — no prior alignment is passed as a candidate (to avoid the LLM perpetuating bad alignments).
+After `refine-alignment` (or `fetch-batch`) writes chapter JSON files, `retry-alignment` scores each verse using the composite quality scorer and re-aligns flagged verses from a **blank slate** — no prior alignment is passed as a candidate (to avoid the LLM perpetuating bad alignments).
 
 Use `--dry-run` first to inspect which verses would be flagged before making any LLM calls.
 
@@ -326,24 +294,7 @@ Range filtering (same flags as `refine-alignment`, minus `--verse` / `--verse-ra
 | `--chapter BBCCC` | `--chapter 66007` |
 | `--chapter-range START END` | `--chapter-range 66001 66022` |
 
-#### Two-pass workflow (cheap model → score → retry with better model)
-
-```bash
-# 1. First pass — cheap/fast model
-refine-alignment --config OENGB --corpus nt \
-  --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
-
-# 2. Audit scores (no LLM call)
-score-alignment --config OENGB --corpus nt --flagged-only --output scores.tsv
-
-# 3. Re-align flagged verses with a better model
-retry-alignment --config OENGB --corpus nt \
-  --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
-```
-
-The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
-
-#### Async retry
+##### Async retry
 
 ```bash
 retry-alignment --config OENGB --corpus nt --book 66 \
@@ -353,7 +304,9 @@ retry-alignment --config OENGB --corpus nt --book 66 \
 fetch-batch jobs/anthropic/OENGB-nt-20260424-abc12345.json --wait
 ```
 
-### `render-alignment`
+### Visualization
+
+#### `render-alignment`
 
 Generate per-chapter HTML alignment visualizations in SBL Reverse Interlinear style. Each verse is a row of inline-block cells (translation order). Each cell shows the target token above its aligned source token(s) with subscript word-position indices. Relationship symbols follow the SBL RI convention:
 
@@ -430,8 +383,11 @@ Group-level extensions (in `meta` on the group, alongside `creator` and `conform
 | `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`) |
 | `meta.llm.model` | `string` | Model name, e.g. `gpt-5.4-mini` |
 | `meta.llm.reasoning_effort` | `string` | Reasoning effort level if set, e.g. `high` |
+| `meta.retry_llm.provider` | `string` | Provider used by `retry-alignment` (only present when a retry pass has run) |
+| `meta.retry_llm.model` | `string` | Retry model name |
+| `meta.retry_llm.reasoning_effort` | `string` | Reasoning effort for the retry pass |
 
-`AlignmentsReader.group_meta` exposes the full raw group meta dict so downstream tools (e.g. `render-alignment`) can read back fields like `llm` without re-parsing the JSON.
+`AlignmentsReader.group_meta` exposes the full raw group meta dict so downstream tools (e.g. `render-alignment`) can read back fields like `llm` and `retry_llm` without re-parsing the JSON.
 
 All tokens not listed in `meta.secondary` are assumed primary. `meta.nonEquivalent` tokens are distinct from simply unrecorded tokens — they represent a positive determination of non-equivalence (see §3.5 of alignment-principles). See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) for full specification.
 
@@ -448,3 +404,54 @@ See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek
 - Grammatical construction cases (§9): finite verbs, participials, infinitivals, adjectives/adverbs, pronouns, prepositions, conjunctions/particles, discourse restructuring
 - Mounce Reverse Interlinear guidelines reference cases
 - Automated → LLM sharpening workflow
+
+## Appendix: Migration and seeding tools
+
+These tools create initial alignment candidates by migrating from an existing aligned translation. They are not needed when aligning from scratch (`--from-scratch` on the command line, or `from_scratch: true` in the config).
+
+### `diff-migrate`
+
+Migrate alignments from a reference translation to a similar translation using word-level text diffs ([diff_match_patch](https://github.com/google/diff-match-patch)).
+
+```
+diff-migrate \
+  --source-edition NIV11 \
+  --target-edition NIrV \
+  --source-tsv-dir  path/to/alignments-eng/data/targets/NIV11 \
+  --target-tsv-dir  path/to/alignments-eng/data/targets/NIrV \
+  --source-alignment-dir path/to/alignments-eng/data/alignments/NIV11 \
+  --output-dir path/to/alignments-eng/exp/NIrV/DIFF-MIGRATED
+```
+
+### `sim-migrate`
+
+Migrate alignments using multilingual sentence similarity. Supports [LaBSE](https://huggingface.co/sentence-transformers/LaBSE) (default, broad language coverage) and [SONAR_200](https://huggingface.co/cointegrated/SONAR_200_text_encoder) (useful for languages LaBSE does not cover, e.g. Lingala).
+
+```
+sim-migrate \
+  --source-edition NIV11 --source-language eng \
+  --target-edition BONBV --target-language spa \
+  --source-tsv-dir  path/to/alignments-eng/data/targets/NIV11 \
+  --target-tsv-dir  path/to/alignments-spa/data/targets/BONBV \
+  --source-alignment-dir path/to/alignments-eng/data/alignments/NIV11 \
+  --output-dir path/to/alignments-spa/exp/BONBV/SIM-MIGRATED \
+  [--model sentence-transformers/LaBSE] \
+  [--min-similarity 0.7] [--max-word-distance 8] \
+  [--no-stopword-filter]
+```
+
+### `acai-align`
+
+Create entity alignments (persons, places, groups, etc.) using [ACAI](https://github.com/BibleAquifer/ACAI) data. Matches entities to translation tokens via reference-list overlap and Jaro-Winkler string similarity, with [trabina](https://github.com/RickBrannan/trabina) name-translation data to improve cross-language matching.
+
+```
+acai-align \
+  --target-language spa \
+  --target-edition BONBV \
+  --targets-dir  path/to/alignments-spa/data/targets/BONBV \
+  --acai-data-dir C:/git/BibleAquifer/ACAI \
+  --trabina-dir  C:/git/BN-Content/trabina/data/weighted \
+  --output-dir   path/to/alignments-spa/exp/BONBV/ACAI \
+  [--include-secondaries] \
+  [--acai-types people places groups deities]
+```

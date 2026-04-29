@@ -81,12 +81,34 @@ creator: text-align
 # llm_provider: openai       llm_model: gpt-5.4-mini        (default if unset)
 # llm_provider: anthropic    llm_model: claude-sonnet-4-6
 # llm_provider: google       llm_model: gemini-3-flash-preview  (requires GEMINI_API_KEY)
+# llm_provider: openrouter   llm_model: deepseek/deepseek-v4-pro
 
 # Reasoning effort / thinking level (none/minimal/low/medium/high).
 # OpenAI gpt-5.x: maps to reasoning_effort on the Responses API.
 # Google gemini-3+: maps to thinkingLevel on ThinkingConfig.
 # Omit or leave blank to use the model's default (no thinking config sent).
 # reasoning_effort: high
+
+# ---------------------------------------------------------------------------
+# retry-alignment settings
+# ---------------------------------------------------------------------------
+
+# LLM provider and model for retry-alignment (the second-pass / quality-repair step).
+# If absent, retry-alignment falls back to the llm_provider / llm_model /
+# reasoning_effort values above. Set these to use a different (typically better)
+# model for the retry pass than the initial refine pass.
+# retry_llm_provider: anthropic
+# retry_llm_model: claude-sonnet-4-6
+# retry_reasoning_effort: high
+
+# Alignment quality scoring threshold for retry-alignment and score-alignments.
+# Verses with a composite penalty score above this value are flagged for retry.
+# Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
+# score_retry_threshold: 0.25
+
+# Legacy coverage threshold (deprecated; superseded by score_retry_threshold).
+# Flag verses with more than this many unaligned source tokens.
+# min_unaligned_src: 2
 
 # ---------------------------------------------------------------------------
 # sim-migrate settings

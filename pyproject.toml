@@ -43,6 +43,7 @@ render-alignment = "text_align.render.html:main"
 refine-alignment = "text_align.refine.refine:main"
 fetch-batch = "text_align.refine.fetch_batch:main"
 retry-alignment = "text_align.refine.retry_cli:main"
+score-alignments = "text_align.refine.score_alignments:main"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

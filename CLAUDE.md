@@ -22,15 +22,18 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment + fetch-batch + retry-alignment CLIs
-│   ├── prompt/       # language-aware prompt system (see below)
-│   ├── llm.py        # LLMClient: OpenAI / Anthropic / Google (sync)
-│   ├── async_batch.py # provider batch-API helpers (Google, OpenAI, Anthropic)
-│   ├── coverage.py   # per-verse source-token coverage evaluation
-│   ├── refine.py     # refine-alignment CLI entry point
-│   ├── fetch_batch.py # fetch-batch CLI entry point
-│   ├── retry.py      # verse merge/retry core logic
-│   └── retry_cli.py  # retry-alignment CLI entry point
+├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignments CLIs
+│   ├── prompt/          # language-aware prompt system (see below)
+│   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter (sync)
+│   ├── async_batch.py   # provider batch-API helpers (Google, OpenAI, Anthropic)
+│   ├── coverage.py      # legacy per-verse source-token coverage evaluation
+│   ├── scoring.py       # composite alignment quality scorer (five signals)
+│   ├── scoring_stopwords.py # per-language stopword sets for scorer signal 2
+│   ├── refine.py        # refine-alignment CLI entry point
+│   ├── fetch_batch.py   # fetch-batch CLI entry point
+│   ├── retry.py         # verse merge/retry core logic
+│   ├── retry_cli.py     # retry-alignment CLI entry point
+│   └── score_alignments.py  # score-alignments CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
 
@@ -234,14 +237,91 @@ Implementation details:
 
 Full design: `docs/batch-api-plan.md`.
 
-## retry-alignment (`refine/retry_cli.py`, `refine/retry.py`, `refine/coverage.py`)
+## Alignment quality scoring (`refine/scoring.py`, `refine/scoring_stopwords.py`)
 
-Post-batch quality pass: identifies verses with too many unaligned source tokens
+`score_chapter_file(path, source_verses, lang, config, target_verses=None)` scores all
+verses in a chapter JSON file and returns `list[VerseScore]`. Each `VerseScore` carries
+five penalty signals (0–1 each) and a composite score; verses above `config.retry_threshold`
+have `needs_retry=True`.
+
+**Five signals:**
+
+| # | Signal | What it catches |
+|---|--------|----------------|
+| 1 | Weighted source coverage | Unaligned source tokens, weighted by POS (verb/noun=1.0 … article=0.1) |
+| 2 | Translation content-word coverage | Target words not in any record and not NEQ (stop-words excluded) |
+| 3 | NEQ overuse | NEQ rate above a per-language baseline (default 10%) |
+| 4 | Token smearing | N:M records where both sides have >1 primary and no `is_idiom` flag |
+| 5 | Per-verse deviation | Verses anomalously worse than the chapter mean (second pass) |
+
+Signals 1–4 are computed per verse; signal 5 requires a second pass over all verses in the
+chapter. `score_chapter()` handles the two-pass logic and sets `needs_retry`.
+
+**Signal 4 (smearing):** catches the cheap-model failure mode where tokens that should be
+separate records (e.g. adjective + noun) are grouped into one N:M record. Weighted by
+`primary_src × primary_tgt`; a 1.5× adjacency boost applies when source and target token
+IDs are both consecutive, which is the strongest indicator of over-grouping.
+
+**Stop-word lists (`scoring_stopwords.py`):** uses `stopwordsiso` (already a project
+dependency) intersected with a small curated core per language to keep lists minimal.
+Languages without coverage (Tok Pisin, Bislama, Lingala, …) return an empty frozenset —
+the safe direction is to penalise gaps rather than suppress content words.
+
+**`ScoringConfig`** holds signal weights (w1–w5), NEQ baseline, adjacency multiplier,
+deviation k, and retry threshold. All overridable; defaults work for NT English.
+
+YAML config keys: `score_retry_threshold` (default 0.25). Weights are code defaults;
+adjust via `ScoringConfig` if needed.
+
+## score-alignments (`refine/score_alignments.py`)
+
+Standalone audit tool. Reads chapter JSON files and writes a per-verse TSV report (columns:
+`verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `structural_errors`) to
+stdout or `--output`. Does **not** call the LLM.
+
+```bash
+score-alignments \
+  --config OENGB --corpus nt \
+  --alignment-dir path/to/LLM-REFINED \
+  [--target-tsv-dir path/to/targets/OENGB]   # enables signal 2
+  [--score-retry-threshold 0.25] \
+  [--flagged-only] \
+  [--output scores.tsv]
+```
+
+Primary use: run between `refine-alignment` and `retry-alignment` to inspect quality
+before committing to a retry spend, and to tune the threshold against manually reviewed
+chapters.
+
+## Two-pass workflow (cheap model → score → retry)
+
+```bash
+# 1. First pass — cheap/fast model
+refine-alignment --config MYEDITION --corpus nt \
+  --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
+
+# 2. Audit scores (no LLM call)
+score-alignments --config MYEDITION --corpus nt --flagged-only --output scores.tsv
+
+# 3. Retry flagged verses with a better model
+retry-alignment --config MYEDITION --corpus nt \
+  --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
+```
+
+The YAML config supports separate model keys per pass — `retry_llm_provider`,
+`retry_llm_model`, `retry_reasoning_effort` — that override the refine-phase `llm_*`
+keys in `retry-alignment`. If absent, the retry pass falls back to the refine keys.
+
+## retry-alignment (`refine/retry_cli.py`, `refine/retry.py`, `refine/scoring.py`)
+
+Post-batch quality pass: identifies verses that scored above the retry threshold
 and re-aligns them from scratch.
 
-**Detection** (`coverage.py`): a source token is covered if it appears in any
-record's `source` list OR in `nonEquivalent.source`. Verses with more than
-`--min-unaligned-src` (default 3) uncovered tokens are flagged.
+**Detection** (`scoring.py`): `score_chapter_file()` scores every verse using the
+five-signal composite scorer. Verses with `composite > --score-retry-threshold`
+(default 0.25) are flagged. This replaces the legacy single-threshold unaligned-source
+count (`coverage.py`); `--min-unaligned-src` is retained as a deprecated argument
+but is no longer used.
 
 **Remedy**: flagged verses are sent to the LLM **blank-slate** — no prior
 alignment is passed as a candidate. Passing existing records as candidates caused

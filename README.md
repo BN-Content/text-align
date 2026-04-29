@@ -71,11 +71,14 @@ src/text_align/
 │   │   └── __init__.py  #   Public API re-export
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
-│   ├── coverage.py      # Per-verse source-token coverage evaluation
+│   ├── coverage.py      # Per-verse source-token coverage evaluation (legacy)
+│   ├── scoring.py       # Composite alignment quality scorer (five signals)
+│   ├── scoring_stopwords.py  # Per-language stopword sets for scorer
 │   ├── refine.py        # refine-alignment CLI
 │   ├── fetch_batch.py   # fetch-batch CLI
 │   ├── retry.py         # Verse merge/retry core logic
-│   └── retry_cli.py     # retry-alignment CLI
+│   ├── retry_cli.py     # retry-alignment CLI
+│   └── score_alignments.py  # score-alignments CLI
 └── render/
     └── html.py          # render-alignment CLI
 ```
@@ -263,11 +266,31 @@ Google exposes only a coarse state enum (`JOB_STATE_PENDING` / `JOB_STATE_RUNNIN
 
 For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
 
+### `score-alignments`
+
+Scores alignment quality for existing chapter JSON files and writes a per-verse TSV report. Does **not** call the LLM — use this between `refine-alignment` and `retry-alignment` to inspect quality and tune the retry threshold before committing to API spend.
+
+Each verse receives a composite penalty score (0–1, higher = worse) from five signals: weighted source-token coverage, translation content-word coverage, NEQ overuse, token smearing (N:M records where both sides have multiple primary tokens), and per-verse deviation from chapter mean. Verses above the threshold are flagged `needs_retry=True`.
+
+```
+score-alignments \
+  --alignment-dir path/to/alignments-eng/exp/OENGB/LLM-REFINED \
+  --corpus nt \
+  --target-language eng \
+  [--target-edition OENGB] \
+  [--target-tsv-dir path/to/alignments-eng/data/targets/OENGB]  # enables signal 2
+  [--sources-dir data/sources/] \
+  [--score-retry-threshold 0.25] \
+  [--flagged-only] \
+  [--output scores.tsv] \
+  [--config OENGB]
+```
+
+Output columns: `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `structural_errors`.
+
 ### `retry-alignment`
 
-After `fetch-batch` writes chapter JSON files, `retry-alignment` identifies verses where more than N source tokens are unaligned and re-aligns them from a **blank slate** — no prior alignment is passed as a candidate (to avoid the LLM perpetuating bad alignments).
-
-A source token is considered covered if it appears in any record's `source` list or in `nonEquivalent.source`. The default threshold is `> 3` unaligned source tokens; use `--min-unaligned-src` to adjust.
+After `fetch-batch` writes chapter JSON files, `retry-alignment` scores each verse using the composite quality scorer and re-aligns flagged verses from a **blank slate** — no prior alignment is passed as a candidate (to avoid the LLM perpetuating bad alignments).
 
 Use `--dry-run` first to inspect which verses would be flagged before making any LLM calls.
 
@@ -279,18 +302,18 @@ retry-alignment \
   --target-edition OENGB \
   --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
   [--sources-dir data/sources/] \
-  [--llm-provider anthropic]     # openai | anthropic | google | openrouter (default: anthropic)
+  [--llm-provider anthropic]          # openai | anthropic | google | openrouter (default: anthropic)
   [--llm-model claude-opus-4-7] \
   [--reasoning-effort high] \
-  [--min-unaligned-src 3]        # flag verses with more than N unaligned source tokens
+  [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4] \
   [--temperature 1] \
   [--max-output-tokens 32000] \
-  [--batch-mode sync]            # sync (default) | async
+  [--batch-mode sync]                 # sync (default) | async
   [--jobs-dir jobs/] \
-  [--dry-run]                    # report flagged verses without calling the LLM
+  [--dry-run]                         # report flagged verses without calling the LLM
   [--config OENGB]
 ```
 
@@ -303,22 +326,30 @@ Range filtering (same flags as `refine-alignment`, minus `--verse` / `--verse-ra
 | `--chapter BBCCC` | `--chapter 66007` |
 | `--chapter-range START END` | `--chapter-range 66001 66022` |
 
-Typical workflow:
+#### Two-pass workflow (cheap model → score → retry with better model)
 
 ```bash
-# 1. Check what would be retried
-retry-alignment --config OENGB --corpus nt --book 66 --dry-run
+# 1. First pass — cheap/fast model
+refine-alignment --config OENGB --corpus nt \
+  --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
 
-# 2. Re-align flagged verses (sync)
-retry-alignment --config OENGB --corpus nt --book 66 \
-  --llm-provider anthropic --llm-model claude-opus-4-7 --reasoning-effort high
+# 2. Audit scores (no LLM call)
+score-alignments --config OENGB --corpus nt --flagged-only --output scores.tsv
 
-# 2. Or submit async
+# 3. Re-align flagged verses with a better model
+retry-alignment --config OENGB --corpus nt \
+  --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
+```
+
+The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
+
+#### Async retry
+
+```bash
 retry-alignment --config OENGB --corpus nt --book 66 \
   --llm-provider anthropic --llm-model claude-opus-4-7 --reasoning-effort high \
   --batch-mode async
 
-# 3. Fetch and merge async results
 fetch-batch jobs/anthropic/OENGB-nt-20260424-abc12345.json --wait
 ```
 

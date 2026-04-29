@@ -17,9 +17,10 @@ from text_align import ROOT
 from text_align.config import load_config_from_args, require
 from text_align.migrate.tsv import process_usfm_tsv
 
-from .coverage import VerseRetrySpec, find_low_coverage_verses
+from .coverage import VerseRetrySpec
 from .llm import LLMClient
 from .retry import build_retry_chapter_batches, discover_chapter_files, retry_chapter_sync
+from .scoring import ScoringConfig, score_chapter_file
 from .source import load_source_verses
 
 
@@ -71,8 +72,10 @@ def parse_args() -> argparse.Namespace:
                    help="Hard cap on response tokens (default: 32000)")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
-    p.add_argument("--min-unaligned-src", type=int, default=2,
-                   help="Flag verses with more than this many unaligned source tokens (default: 2)")
+    p.add_argument("--score-retry-threshold", type=float, default=0.25,
+                   help="Composite penalty threshold above which a verse is retried (default: 0.25)")
+    p.add_argument("--min-unaligned-src", type=int, default=None,
+                   help="(deprecated) Use --score-retry-threshold instead")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: re-align immediately and write results (default); "
                         "async: submit to provider batch API and exit "
@@ -94,6 +97,14 @@ def parse_args() -> argparse.Namespace:
 
     p.set_defaults(**config_defaults)
     args = p.parse_args()
+
+    # Retry-specific model keys fall back to the refine model keys when absent.
+    # This allows a single config to use one model for both passes, or separate
+    # configs to specify different models per pass.
+    args.llm_provider = getattr(args, "retry_llm_provider", None) or args.llm_provider
+    args.llm_model    = getattr(args, "retry_llm_model",    None) or args.llm_model
+    args.reasoning_effort = getattr(args, "retry_reasoning_effort", None) or args.reasoning_effort
+
     require(args, "alignment_dir", "target_language", "target_edition", "target_tsv_dir", "corpus")
 
     if args.llm_model is None and not args.dry_run:
@@ -141,11 +152,11 @@ def main() -> None:
     effort_str = f" (reasoning_effort={args.reasoning_effort})" if args.reasoning_effort else ""
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")
-    print(f"  Alignment dir:  {args.alignment_dir}")
-    print(f"  Min unaligned:  > {args.min_unaligned_src} source token(s)")
+    print(f"  Alignment dir:   {args.alignment_dir}")
+    print(f"  Retry threshold: {args.score_retry_threshold:.2f}")
     if not args.dry_run:
-        print(f"  Provider:       {args.llm_provider} / {args.llm_model}{effort_str}")
-        print(f"  Mode:           {args.batch_mode}")
+        print(f"  Provider:        {args.llm_provider} / {args.llm_model}{effort_str}")
+        print(f"  Mode:            {args.batch_mode}")
 
     # Discover and filter chapter files
     chapter_files = discover_chapter_files(args.alignment_dir)
@@ -154,18 +165,31 @@ def main() -> None:
         raise SystemExit("No chapter JSON files found in --alignment-dir.")
     print(f"  Evaluating {len(chapter_files)} chapter file(s) ...")
 
-    # Load source tokens (needed for coverage evaluation)
+    # Load source tokens
     print(f"  Loading source tokens ({corpus_id}) ...")
     source_verses = load_source_verses(args.sources_dir, args.corpus)
 
-    # Evaluate coverage for each chapter file
+    scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
+
+    # Score each chapter file and collect verses that need retry
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]] = {}
     chapter_paths: dict[str, Path] = {}
 
     for cf in chapter_files:
         parts = cf.stem.split("-")
         chapter_id = parts[-3] + parts[-2]
-        specs = find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
+        verse_scores = score_chapter_file(
+            cf, source_verses, args.target_language, scoring_config
+        )
+        specs = [
+            VerseRetrySpec(
+                verse_id=vs.verse_id,
+                chapter_id=chapter_id,
+                uncovered_src_ids=[],
+                uncovered_count=0,
+            )
+            for vs in verse_scores if vs.needs_retry
+        ]
         if specs:
             retry_specs_by_chapter[chapter_id] = specs
             chapter_paths[chapter_id] = cf
@@ -179,7 +203,7 @@ def main() -> None:
     print(f"\n  {total_flagged} verse(s) flagged across {len(retry_specs_by_chapter)} chapter(s):")
     for chapter_id in sorted(retry_specs_by_chapter):
         for spec in retry_specs_by_chapter[chapter_id]:
-            print(f"    {spec.verse_id}: {spec.uncovered_count} unaligned source token(s)")
+            print(f"    {spec.verse_id}")
 
     if args.dry_run:
         return

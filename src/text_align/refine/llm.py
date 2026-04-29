@@ -346,6 +346,9 @@ def _iter_verse_entries(
 
 _RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 503})
 
+# Transient network/decode errors that warrant a retry regardless of HTTP status.
+_RETRIABLE_EXC_TYPES: tuple[type, ...] = (json.JSONDecodeError,)
+
 
 def _status_code(exc: Exception) -> int | None:
     """Return the HTTP status code from a provider exception, or None."""
@@ -365,22 +368,24 @@ def _status_code(exc: Exception) -> int | None:
 def _api_call_with_backoff(fn, max_retries: int, provider: str):
     """Call fn(), retrying on transient API errors with exponential backoff.
 
-    Retries on 429 (rate-limited) and 503 (overloaded) up to *max_retries*
-    times.  Raises RuntimeError immediately on non-retriable errors or after
-    exhausting retries.  Delays: 2s, 4s, 8s, 16s, …
+    Retries on 429 (rate-limited), 503 (overloaded), and malformed-JSON
+    responses up to *max_retries* times.  Raises RuntimeError immediately on
+    non-retriable errors or after exhausting retries.  Delays: 2s, 4s, 8s, …
     """
     for attempt in range(max_retries + 1):
         try:
             return fn()
         except Exception as exc:
             code = _status_code(exc)
-            if code not in _RETRIABLE_STATUS_CODES or attempt == max_retries:
+            retriable = code in _RETRIABLE_STATUS_CODES or isinstance(exc, _RETRIABLE_EXC_TYPES)
+            if not retriable or attempt == max_retries:
                 raise RuntimeError(
                     f"{provider} API error (attempt {attempt + 1}): {exc}"
                 ) from exc
+            reason = str(code) if code else type(exc).__name__
             delay = 2 ** (attempt + 1)
             print(
-                f"  {provider} API {code} — retrying in {delay}s "
+                f"  {provider} API {reason} — retrying in {delay}s "
                 f"(attempt {attempt + 1}/{max_retries + 1}) ...",
                 flush=True,
             )

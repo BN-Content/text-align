@@ -81,8 +81,8 @@ class ScoringConfig:
     w1: float = 0.35   # weighted source coverage
     w2: float = 0.20   # translation content coverage
     w3: float = 0.15   # NEQ overuse
-    w4: float = 0.20   # token smearing
-    w5: float = 0.10   # per-verse deviation
+    w4: float = 0.30   # token smearing
+    w5: float = 0.00   # per-verse deviation (informational only; 0 = no retry influence)
     # Signal 3: NEQ baseline rate (expected natural NEQ rate for this corpus/lang)
     neq_baseline: float = 0.10
     # Signal 4: adjacency boost for same-verse consecutive-token smearing

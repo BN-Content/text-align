@@ -39,12 +39,13 @@ from-scratch: true
 llm_provider: openrouter
 #reasoning_effort: medium
 #llm_model: google/gemma-4-26b-a4b-it
-#llm_model: moonshotai/kimi-k2.5
-#llm_model: moonshotai/kimi-k2.6
+#llm_model: moonshotai/kimi-k2.5:exacto
+#llm_model: moonshotai/kimi-k2.6:exacto
 #batch_size: 4
-#llm_model: qwen/qwen3.6-plus
-#llm_model: z-ai/glm-5.1
-llm_model: deepseek/deepseek-v4-pro
+#llm_model: qwen/qwen3.6-plus:exacto
+#llm_model: z-ai/glm-5.1:exacto
+llm_model: deepseek/deepseek-v4-pro:exacto
+#llm_model: deepseek/deepseek-v4-flash
 #llm_model: mistralai/mistral-large-2512
 
 # ---------------------------------------------------------------------------
@@ -56,7 +57,8 @@ llm_model: deepseek/deepseek-v4-pro
 # reasoning_effort values above. Set these to use a different (typically better)
 # model for the retry pass than the initial refine pass.
 retry_llm_provider: anthropic
-retry_llm_model: claude-sonnet-4-6
+#retry_llm_model: claude-sonnet-4-6
+retry_llm_model: claude-opus-4-7
 retry_reasoning_effort: high
 
 # Alignment quality scoring threshold for retry-alignment and score-alignment.

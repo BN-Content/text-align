@@ -317,11 +317,11 @@ keys in `retry-alignment`. If absent, the retry pass falls back to the refine ke
 Post-batch quality pass: identifies verses that scored above the retry threshold
 and re-aligns them from scratch.
 
-**Detection** (`scoring.py`): `score_chapter_file()` scores every verse using the
-five-signal composite scorer. Verses with `composite > --score-retry-threshold`
-(default 0.25) are flagged. This replaces the legacy single-threshold unaligned-source
-count (`coverage.py`); `--min-unaligned-src` is retained as a deprecated argument
-but is no longer used.
+**Detection** (`scoring.py`, `coverage.py`): a verse is flagged when either condition
+holds: (a) `score_chapter_file()` returns `composite > --score-retry-threshold`
+(default 0.25), or (b) `find_low_coverage_verses()` finds more than
+`--min-unaligned-src` (default 2) unaligned source tokens. Both checks run for every
+chapter; a verse needs only one to trigger.
 
 **Remedy**: flagged verses are sent to the LLM **blank-slate** — no prior
 alignment is passed as a candidate. Passing existing records as candidates caused

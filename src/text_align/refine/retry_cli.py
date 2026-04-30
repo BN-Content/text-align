@@ -17,7 +17,7 @@ from text_align import ROOT
 from text_align.config import load_config_from_args, require
 from text_align.migrate.tsv import process_usfm_tsv
 
-from .coverage import VerseRetrySpec
+from .coverage import VerseRetrySpec, find_low_coverage_verses
 from .llm import LLMClient
 from .retry import build_retry_chapter_batches, discover_chapter_files, retry_chapter_sync
 from .scoring import ScoringConfig, score_chapter_file
@@ -74,8 +74,8 @@ def parse_args() -> argparse.Namespace:
                    help="Creator string for alignment meta (default: text-align)")
     p.add_argument("--score-retry-threshold", type=float, default=0.25,
                    help="Composite penalty threshold above which a verse is retried (default: 0.25)")
-    p.add_argument("--min-unaligned-src", type=int, default=None,
-                   help="(deprecated) Use --score-retry-threshold instead")
+    p.add_argument("--min-unaligned-src", type=int, default=2,
+                   help="Also retry verses with more than N unaligned source tokens (default: 2)")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: re-align immediately and write results (default); "
                         "async: submit to provider batch API and exit "
@@ -86,6 +86,10 @@ def parse_args() -> argparse.Namespace:
                    help="Report flagged verses without calling the LLM")
 
     range_group = p.add_mutually_exclusive_group()
+    range_group.add_argument("--verse", default=None, metavar="BBCCCVVV",
+                             help="Force-retry a single verse regardless of score, e.g. --verse 41004003")
+    range_group.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
+                             help="Force-retry a verse range regardless of score, e.g. --verse-range 41004001 41004020")
     range_group.add_argument("--book", default=None, metavar="BB",
                              help="Limit to a single book, e.g. --book 66")
     range_group.add_argument("--book-range", default=None, nargs=2, metavar=("START", "END"),
@@ -116,20 +120,30 @@ def parse_args() -> argparse.Namespace:
 
 
 def _filter_chapter_files(chapter_files: list[Path], args: argparse.Namespace) -> list[Path]:
-    """Filter chapter files by the active book/chapter range arg."""
+    """Filter chapter files by the active range arg."""
+    verse = getattr(args, "verse", None)
+    verse_range = getattr(args, "verse_range", None)
     book = getattr(args, "book", None)
     book_range = getattr(args, "book_range", None)
     chapter = getattr(args, "chapter", None)
     chapter_range = getattr(args, "chapter_range", None)
 
-    if not any([book, book_range, chapter, chapter_range]):
+    if not any([verse, verse_range, book, book_range, chapter, chapter_range]):
         return chapter_files
 
     result = []
     for f in chapter_files:
         parts = f.stem.split("-")
         cid = parts[-3] + parts[-2]  # BBCCC
-        if book:
+        if verse:
+            if cid == str(verse).zfill(8)[:5]:
+                result.append(f)
+        elif verse_range:
+            start_cid = str(verse_range[0]).zfill(8)[:5]
+            end_cid = str(verse_range[1]).zfill(8)[:5]
+            if start_cid <= cid <= end_cid:
+                result.append(f)
+        elif book:
             if cid[:2] == str(book).zfill(2):
                 result.append(f)
         elif book_range:
@@ -153,7 +167,7 @@ def main() -> None:
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")
     print(f"  Alignment dir:   {args.alignment_dir}")
-    print(f"  Retry threshold: {args.score_retry_threshold:.2f}")
+    print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>{args.min_unaligned_src}")
     if not args.dry_run:
         print(f"  Provider:        {args.llm_provider} / {args.llm_model}{effort_str}")
         print(f"  Mode:            {args.batch_mode}")
@@ -171,6 +185,17 @@ def main() -> None:
 
     scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
 
+    # Verse-level force-include: these verses are retried regardless of score.
+    forced_verse: str | None = getattr(args, "verse", None)
+    forced_verse_range: list[str] | None = getattr(args, "verse_range", None)
+
+    def _is_forced(vid: str) -> bool:
+        if forced_verse:
+            return vid == forced_verse
+        if forced_verse_range:
+            return forced_verse_range[0] <= vid <= forced_verse_range[1]
+        return False
+
     # Score each chapter file and collect verses that need retry
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]] = {}
     chapter_paths: dict[str, Path] = {}
@@ -181,6 +206,10 @@ def main() -> None:
         verse_scores = score_chapter_file(
             cf, source_verses, args.target_language, scoring_config
         )
+        coverage_flagged = {
+            spec.verse_id
+            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
+        }
         specs = [
             VerseRetrySpec(
                 verse_id=vs.verse_id,
@@ -188,7 +217,8 @@ def main() -> None:
                 uncovered_src_ids=[],
                 uncovered_count=0,
             )
-            for vs in verse_scores if vs.needs_retry
+            for vs in verse_scores
+            if vs.needs_retry or vs.verse_id in coverage_flagged or _is_forced(vs.verse_id)
         ]
         if specs:
             retry_specs_by_chapter[chapter_id] = specs

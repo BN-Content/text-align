@@ -29,7 +29,7 @@ from-scratch: true
 #llm_provider: openai
 #llm_model: gpt-5.4-mini
 #llm_model: gpt-5.4
-#reasoning_effort: high
+#reasoning_effort: low
 # Google
 #reasoning_effort: high
 #llm_provider: google
@@ -45,8 +45,8 @@ llm_provider: openrouter
 #llm_model: qwen/qwen3.6-plus:exacto
 #llm_model: z-ai/glm-5.1:exacto
 llm_model: deepseek/deepseek-v4-pro:exacto
-#llm_model: deepseek/deepseek-v4-flash
-#llm_model: mistralai/mistral-large-2512
+#llm_model: deepseek/deepseek-v4-flash:exacto
+#llm_model: mistralai/mistral-large-2512:exacto
 
 # ---------------------------------------------------------------------------
 # retry-alignment settings

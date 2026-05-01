@@ -103,6 +103,7 @@ class VerseScore:
     signal_5: float = 0.0
     composite: float = 0.0
     structural_errors: int = 0
+    article_neq_count: int = 0
     needs_retry: bool = False
 
 
@@ -142,6 +143,14 @@ def score_verse(
     # Filter chapter-level NEQ sets to this verse
     verse_neq_src = {sid for sid in neq_source if sid[:8] == verse_id}
     verse_neq_tgt = {tid for tid in neq_target if tid[:8] == verse_id}
+
+    # Definite articles in NEQ are always a mistake: articles must be primary
+    # to "the"/pronoun/reinstated proper noun, or secondary to their head.
+    src_by_id: dict[str, Source] = {t.id: t for t in src_tokens}
+    vs.article_neq_count = sum(
+        1 for sid in verse_neq_src
+        if src_by_id.get(sid) is not None and src_by_id[sid].pos in {"art", "det"}
+    )
 
     # -----------------------------------------------------------------------
     # Tier 1 — structural validity check (count errors, skip invalid records)
@@ -257,7 +266,7 @@ def score_chapter(verse_scores: list[VerseScore], config: ScoringConfig) -> list
             + config.w4 * vs.signal_4
             + config.w5 * vs.signal_5
         )
-        vs.needs_retry = vs.composite > config.retry_threshold
+        vs.needs_retry = vs.composite > config.retry_threshold or vs.article_neq_count > 0
 
     return verse_scores
 

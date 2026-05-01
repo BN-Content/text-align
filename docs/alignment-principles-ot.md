@@ -27,7 +27,7 @@ Alignments are intentionally **generous** rather than strictly literal. When a t
 
 **Example (inseparable preposition, split token):** Hebrew לַמֶּלֶךְ "to the king" encodes preposition (לְ), article (הַ), and noun (מֶּלֶךְ) in a single word form. When MACULA provides separate word-part tokens for each morpheme, each maps individually to its English correspondent. When the entire form is one token, English "to," "the," and "king" collectively align to it (with "the" secondary; see §7).
 
-**Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. The goal is to align as clearly and generously as possible, which sometimes means leaving tokens unaligned or marking them NEQ. It does not mean forcing every token into some record. Leaving a token unrecorded (state: unknown) and marking it NEQ (state: positively no correspondent) are both legitimate, deliberate outcomes — not failures of alignment. If no evident reason exists for a token's presence, marking it NEQ or leaving it unrecorded is preferable to manufacturing a link. See §3.5.
+**Limits of generous alignment:** Generous alignment means finding reasons to include a token — lexical, grammatical, or contextual. The goal is to align as clearly and generously as possible, which sometimes means leaving tokens unaligned or marking them NEQ ("Non-Equivalent"; see definition in §3.5). It does not mean forcing every token into some record. Leaving a token unrecorded (state: unknown) and marking it NEQ (state: positively no correspondent) are both legitimate, deliberate outcomes — not failures of alignment. If no evident reason exists for a token's presence, marking it NEQ or leaving it unrecorded is preferable to manufacturing a link. See §3.5.
 
 **Surface form differences:** Morphological differences between source and target tokens — tense, voice, number, aspect, stem — do not prevent alignment. The question is whether there is lexical and semantic correspondence, not whether the surface forms match.
 
@@ -532,7 +532,7 @@ When English renders the construct with a possessive apostrophe ("the LORD's wor
 
 ### 11.5 Construct Chains of Three or More Links
 
-Hebrew construct chains may extend across three or more nouns (e.g., דִּבְרֵי סֵפֶר הַתּוֹרָה "words of the book of the law"). Align each link individually following §11.2–11.4. Each construct noun's "of" is secondary to that noun.
+Hebrew construct chains may extend across three or more nouns (e.g., דִּבְרֵי סֵפֶר הַתּוֹרָה "words of the book of the law"). Align each link individually following §11.2–11.4. Each 'of' is secondary to the construct noun it follows.
 
 ### 11.6 Adjectives in Construct Position
 

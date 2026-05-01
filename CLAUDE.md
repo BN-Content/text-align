@@ -289,6 +289,11 @@ score-alignment \
   [--output scores.tsv]
 ```
 
+TSV includes an `article_neq` column (integer count). Any verse with `article_neq > 0`
+is unconditionally flagged `needs_retry=True` regardless of the composite score —
+NEQ'd articles are always a mistake (articles must be primary to "the"/pronoun/reinstated
+proper noun, or secondary to their head noun/adjective/participle).
+
 Primary use: run between `refine-alignment` and `retry-alignment` to inspect quality
 before committing to a retry spend, and to tune the threshold against manually reviewed
 chapters.

@@ -90,6 +90,12 @@ def parse_args() -> argparse.Namespace:
                              help="Force-retry a single verse regardless of score, e.g. --verse 41004003")
     range_group.add_argument("--verse-range", default=None, nargs=2, metavar=("START", "END"),
                              help="Force-retry a verse range regardless of score, e.g. --verse-range 41004001 41004020")
+    range_group.add_argument("--verse-list", default=None, metavar="VIDS",
+                             help="Comma-separated verse IDs to force-retry regardless of score, "
+                                  "e.g. --verse-list 62002002,62003010")
+    range_group.add_argument("--verse-list-file", default=None, type=Path, metavar="FILE",
+                             help="File of verse IDs to force-retry regardless of score "
+                                  "(one BBCCCVVV per line; blank lines and # comments ignored)")
     range_group.add_argument("--book", default=None, metavar="BB",
                              help="Limit to a single book, e.g. --book 66")
     range_group.add_argument("--book-range", default=None, nargs=2, metavar=("START", "END"),
@@ -119,7 +125,11 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
-def _filter_chapter_files(chapter_files: list[Path], args: argparse.Namespace) -> list[Path]:
+def _filter_chapter_files(
+    chapter_files: list[Path],
+    args: argparse.Namespace,
+    forced_verse_set: frozenset[str] | None = None,
+) -> list[Path]:
     """Filter chapter files by the active range arg."""
     verse = getattr(args, "verse", None)
     verse_range = getattr(args, "verse_range", None)
@@ -128,7 +138,7 @@ def _filter_chapter_files(chapter_files: list[Path], args: argparse.Namespace) -
     chapter = getattr(args, "chapter", None)
     chapter_range = getattr(args, "chapter_range", None)
 
-    if not any([verse, verse_range, book, book_range, chapter, chapter_range]):
+    if not any([verse, verse_range, forced_verse_set, book, book_range, chapter, chapter_range]):
         return chapter_files
 
     result = []
@@ -142,6 +152,9 @@ def _filter_chapter_files(chapter_files: list[Path], args: argparse.Namespace) -
             start_cid = str(verse_range[0]).zfill(8)[:5]
             end_cid = str(verse_range[1]).zfill(8)[:5]
             if start_cid <= cid <= end_cid:
+                result.append(f)
+        elif forced_verse_set:
+            if any(vid[:5] == cid for vid in forced_verse_set):
                 result.append(f)
         elif book:
             if cid[:2] == str(book).zfill(2):
@@ -172,9 +185,23 @@ def main() -> None:
         print(f"  Provider:        {args.llm_provider} / {args.llm_model}{effort_str}")
         print(f"  Mode:            {args.batch_mode}")
 
+    # Build forced-verse set from --verse-list or --verse-list-file
+    forced_verse_set: frozenset[str] | None = None
+    verse_list_arg: str | None = getattr(args, "verse_list", None)
+    verse_list_file: Path | None = getattr(args, "verse_list_file", None)
+    if verse_list_arg:
+        forced_verse_set = frozenset(v.strip() for v in verse_list_arg.split(",") if v.strip())
+        print(f"  Force-retry list: {len(forced_verse_set)} verse(s) (--verse-list)")
+    elif verse_list_file:
+        lines = verse_list_file.read_text().splitlines()
+        forced_verse_set = frozenset(
+            ln.strip() for ln in lines if ln.strip() and not ln.strip().startswith("#")
+        )
+        print(f"  Force-retry list: {len(forced_verse_set)} verse(s) from {verse_list_file}")
+
     # Discover and filter chapter files
     chapter_files = discover_chapter_files(args.alignment_dir)
-    chapter_files = _filter_chapter_files(chapter_files, args)
+    chapter_files = _filter_chapter_files(chapter_files, args, forced_verse_set)
     if not chapter_files:
         raise SystemExit("No chapter JSON files found in --alignment-dir.")
     print(f"  Evaluating {len(chapter_files)} chapter file(s) ...")
@@ -194,6 +221,8 @@ def main() -> None:
             return vid == forced_verse
         if forced_verse_range:
             return forced_verse_range[0] <= vid <= forced_verse_range[1]
+        if forced_verse_set:
+            return vid in forced_verse_set
         return False
 
     # Score each chapter file and collect verses that need retry

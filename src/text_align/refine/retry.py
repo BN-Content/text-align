@@ -182,7 +182,7 @@ def build_retry_chapter_batches(
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]
             testament = "nt" if corpus_id == "SBLGNT" else "ot"
-            phenomena = detect_phenomena(all_src, testament=testament)
+            phenomena = detect_phenomena(all_src)
             system_msg = build_system_prompt(phenomena, target_language, testament=testament)
             user_msg, _batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
 

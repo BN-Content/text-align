@@ -589,7 +589,7 @@ class LLMClient:
             if self.temperature is not None:
                 _oa_kwargs["temperature"] = self.temperature
             if self.max_output_tokens is not None:
-                _oa_kwargs["max_tokens"] = self.max_output_tokens
+                _oa_kwargs["max_completion_tokens"] = self.max_output_tokens
             try:
                 response = _api_call_with_backoff(
                     lambda: self._client.chat.completions.create(**_oa_kwargs),

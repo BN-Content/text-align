@@ -34,6 +34,7 @@ _TSV_FIELDS = [
     "signal_5",
     "needs_retry",
     "structural_errors",
+    "article_neq",
 ]
 
 
@@ -169,6 +170,7 @@ def main() -> None:
                 "signal_5":          f"{vs.signal_5:.4f}",
                 "needs_retry":       str(vs.needs_retry),
                 "structural_errors": vs.structural_errors,
+                "article_neq":       vs.article_neq_count,
             })
     finally:
         if args.output:

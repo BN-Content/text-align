@@ -351,7 +351,7 @@ def submit_openai(
             if temperature is not None:
                 body["temperature"] = temperature
             if max_output_tokens is not None:
-                body["max_tokens"] = max_output_tokens
+                body["max_completion_tokens"] = max_output_tokens
         lines.append(json.dumps({
             "custom_id": str(idx),
             "method": "POST",

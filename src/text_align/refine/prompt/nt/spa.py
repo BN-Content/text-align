@@ -171,6 +171,13 @@ correspondent?**
 **YES → give it a primary 1:1 record for that word (see branch A below).**
 **NO  → it is secondary to its head word. Never NEQ. Never omitted. Always secondary.**
 
+**A Greek article is NEVER NEQ.** If the translation has no definite or indefinite article, 
+or no available or appropriate possessive pronoun or reinstantiation 
+of a proper name, or no substantive participle rendered with "los que"/"el que",
+then the article is secondary to its head word. In this case, the article does not 
+get its own record; it is always secondary to the noun, adjective, participle, 
+or proper name it modifies.
+
 **Critical prohibition: a Greek article NEVER corresponds to a preposition.**
 Spanish prepositions ("de", "en", "a", "por") that arise from a noun's case are
 secondary to that noun — not to the article. The article is either a Spanish article

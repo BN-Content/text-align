@@ -135,6 +135,13 @@ Greek has a definite article (ὁ/ἡ/τό); English has both definite ("the") a
 **YES → give it a primary 1:1 record for that word (see branch A below).**
 **NO  → it is secondary to its head word. Never NEQ. Never omitted. Always secondary.**
 
+**A Greek article is NEVER NEQ.** If the translation has no "the", 
+or no available or appropriate possessive pronoun or reinstantiation 
+of a proper name, or no substantive participle rendered as "the one"/"those who", 
+then the article is secondary to its head word. In this case, the article does not 
+get its own record; it is always secondary to the noun, adjective, participle, 
+or proper name it modifies.
+
 **Critical prohibition: a Greek article NEVER corresponds to a preposition.**
 English prepositions ("of", "to", "for", "with", "from", "in", "among", etc.) that
 arise from a noun's or participle's case are secondary to that noun or participle —

@@ -64,6 +64,36 @@ def load_job_metadata(path: Path) -> dict:
         return json.load(f)
 
 
+def _process_function_call_data(
+    data: dict,
+    chapter_id: str,
+    chapter_results: dict[str, dict[str, list[dict]]],
+    verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
+    verse_source_ids: dict[str, set[str]],
+    verse_target_ids: dict[str, set[str]],
+    all_errors: list[str],
+    all_san: list[str],
+) -> None:
+    """Process one function-call data dict: map tokens, validate, accumulate results."""
+    block_errors: list[str] = []
+    for verse_id, records in _iter_verse_entries(data, block_errors):
+        if verse_token_maps:
+            src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+            records, map_errors = reverse_map_records(records, src_map, tgt_map)
+            all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
+        valid, errs, san = validate_records(
+            records,
+            verse_source_ids.get(verse_id, set()),
+            verse_target_ids.get(verse_id, set()),
+        )
+        all_san.extend(f"VERSE {verse_id}: {d}" for d in san)
+        if valid:
+            chapter_results.setdefault(chapter_id, {})[verse_id] = valid
+        if errs:
+            all_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+    all_errors.extend(block_errors)
+
+
 # ---------------------------------------------------------------------------
 # Google (Gemini) batch API
 # ---------------------------------------------------------------------------
@@ -269,24 +299,11 @@ def retrieve_google(
                     f"could not read function call args: {exc}"
                 )
                 continue
-
-            fc_errors: list[str] = []
-            for verse_id, records in _iter_verse_entries(data, fc_errors):
-                if verse_token_maps:
-                    src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                    records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                valid, errs, san = validate_records(
-                    records,
-                    verse_source_ids.get(verse_id, set()),
-                    verse_target_ids.get(verse_id, set()),
-                )
-                all_san.extend(f"VERSE {verse_id}: {d}" for d in san)
-                if valid:
-                    chapter_results.setdefault(chapter_id, {})[verse_id] = valid
-                if errs:
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-            all_errors.extend(fc_errors)
+            _process_function_call_data(
+                data, chapter_id, chapter_results,
+                verse_token_maps, verse_source_ids, verse_target_ids,
+                all_errors, all_san,
+            )
 
     return chapter_results, all_errors, all_san
 
@@ -529,23 +546,11 @@ def retrieve_openai(
                     )
 
         for data in function_args_list:
-            fc_errors: list[str] = []
-            for verse_id, records in _iter_verse_entries(data, fc_errors):
-                if verse_token_maps:
-                    src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                    records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                valid, errs, san = validate_records(
-                    records,
-                    verse_source_ids.get(verse_id, set()),
-                    verse_target_ids.get(verse_id, set()),
-                )
-                all_san.extend(f"VERSE {verse_id}: {d}" for d in san)
-                if valid:
-                    chapter_results.setdefault(chapter_id, {})[verse_id] = valid
-                if errs:
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-            all_errors.extend(fc_errors)
+            _process_function_call_data(
+                data, chapter_id, chapter_results,
+                verse_token_maps, verse_source_ids, verse_target_ids,
+                all_errors, all_san,
+            )
 
     return chapter_results, all_errors, all_san
 
@@ -678,23 +683,11 @@ def retrieve_anthropic(
         tool_use_blocks = [b for b in message.content if b.type == "tool_use"]
 
         for block in tool_use_blocks:
-            block_errors: list[str] = []
-            for verse_id, records in _iter_verse_entries(block.input, block_errors):
-                if verse_token_maps:
-                    src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                    records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                valid, errs, san = validate_records(
-                    records,
-                    verse_source_ids.get(verse_id, set()),
-                    verse_target_ids.get(verse_id, set()),
-                )
-                all_san.extend(f"VERSE {verse_id}: {d}" for d in san)
-                if valid:
-                    chapter_results.setdefault(chapter_id, {})[verse_id] = valid
-                if errs:
-                    all_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-            all_errors.extend(block_errors)
+            _process_function_call_data(
+                block.input, chapter_id, chapter_results,
+                verse_token_maps, verse_source_ids, verse_target_ids,
+                all_errors, all_san,
+            )
 
     return chapter_results, all_errors, all_san
 

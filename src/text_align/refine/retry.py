@@ -15,6 +15,7 @@ from .coverage import VerseRetrySpec
 from .llm import LLMClient
 from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
 from .refine import build_output_alignment
+from .util import _chapter_id_from_path
 
 
 _CHAPTER_GLOB = "*-*-??-???-manual.json"
@@ -221,8 +222,7 @@ def _filter_chapter_files(
 
     result = []
     for f in chapter_files:
-        parts = f.stem.split("-")
-        cid = parts[-3] + parts[-2]  # BBCCC
+        cid = _chapter_id_from_path(f)
         if verse:
             if cid == str(verse).zfill(8)[:5]:
                 result.append(f)

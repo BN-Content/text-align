@@ -26,6 +26,7 @@ from .retry import (
 )
 from .scoring import ScoringConfig, score_chapter_file
 from .source import load_source_verses
+from .util import _chapter_id_from_path
 
 
 _SOURCES_DIR = ROOT / "data" / "sources"
@@ -186,8 +187,7 @@ def main() -> None:
     chapter_paths: dict[str, Path] = {}
 
     for cf in chapter_files:
-        parts = cf.stem.split("-")
-        chapter_id = parts[-3] + parts[-2]
+        chapter_id = _chapter_id_from_path(cf)
         verse_scores = score_chapter_file(
             cf, source_verses, args.target_language, scoring_config
         )

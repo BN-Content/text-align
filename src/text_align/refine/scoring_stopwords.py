@@ -8,6 +8,8 @@ rather than hide them by over-suppressing content words.
 
 from __future__ import annotations
 
+import functools
+
 # Curated cores: words that are unambiguously function words in every context.
 # Words like "say", "go", "come", "make" are intentionally excluded even
 # though they appear in some stopword packages.
@@ -70,9 +72,7 @@ _ISO3_TO_ISO1: dict[str, str] = {
     "swa": "sw",
 }
 
-_cache: dict[str, frozenset[str]] = {}
-
-
+@functools.lru_cache(maxsize=None)
 def stopwords_for_lang(lang_iso3: str) -> frozenset[str]:
     """Return a minimal stopword frozenset for the given ISO 639-3 code.
 
@@ -80,9 +80,6 @@ def stopwords_for_lang(lang_iso3: str) -> frozenset[str]:
     appear in both are kept. Languages with no curated core or no package
     coverage return an empty frozenset.
     """
-    if lang_iso3 in _cache:
-        return _cache[lang_iso3]
-
     core = _CORE.get(lang_iso3, frozenset())
     iso1 = _ISO3_TO_ISO1.get(lang_iso3)
 
@@ -90,11 +87,7 @@ def stopwords_for_lang(lang_iso3: str) -> frozenset[str]:
         try:
             from stopwordsiso import stopwords as _sw
             pkg = frozenset(w.lower() for w in _sw(iso1))
-            result = core & pkg
+            return core & pkg
         except Exception:
-            result = core
-    else:
-        result = frozenset()
-
-    _cache[lang_iso3] = result
-    return result
+            return core
+    return frozenset()

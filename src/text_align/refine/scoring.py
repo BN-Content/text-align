@@ -22,6 +22,7 @@ from text_align.burrito.source import Source
 from text_align.migrate.alignment_io import load_alignment_json
 
 from .scoring_stopwords import stopwords_for_lang
+from .util import _chapter_id_from_path
 
 
 # ---------------------------------------------------------------------------
@@ -344,9 +345,3 @@ def score_chapter_file(
         verse_scores.append(vs)
 
     return score_chapter(verse_scores, config)
-
-
-def _chapter_id_from_path(path: Path) -> str:
-    """Extract BBCCC chapter ID from a filename like SBLGNT-OENGB-66-007-manual.json."""
-    parts = path.stem.split("-")
-    return parts[-3] + parts[-2]

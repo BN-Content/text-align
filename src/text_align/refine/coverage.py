@@ -11,6 +11,8 @@ from pathlib import Path
 
 from text_align.migrate.alignment_io import load_alignment_json
 
+from .util import _chapter_id_from_path
+
 
 @dataclass
 class CoverageStats:
@@ -30,16 +32,6 @@ class VerseRetrySpec:
     chapter_id: str  # BBCCC
     uncovered_src_ids: list[str]
     uncovered_count: int
-
-
-def _chapter_id_from_path(path: Path) -> str:
-    """Extract BBCCC chapter ID from a filename like SBLGNT-OENGB-66-007-manual.json.
-
-    Parses from the end so edition names containing hyphens are handled correctly.
-    """
-    parts = path.stem.split("-")
-    # Format: {corpus_id}-{edition}-{BB}-{CCC}-manual
-    return parts[-3] + parts[-2]
 
 
 def find_low_coverage_verses(

@@ -76,6 +76,42 @@ def _write_chapter_results(
 
     return total_records
 
+def _build_verse_id_sets(
+    requests_meta: list[dict],
+    source_verses: dict,
+    target_verses: dict,
+) -> tuple[
+    dict[str, set[str]],
+    dict[str, set[str]],
+    dict[str, tuple[dict[int, str], dict[int, str]]],
+]:
+    """Build verse_source_ids, verse_target_ids, and verse_token_maps from job requests."""
+    all_verse_ids: set[str] = set()
+    for req in requests_meta:
+        all_verse_ids.update(req["verse_ids"])
+
+    verse_source_ids = {
+        vid: {t.id for t in source_verses.get(vid, [])}
+        for vid in all_verse_ids
+    }
+    verse_target_ids = {
+        vid: {t.id for t in (
+            list(target_verses[vid].words.values()) if vid in target_verses else []
+        )}
+        for vid in all_verse_ids
+    }
+    verse_token_maps = {
+        vid: (
+            {i + 1: t.id for i, t in enumerate(source_verses.get(vid, []))},
+            {i + 1: t.id for i, t in enumerate(
+                list(target_verses[vid].words.values()) if vid in target_verses else []
+            )},
+        )
+        for vid in all_verse_ids
+    }
+    return verse_source_ids, verse_target_ids, verse_token_maps
+
+
 _GOOGLE_SUCCEEDED = "JOB_STATE_SUCCEEDED"
 _GOOGLE_FAILED = "JOB_STATE_FAILED"
 _GOOGLE_CANCELLED = "JOB_STATE_CANCELLED"
@@ -166,32 +202,9 @@ def _fetch_google(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
     print(f"  Loading target tokens ({target_edition}) ...")
     target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
 
-    # Build verse ID sets for every verse covered by the job
-    all_verse_ids: set[str] = set()
-    for req in job_meta["requests"]:
-        all_verse_ids.update(req["verse_ids"])
-
-    verse_source_ids = {
-        vid: {t.id for t in source_verses.get(vid, [])}
-        for vid in all_verse_ids
-    }
-    verse_target_ids = {
-        vid: {t.id for t in (
-            list(target_verses[vid].words.values()) if vid in target_verses else []
-        )}
-        for vid in all_verse_ids
-    }
-
-    # Rebuild per-verse token maps (same sequential ordering as at submission time)
-    verse_token_maps = {
-        vid: (
-            {i + 1: t.id for i, t in enumerate(source_verses.get(vid, []))},
-            {i + 1: t.id for i, t in enumerate(
-                list(target_verses[vid].words.values()) if vid in target_verses else []
-            )},
-        )
-        for vid in all_verse_ids
-    }
+    verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
+        job_meta["requests"], source_verses, target_verses
+    )
 
     chapter_results, errors, san_details = retrieve_google(
         genai_client=client,
@@ -275,29 +288,9 @@ def _fetch_openai(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
     print(f"  Loading target tokens ({target_edition}) ...")
     target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
 
-    all_verse_ids: set[str] = set()
-    for req in job_meta["requests"]:
-        all_verse_ids.update(req["verse_ids"])
-
-    verse_source_ids = {
-        vid: {t.id for t in source_verses.get(vid, [])}
-        for vid in all_verse_ids
-    }
-    verse_target_ids = {
-        vid: {t.id for t in (
-            list(target_verses[vid].words.values()) if vid in target_verses else []
-        )}
-        for vid in all_verse_ids
-    }
-    verse_token_maps = {
-        vid: (
-            {i + 1: t.id for i, t in enumerate(source_verses.get(vid, []))},
-            {i + 1: t.id for i, t in enumerate(
-                list(target_verses[vid].words.values()) if vid in target_verses else []
-            )},
-        )
-        for vid in all_verse_ids
-    }
+    verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
+        job_meta["requests"], source_verses, target_verses
+    )
 
     chapter_results, errors, san_details = retrieve_openai(
         openai_client=client,
@@ -379,29 +372,9 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
     print(f"  Loading target tokens ({target_edition}) ...")
     target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
 
-    all_verse_ids: set[str] = set()
-    for req in job_meta["requests"]:
-        all_verse_ids.update(req["verse_ids"])
-
-    verse_source_ids = {
-        vid: {t.id for t in source_verses.get(vid, [])}
-        for vid in all_verse_ids
-    }
-    verse_target_ids = {
-        vid: {t.id for t in (
-            list(target_verses[vid].words.values()) if vid in target_verses else []
-        )}
-        for vid in all_verse_ids
-    }
-    verse_token_maps = {
-        vid: (
-            {i + 1: t.id for i, t in enumerate(source_verses.get(vid, []))},
-            {i + 1: t.id for i, t in enumerate(
-                list(target_verses[vid].words.values()) if vid in target_verses else []
-            )},
-        )
-        for vid in all_verse_ids
-    }
+    verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
+        job_meta["requests"], source_verses, target_verses
+    )
 
     chapter_results, errors, san_details = retrieve_anthropic(
         anthropic_client=client,

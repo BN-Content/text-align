@@ -396,6 +396,41 @@ def _api_call_with_backoff(fn, max_retries: int, provider: str):
 # Retry message builder
 # ---------------------------------------------------------------------------
 
+def _process_tool_call_data(
+    data: dict,
+    results: dict[str, list[dict]],
+    verse_errors: dict[str, list[str]],
+    all_errors: list[str],
+    all_san_details: list[str],
+    verse_source_ids: dict[str, set[str]],
+    verse_target_ids: dict[str, set[str]],
+    verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
+) -> list[str]:
+    """Validate records from one tool-call data dict and update result accumulators.
+
+    Returns per-call error strings (used to construct the tool response feedback).
+    Mutates results, verse_errors, all_errors, and all_san_details in place.
+    """
+    call_errors: list[str] = []
+    for verse_id, records in _iter_verse_entries(data, all_errors):
+        if verse_token_maps:
+            src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
+            records, map_errors = reverse_map_records(records, src_map, tgt_map)
+            all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
+        valid, errs, san_details = validate_records(
+            records,
+            verse_source_ids.get(verse_id, set()),
+            verse_target_ids.get(verse_id, set()),
+        )
+        all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
+        if valid:
+            results[verse_id] = valid
+        if errs:
+            verse_errors[verse_id] = errs
+            call_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
+    return call_errors
+
+
 def _build_retry_message(verse_errors: dict[str, list[str]]) -> str:
     lines = [
         "The following verses had validation errors in your previous response.",
@@ -641,24 +676,10 @@ class LLMClient:
                     })
                     continue
 
-                tc_errors: list[str] = []
-                for verse_id, records in _iter_verse_entries(data, all_errors):
-                    if verse_token_maps:
-                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                    valid, errs, san_details = validate_records(
-                        records,
-                        verse_source_ids.get(verse_id, set()),
-                        verse_target_ids.get(verse_id, set()),
-                    )
-                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                    if valid:
-                        results[verse_id] = valid
-                    if errs:
-                        verse_errors[verse_id] = errs
-                        tc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-
+                tc_errors = _process_tool_call_data(
+                    data, results, verse_errors, all_errors, all_san_details,
+                    verse_source_ids, verse_target_ids, verse_token_maps,
+                )
                 tool_results.append({
                     "role": "tool",
                     "tool_call_id": tc.id,
@@ -765,24 +786,10 @@ class LLMClient:
                     })
                     continue
 
-                tc_errors: list[str] = []
-                for verse_id, records in _iter_verse_entries(data, all_errors):
-                    if verse_token_maps:
-                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                    valid, errs, san_details = validate_records(
-                        records,
-                        verse_source_ids.get(verse_id, set()),
-                        verse_target_ids.get(verse_id, set()),
-                    )
-                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                    if valid:
-                        results[verse_id] = valid
-                    if errs:
-                        verse_errors[verse_id] = errs
-                        tc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-
+                tc_errors = _process_tool_call_data(
+                    data, results, verse_errors, all_errors, all_san_details,
+                    verse_source_ids, verse_target_ids, verse_token_maps,
+                )
                 tool_results.append({
                     "type": "function_call_output",
                     "call_id": tc.call_id,
@@ -831,7 +838,7 @@ class LLMClient:
             def _do_anthropic():
                 with self._client.messages.stream(
                     model=self.model,
-                    max_tokens=self.ANTHROPIC_MAX_TOKENS,
+                    max_tokens=self.max_output_tokens,
                     system=system_prompt,
                     messages=messages,
                     tools=tool_schema,
@@ -853,24 +860,10 @@ class LLMClient:
             tool_results: list[dict] = []
 
             for block in tool_use_blocks:
-                block_errors: list[str] = []
-                for verse_id, records in _iter_verse_entries(block.input, all_errors):
-                    if verse_token_maps:
-                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                    valid, errs, san_details = validate_records(
-                        records,
-                        verse_source_ids.get(verse_id, set()),
-                        verse_target_ids.get(verse_id, set()),
-                    )
-                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                    if valid:
-                        results[verse_id] = valid
-                    if errs:
-                        verse_errors[verse_id] = errs
-                        block_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-
+                block_errors = _process_tool_call_data(
+                    block.input, results, verse_errors, all_errors, all_san_details,
+                    verse_source_ids, verse_target_ids, verse_token_maps,
+                )
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": block.id,
@@ -983,24 +976,10 @@ class LLMClient:
                     ))
                     continue
 
-                fc_errors: list[str] = []
-                for verse_id, records in _iter_verse_entries(data, all_errors):
-                    if verse_token_maps:
-                        src_map, tgt_map = verse_token_maps.get(verse_id, ({}, {}))
-                        records, map_errors = reverse_map_records(records, src_map, tgt_map)
-                        all_errors.extend(f"VERSE {verse_id}: {e}" for e in map_errors)
-                    valid, errs, san_details = validate_records(
-                        records,
-                        verse_source_ids.get(verse_id, set()),
-                        verse_target_ids.get(verse_id, set()),
-                    )
-                    all_san_details.extend(f"VERSE {verse_id}: {d}" for d in san_details)
-                    if valid:
-                        results[verse_id] = valid
-                    if errs:
-                        verse_errors[verse_id] = errs
-                        fc_errors.extend(f"VERSE {verse_id}: {e}" for e in errs)
-
+                fc_errors = _process_tool_call_data(
+                    data, results, verse_errors, all_errors, all_san_details,
+                    verse_source_ids, verse_target_ids, verse_token_maps,
+                )
                 response_parts.append(types.Part(
                     function_response=types.FunctionResponse(
                         name=fc.name,

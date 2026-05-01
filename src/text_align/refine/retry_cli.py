@@ -26,7 +26,7 @@ from .retry import (
 )
 from .scoring import ScoringConfig, score_chapter_file
 from .source import load_source_verses
-from .util import _chapter_id_from_path
+from .util import _CORPUS_ID, _chapter_id_from_path
 
 
 _SOURCES_DIR = ROOT / "data" / "sources"
@@ -132,7 +132,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    corpus_id = "SBLGNT" if args.corpus == "nt" else "WLCM"
+    corpus_id = _CORPUS_ID[args.corpus]
     effort_str = f" (reasoning_effort={args.reasoning_effort})" if args.reasoning_effort else ""
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")

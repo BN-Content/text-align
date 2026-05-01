@@ -125,13 +125,19 @@ def _build_verse_id_sets(
     return verse_source_ids, verse_target_ids, verse_token_maps
 
 
+def _format_progress(status: str, done: int, total: int, bad: int, bad_label: str) -> str:
+    """Format a batch progress string: 'status  done/total[, N bad_label]'."""
+    if total:
+        suffix = f", {bad} {bad_label}" if bad else ""
+        return f"{status}  {done}/{total}{suffix}"
+    return status
+
+
 def _openai_progress(batch) -> str:
     rc = getattr(batch, "request_counts", None)
     if rc and getattr(rc, "total", 0):
         done = getattr(rc, "completed", 0) + getattr(rc, "failed", 0)
-        failed = getattr(rc, "failed", 0)
-        suffix = f", {failed} failed" if failed else ""
-        return f"{batch.status}  {done}/{rc.total}{suffix}"
+        return _format_progress(batch.status, done, rc.total, getattr(rc, "failed", 0), "failed")
     return batch.status
 
 
@@ -145,9 +151,7 @@ def _anthropic_progress(batch) -> str:
         processing = getattr(rc, "processing", 0)
         total = succeeded + errored + expired + canceled + processing
         done = succeeded + errored + expired + canceled
-        if total:
-            suffix = f", {errored} errored" if errored else ""
-            return f"{batch.processing_status}  {done}/{total}{suffix}"
+        return _format_progress(batch.processing_status, done, total, errored, "errored")
     return batch.processing_status
 
 

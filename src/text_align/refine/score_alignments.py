@@ -20,6 +20,7 @@ from text_align.config import load_config_from_args, require
 from .retry import _filter_chapter_files, discover_chapter_files
 from .scoring import ScoringConfig, VerseScore, score_chapter_file
 from .source import load_source_verses
+from .util import _CORPUS_ID
 
 
 _SOURCES_DIR = ROOT / "data" / "sources"
@@ -83,7 +84,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    corpus_id = "SBLGNT" if args.corpus == "nt" else "WLCM"
+    corpus_id = _CORPUS_ID[args.corpus]
 
     chapter_files = discover_chapter_files(args.alignment_dir)
     chapter_files = _filter_chapter_files(chapter_files, args)

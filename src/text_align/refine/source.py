@@ -6,6 +6,8 @@ from biblelib.word import BCVWPID
 
 from text_align.burrito.source import Source, SourceReader
 
+from .util import _CORPUS_ID
+
 
 def load_source_verses(sources_dir: Path | str, corpus: str) -> dict[str, list[Source]]:
     """Load a source TSV and return a dict of BCV ID → ordered list of Source tokens.
@@ -18,7 +20,7 @@ def load_source_verses(sources_dir: Path | str, corpus: str) -> dict[str, list[S
         corpus: ``"nt"`` for SBLGNT, ``"ot"`` for WLCM.
     """
     sources_dir = Path(sources_dir)
-    filename = "SBLGNT.tsv" if corpus == "nt" else "WLCM.tsv"
+    filename = f"{_CORPUS_ID[corpus]}.tsv"
     reader = SourceReader(sources_dir / filename)
 
     verses: dict[str, list[Source]] = {}

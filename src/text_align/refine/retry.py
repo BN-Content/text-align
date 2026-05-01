@@ -15,7 +15,7 @@ from .coverage import VerseRetrySpec
 from .llm import LLMClient
 from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
 from .refine import build_output_alignment
-from .util import _chapter_id_from_path
+from .util import _chapter_id_from_path, _CORPUS_TESTAMENT
 
 
 _CHAPTER_GLOB = "*-*-??-???-manual.json"
@@ -183,7 +183,7 @@ def build_retry_chapter_batches(
                 verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]
-            testament = "nt" if corpus_id == "SBLGNT" else "ot"
+            testament = _CORPUS_TESTAMENT.get(corpus_id, "nt")
             phenomena = detect_phenomena(all_src)
             system_msg = build_system_prompt(phenomena, target_language, testament=testament)
             user_msg, _batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)

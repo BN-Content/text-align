@@ -25,6 +25,7 @@ from text_align.migrate.tsv import process_usfm_tsv
 from .llm import LLMClient
 from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
 from .source import load_source_verses
+from .util import _CORPUS_ID
 
 
 ALIGNMENT_SOURCE_TYPES = ["ACAI", "SIM-MIGRATED", "DIFF-MIGRATED", "MERGED", "FASTALIGN", "REVISED"]
@@ -258,7 +259,7 @@ def process_corpus(
     jobs_dir: Path = _JOBS_DIR,
 ) -> None:
     """Process one corpus (``"nt"`` or ``"ot"``) and write chapter-based output JSON files."""
-    corpus_id = "SBLGNT" if corpus == "nt" else "WLCM"
+    corpus_id = _CORPUS_ID[corpus]
     print(f"\n--- {corpus.upper()} ({corpus_id}) ---")
 
     print(f"Loading source tokens ({corpus_id}) ...")

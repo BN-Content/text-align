@@ -249,5 +249,3 @@ def _filter_chapter_files(
             if start <= cid <= end:
                 result.append(f)
     return result
-
-    return chapter_batches

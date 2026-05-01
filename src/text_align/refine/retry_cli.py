@@ -10,7 +10,6 @@ CLI entry point: retry-alignment
 from __future__ import annotations
 
 import argparse
-import os
 from pathlib import Path
 
 from text_align import ROOT
@@ -19,7 +18,12 @@ from text_align.migrate.tsv import process_usfm_tsv
 
 from .coverage import VerseRetrySpec, find_low_coverage_verses
 from .llm import LLMClient
-from .retry import build_retry_chapter_batches, discover_chapter_files, retry_chapter_sync
+from .retry import (
+    _filter_chapter_files,
+    build_retry_chapter_batches,
+    discover_chapter_files,
+    retry_chapter_sync,
+)
 from .scoring import ScoringConfig, score_chapter_file
 from .source import load_source_verses
 
@@ -123,54 +127,6 @@ def parse_args() -> argparse.Namespace:
         )
 
     return args
-
-
-def _filter_chapter_files(
-    chapter_files: list[Path],
-    args: argparse.Namespace,
-    forced_verse_set: frozenset[str] | None = None,
-) -> list[Path]:
-    """Filter chapter files by the active range arg."""
-    verse = getattr(args, "verse", None)
-    verse_range = getattr(args, "verse_range", None)
-    book = getattr(args, "book", None)
-    book_range = getattr(args, "book_range", None)
-    chapter = getattr(args, "chapter", None)
-    chapter_range = getattr(args, "chapter_range", None)
-
-    if not any([verse, verse_range, forced_verse_set, book, book_range, chapter, chapter_range]):
-        return chapter_files
-
-    result = []
-    for f in chapter_files:
-        parts = f.stem.split("-")
-        cid = parts[-3] + parts[-2]  # BBCCC
-        if verse:
-            if cid == str(verse).zfill(8)[:5]:
-                result.append(f)
-        elif verse_range:
-            start_cid = str(verse_range[0]).zfill(8)[:5]
-            end_cid = str(verse_range[1]).zfill(8)[:5]
-            if start_cid <= cid <= end_cid:
-                result.append(f)
-        elif forced_verse_set:
-            if any(vid[:5] == cid for vid in forced_verse_set):
-                result.append(f)
-        elif book:
-            if cid[:2] == str(book).zfill(2):
-                result.append(f)
-        elif book_range:
-            start, end = str(book_range[0]).zfill(2), str(book_range[1]).zfill(2)
-            if start <= cid[:2] <= end:
-                result.append(f)
-        elif chapter:
-            if cid == str(chapter).zfill(5):
-                result.append(f)
-        elif chapter_range:
-            start, end = str(chapter_range[0]).zfill(5), str(chapter_range[1]).zfill(5)
-            if start <= cid <= end:
-                result.append(f)
-    return result
 
 
 def main() -> None:
@@ -356,12 +312,7 @@ def _run_async(
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]],
     llm_client: LLMClient,
 ) -> None:
-    if args.llm_provider not in ("google", "openai", "anthropic"):
-        raise SystemExit(
-            f"Async batch mode is not supported for provider {args.llm_provider!r}. "
-            f"Use --batch-mode sync, or switch to google/openai/anthropic for async."
-        )
-    from .async_batch import submit_anthropic, submit_google, submit_openai
+    from .async_batch import submit_batch_job
 
     chapter_batches = build_retry_chapter_batches(
         retry_specs_by_chapter=retry_specs_by_chapter,
@@ -386,45 +337,16 @@ def _run_async(
         "target_tsv_dir": str(args.target_tsv_dir),
     }
 
-    if args.llm_provider == "google":
-        from google import genai as _genai
-        genai_client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        job_id, meta_path = submit_google(
-            genai_client=genai_client,
-            model=args.llm_model,
-            reasoning_effort=args.reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=args.jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
-    elif args.llm_provider == "openai":
-        import openai as _openai
-        openai_client = _openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        job_id, meta_path = submit_openai(
-            openai_client=openai_client,
-            model=args.llm_model,
-            reasoning_effort=args.reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=args.jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
-    else:
-        import anthropic as _anthropic
-        anthropic_client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        job_id, meta_path = submit_anthropic(
-            anthropic_client=anthropic_client,
-            model=args.llm_model,
-            reasoning_effort=args.reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=args.jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
+    job_id, meta_path = submit_batch_job(
+        provider=args.llm_provider,
+        model=args.llm_model,
+        reasoning_effort=args.reasoning_effort,
+        chapter_batches=chapter_batches,
+        jobs_dir=args.jobs_dir,
+        job_metadata_base=job_metadata_base,
+        temperature=llm_client.temperature,
+        max_output_tokens=llm_client.max_output_tokens,
+    )
 
     print(f"  Submitted: {job_id}")
     print(f"  Job metadata: {meta_path}")

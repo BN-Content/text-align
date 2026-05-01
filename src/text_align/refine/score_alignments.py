@@ -17,7 +17,7 @@ from pathlib import Path
 from text_align import ROOT
 from text_align.config import load_config_from_args, require
 
-from .retry import discover_chapter_files
+from .retry import _filter_chapter_files, discover_chapter_files
 from .scoring import ScoringConfig, VerseScore, score_chapter_file
 from .source import load_source_verses
 
@@ -79,36 +79,6 @@ def parse_args() -> argparse.Namespace:
     args = p.parse_args()
     require(args, "alignment_dir", "target_language", "corpus")
     return args
-
-
-def _filter_chapter_files(chapter_files: list[Path], args: argparse.Namespace) -> list[Path]:
-    book = getattr(args, "book", None)
-    book_range = getattr(args, "book_range", None)
-    chapter = getattr(args, "chapter", None)
-    chapter_range = getattr(args, "chapter_range", None)
-
-    if not any([book, book_range, chapter, chapter_range]):
-        return chapter_files
-
-    result = []
-    for f in chapter_files:
-        parts = f.stem.split("-")
-        cid = parts[-3] + parts[-2]
-        if book:
-            if cid[:2] == str(book).zfill(2):
-                result.append(f)
-        elif book_range:
-            start, end = str(book_range[0]).zfill(2), str(book_range[1]).zfill(2)
-            if start <= cid[:2] <= end:
-                result.append(f)
-        elif chapter:
-            if cid == str(chapter).zfill(5):
-                result.append(f)
-        elif chapter_range:
-            start, end = str(chapter_range[0]).zfill(5), str(chapter_range[1]).zfill(5)
-            if start <= cid <= end:
-                result.append(f)
-    return result
 
 
 def main() -> None:

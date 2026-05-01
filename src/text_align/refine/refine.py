@@ -252,9 +252,6 @@ def process_corpus(
     batch_size: int,
     max_retries: int,
     creator: str,
-    llm_provider: str | None = None,
-    llm_model: str | None = None,
-    reasoning_effort: str | None = None,
     args: argparse.Namespace | None = None,
     from_scratch: bool = False,
     batch_mode: str = "sync",
@@ -329,9 +326,6 @@ def process_corpus(
             llm_client=llm_client,
             batch_size=batch_size,
             creator=creator,
-            llm_provider=llm_provider or llm_client.provider,
-            llm_model=llm_model or llm_client.model,
-            reasoning_effort=reasoning_effort,
             jobs_dir=jobs_dir,
         )
     else:
@@ -348,9 +342,6 @@ def process_corpus(
             batch_size=batch_size,
             max_retries=max_retries,
             creator=creator,
-            llm_provider=llm_provider,
-            llm_model=llm_model,
-            reasoning_effort=reasoning_effort,
         )
 
 
@@ -367,9 +358,6 @@ def _process_corpus_sync(
     batch_size: int,
     max_retries: int,
     creator: str,
-    llm_provider: str | None,
-    llm_model: str | None,
-    reasoning_effort: str | None,
 ) -> None:
     """Synchronous path: call LLM per batch, write one file per chapter."""
     all_san_details_total: list[str] = []
@@ -436,7 +424,7 @@ def _process_corpus_sync(
 
         out_path = _write_chapter_file(
             chapter_id, chapter_records, corpus_id, target_edition, output_dir,
-            creator, llm_provider, llm_model, reasoning_effort,
+            creator, llm_client.provider, llm_client.model, llm_client.reasoning_effort,
         )
         n_neq = sum(1 for r in chapter_records if (r.get("meta") or {}).get("rel") == "NEQ")
         print(
@@ -485,19 +473,10 @@ def _process_corpus_async(
     llm_client: LLMClient,
     batch_size: int,
     creator: str,
-    llm_provider: str,
-    llm_model: str,
-    reasoning_effort: str | None,
     jobs_dir: Path,
 ) -> None:
     """Async path: build all request payloads and submit to provider batch API."""
-    if llm_provider not in ("google", "openai", "anthropic"):
-        raise SystemExit(
-            f"Async batch mode is not supported for provider {llm_provider!r}. "
-            f"Use --batch-mode sync, or switch to google/openai/anthropic for async."
-        )
-
-    from .async_batch import submit_anthropic, submit_google, submit_openai
+    from .async_batch import submit_batch_job
 
     chapter_batches: list[dict] = []
 
@@ -531,9 +510,7 @@ def _process_corpus_async(
                 "user_message": user_msg,
             })
 
-    print(f"  Submitting {len(chapter_batches)} request(s) to {llm_provider} batch API ...")
-
-    import os
+    print(f"  Submitting {len(chapter_batches)} request(s) to {llm_client.provider} batch API ...")
 
     job_metadata_base = {
         "target_edition": target_edition,
@@ -546,45 +523,16 @@ def _process_corpus_async(
         "target_tsv_dir": str(target_tsv_dir),
     }
 
-    if llm_provider == "google":
-        from google import genai as _genai
-        genai_client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-        job_id, meta_path = submit_google(
-            genai_client=genai_client,
-            model=llm_model,
-            reasoning_effort=reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
-    elif llm_provider == "openai":
-        import openai as _openai
-        openai_client = _openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
-        job_id, meta_path = submit_openai(
-            openai_client=openai_client,
-            model=llm_model,
-            reasoning_effort=reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
-    else:
-        import anthropic as _anthropic
-        anthropic_client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
-        job_id, meta_path = submit_anthropic(
-            anthropic_client=anthropic_client,
-            model=llm_model,
-            reasoning_effort=reasoning_effort,
-            chapter_batches=chapter_batches,
-            jobs_dir=jobs_dir,
-            job_metadata_base=job_metadata_base,
-            temperature=llm_client.temperature,
-            max_output_tokens=llm_client.max_output_tokens,
-        )
+    job_id, meta_path = submit_batch_job(
+        provider=llm_client.provider,
+        model=llm_client.model,
+        reasoning_effort=llm_client.reasoning_effort,
+        chapter_batches=chapter_batches,
+        jobs_dir=jobs_dir,
+        job_metadata_base=job_metadata_base,
+        temperature=llm_client.temperature,
+        max_output_tokens=llm_client.max_output_tokens,
+    )
 
     print(f"  Submitted: {job_id}")
     print(f"  Job metadata: {meta_path}")
@@ -746,9 +694,6 @@ def main() -> None:
             batch_size=args.batch_size,
             max_retries=args.max_retries,
             creator=args.creator,
-            llm_provider=args.llm_provider,
-            llm_model=args.llm_model,
-            reasoning_effort=args.reasoning_effort,
             args=args,
             from_scratch=args.from_scratch,
             batch_mode=args.batch_mode,

@@ -18,7 +18,20 @@ from pathlib import Path
 from text_align.migrate.alignment_io import write_alignment_json
 from text_align.migrate.tsv import process_usfm_tsv
 
-from .async_batch import load_job_metadata, retrieve_anthropic, retrieve_google, retrieve_openai
+from .async_batch import (
+    _ANTHROPIC_ENDED,
+    _GOOGLE_FAILED,
+    _GOOGLE_CANCELLED,
+    _GOOGLE_TERMINAL,
+    _OPENAI_FAILED,
+    _OPENAI_EXPIRED,
+    _OPENAI_CANCELLED,
+    _OPENAI_TERMINAL,
+    load_job_metadata,
+    retrieve_anthropic,
+    retrieve_google,
+    retrieve_openai,
+)
 from .refine import build_output_alignment
 from .source import load_source_verses
 
@@ -112,18 +125,6 @@ def _build_verse_id_sets(
     return verse_source_ids, verse_target_ids, verse_token_maps
 
 
-_GOOGLE_SUCCEEDED = "JOB_STATE_SUCCEEDED"
-_GOOGLE_FAILED = "JOB_STATE_FAILED"
-_GOOGLE_CANCELLED = "JOB_STATE_CANCELLED"
-_GOOGLE_TERMINAL = {_GOOGLE_SUCCEEDED, _GOOGLE_FAILED, _GOOGLE_CANCELLED}
-
-_OPENAI_SUCCEEDED = "completed"
-_OPENAI_FAILED = "failed"
-_OPENAI_EXPIRED = "expired"
-_OPENAI_CANCELLED = "cancelled"
-_OPENAI_TERMINAL = {_OPENAI_SUCCEEDED, _OPENAI_FAILED, _OPENAI_EXPIRED, _OPENAI_CANCELLED}
-
-
 def _openai_progress(batch) -> str:
     rc = getattr(batch, "request_counts", None)
     if rc and getattr(rc, "total", 0):
@@ -148,6 +149,47 @@ def _anthropic_progress(batch) -> str:
             suffix = f", {errored} errored" if errored else ""
             return f"{batch.processing_status}  {done}/{total}{suffix}"
     return batch.processing_status
+
+
+def _load_tokens(job_meta: dict) -> tuple[dict, dict]:
+    """Load source and target verse tokens from the paths stored in job_meta."""
+    sources_dir = Path(job_meta["sources_dir"])
+    target_tsv_dir = Path(job_meta["target_tsv_dir"])
+    target_edition = job_meta["target_edition"]
+    corpus = job_meta["corpus"]
+    print(f"  Loading source tokens ({job_meta['corpus_id']}) ...")
+    source_verses = load_source_verses(sources_dir, corpus)
+    print(f"  Loading target tokens ({target_edition}) ...")
+    target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
+    return source_verses, target_verses
+
+
+def _report_results(
+    chapter_results: dict,
+    errors: list[str],
+    san_details: list[str],
+    job_meta: dict,
+    output_dir: Path,
+    target_edition: str,
+) -> None:
+    """Write chapter results and print summary/error lines."""
+    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
+    n_chapters = len(chapter_results)
+    print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
+
+    if san_details:
+        print(f"  {len(san_details)} record(s) sanitized:")
+        for detail in san_details[:20]:
+            print(f"    {detail}")
+        if len(san_details) > 20:
+            print(f"    ... and {len(san_details) - 20} more")
+
+    if errors:
+        print(f"  {len(errors)} validation error(s):")
+        for err in errors[:20]:
+            print(f"    {err}")
+        if len(errors) > 20:
+            print(f"    ... and {len(errors) - 20} more")
 
 
 def _cancel_google(job_meta: dict) -> None:
@@ -191,17 +233,7 @@ def _fetch_google(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
 
     print(f"Job {job_name}: {state} — retrieving results ...")
 
-    # Re-load source/target tokens for validation
-    sources_dir = Path(job_meta["sources_dir"])
-    target_tsv_dir = Path(job_meta["target_tsv_dir"])
-    target_edition = job_meta["target_edition"]
-    corpus = job_meta["corpus"]
-
-    print(f"  Loading source tokens ({job_meta['corpus_id']}) ...")
-    source_verses = load_source_verses(sources_dir, corpus)
-    print(f"  Loading target tokens ({target_edition}) ...")
-    target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
-
+    source_verses, target_verses = _load_tokens(job_meta)
     verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
         job_meta["requests"], source_verses, target_verses
     )
@@ -217,24 +249,7 @@ def _fetch_google(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
 
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
-    n_chapters = len(chapter_results)
-    print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
-
-    if san_details:
-        print(f"  {len(san_details)} record(s) sanitized:")
-        for detail in san_details[:20]:
-            print(f"    {detail}")
-        if len(san_details) > 20:
-            print(f"    ... and {len(san_details) - 20} more")
-
-    if errors:
-        print(f"  {len(errors)} validation error(s):")
-        for err in errors[:20]:
-            print(f"    {err}")
-        if len(errors) > 20:
-            print(f"    ... and {len(errors) - 20} more")
+    _report_results(chapter_results, errors, san_details, job_meta, output_dir, job_meta["target_edition"])
 
 
 def _cancel_openai(job_meta: dict) -> None:
@@ -278,16 +293,7 @@ def _fetch_openai(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
 
     print(f"Batch {batch_id}: {state} — retrieving results ...")
 
-    sources_dir = Path(job_meta["sources_dir"])
-    target_tsv_dir = Path(job_meta["target_tsv_dir"])
-    target_edition = job_meta["target_edition"]
-    corpus = job_meta["corpus"]
-
-    print(f"  Loading source tokens ({job_meta['corpus_id']}) ...")
-    source_verses = load_source_verses(sources_dir, corpus)
-    print(f"  Loading target tokens ({target_edition}) ...")
-    target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
-
+    source_verses, target_verses = _load_tokens(job_meta)
     verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
         job_meta["requests"], source_verses, target_verses
     )
@@ -304,24 +310,7 @@ def _fetch_openai(job_meta: dict, poll_only: bool, wait: bool, wait_interval: in
 
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
-    n_chapters = len(chapter_results)
-    print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
-
-    if san_details:
-        print(f"  {len(san_details)} record(s) sanitized:")
-        for detail in san_details[:20]:
-            print(f"    {detail}")
-        if len(san_details) > 20:
-            print(f"    ... and {len(san_details) - 20} more")
-
-    if errors:
-        print(f"  {len(errors)} validation error(s):")
-        for err in errors[:20]:
-            print(f"    {err}")
-        if len(errors) > 20:
-            print(f"    ... and {len(errors) - 20} more")
+    _report_results(chapter_results, errors, san_details, job_meta, output_dir, job_meta["target_edition"])
 
 
 def _cancel_anthropic(job_meta: dict) -> None:
@@ -346,10 +335,10 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
         print(f"Batch {batch_id}: {_anthropic_progress(batch)}")
         return
 
-    if state != "ended":
+    if state != _ANTHROPIC_ENDED:
         if wait:
             print(f"  Batch {batch_id}: {_anthropic_progress(batch)} — waiting ...")
-            while state != "ended":
+            while state != _ANTHROPIC_ENDED:
                 time.sleep(wait_interval)
                 batch = client.messages.batches.retrieve(batch_id)
                 state = batch.processing_status
@@ -362,16 +351,7 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
 
     print(f"Batch {batch_id}: {state} — retrieving results ...")
 
-    sources_dir = Path(job_meta["sources_dir"])
-    target_tsv_dir = Path(job_meta["target_tsv_dir"])
-    target_edition = job_meta["target_edition"]
-    corpus = job_meta["corpus"]
-
-    print(f"  Loading source tokens ({job_meta['corpus_id']}) ...")
-    source_verses = load_source_verses(sources_dir, corpus)
-    print(f"  Loading target tokens ({target_edition}) ...")
-    target_verses = process_usfm_tsv(target_tsv_dir, target_edition)
-
+    source_verses, target_verses = _load_tokens(job_meta)
     verse_source_ids, verse_target_ids, verse_token_maps = _build_verse_id_sets(
         job_meta["requests"], source_verses, target_verses
     )
@@ -387,24 +367,7 @@ def _fetch_anthropic(job_meta: dict, poll_only: bool, wait: bool, wait_interval:
 
     output_dir = Path(job_meta["output_dir"])
     output_dir.mkdir(parents=True, exist_ok=True)
-
-    total_records = _write_chapter_results(chapter_results, job_meta, output_dir, target_edition)
-    n_chapters = len(chapter_results)
-    print(f"\n  {total_records} records across {n_chapters} chapter(s) written to {output_dir}")
-
-    if san_details:
-        print(f"  {len(san_details)} record(s) sanitized:")
-        for detail in san_details[:20]:
-            print(f"    {detail}")
-        if len(san_details) > 20:
-            print(f"    ... and {len(san_details) - 20} more")
-
-    if errors:
-        print(f"  {len(errors)} validation error(s):")
-        for err in errors[:20]:
-            print(f"    {err}")
-        if len(errors) > 20:
-            print(f"    ... and {len(errors) - 20} more")
+    _report_results(chapter_results, errors, san_details, job_meta, output_dir, job_meta["target_edition"])
 
 
 def parse_args() -> argparse.Namespace:

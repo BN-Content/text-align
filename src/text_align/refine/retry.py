@@ -6,6 +6,7 @@ verses from a blank slate, and merges the results back into the chapter files.
 
 from __future__ import annotations
 
+import argparse
 from pathlib import Path
 
 from text_align.migrate.alignment_io import load_alignment_json, write_alignment_json
@@ -193,5 +194,60 @@ def build_retry_chapter_batches(
                 "system_prompt": system_msg,
                 "user_message": user_msg,
             })
+
+    return chapter_batches
+
+
+def _filter_chapter_files(
+    chapter_files: list[Path],
+    args: argparse.Namespace,
+    forced_verse_set: frozenset[str] | None = None,
+) -> list[Path]:
+    """Filter chapter files by the active range arg on args.
+
+    Handles: --verse, --verse-range, --verse-list/--verse-list-file (via
+    forced_verse_set), --book, --book-range, --chapter, --chapter-range.
+    Unknown args are read via getattr so this works for any args namespace.
+    """
+    verse = getattr(args, "verse", None)
+    verse_range = getattr(args, "verse_range", None)
+    book = getattr(args, "book", None)
+    book_range = getattr(args, "book_range", None)
+    chapter = getattr(args, "chapter", None)
+    chapter_range = getattr(args, "chapter_range", None)
+
+    if not any([verse, verse_range, forced_verse_set, book, book_range, chapter, chapter_range]):
+        return chapter_files
+
+    result = []
+    for f in chapter_files:
+        parts = f.stem.split("-")
+        cid = parts[-3] + parts[-2]  # BBCCC
+        if verse:
+            if cid == str(verse).zfill(8)[:5]:
+                result.append(f)
+        elif verse_range:
+            start_cid = str(verse_range[0]).zfill(8)[:5]
+            end_cid = str(verse_range[1]).zfill(8)[:5]
+            if start_cid <= cid <= end_cid:
+                result.append(f)
+        elif forced_verse_set:
+            if any(vid[:5] == cid for vid in forced_verse_set):
+                result.append(f)
+        elif book:
+            if cid[:2] == str(book).zfill(2):
+                result.append(f)
+        elif book_range:
+            start, end = str(book_range[0]).zfill(2), str(book_range[1]).zfill(2)
+            if start <= cid[:2] <= end:
+                result.append(f)
+        elif chapter:
+            if cid == str(chapter).zfill(5):
+                result.append(f)
+        elif chapter_range:
+            start, end = str(chapter_range[0]).zfill(5), str(chapter_range[1]).zfill(5)
+            if start <= cid <= end:
+                result.append(f)
+    return result
 
     return chapter_batches

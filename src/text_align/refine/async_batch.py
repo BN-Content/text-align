@@ -292,14 +292,26 @@ def retrieve_google(
 
 
 # ---------------------------------------------------------------------------
-# OpenAI batch API
+# Terminal batch-job states (re-exported for fetch_batch.py)
 # ---------------------------------------------------------------------------
+
+_GOOGLE_SUCCEEDED = "JOB_STATE_SUCCEEDED"
+_GOOGLE_FAILED = "JOB_STATE_FAILED"
+_GOOGLE_CANCELLED = "JOB_STATE_CANCELLED"
+_GOOGLE_TERMINAL = frozenset({_GOOGLE_SUCCEEDED, _GOOGLE_FAILED, _GOOGLE_CANCELLED})
 
 _OPENAI_SUCCEEDED = "completed"
 _OPENAI_FAILED = "failed"
 _OPENAI_EXPIRED = "expired"
 _OPENAI_CANCELLED = "cancelled"
-_OPENAI_TERMINAL = {_OPENAI_SUCCEEDED, _OPENAI_FAILED, _OPENAI_EXPIRED, _OPENAI_CANCELLED}
+_OPENAI_TERMINAL = frozenset({_OPENAI_SUCCEEDED, _OPENAI_FAILED, _OPENAI_EXPIRED, _OPENAI_CANCELLED})
+
+_ANTHROPIC_ENDED = "ended"
+
+
+# ---------------------------------------------------------------------------
+# OpenAI batch API
+# ---------------------------------------------------------------------------
 
 
 def submit_openai(
@@ -542,8 +554,6 @@ def retrieve_openai(
 # Anthropic batch API
 # ---------------------------------------------------------------------------
 
-_ANTHROPIC_ENDED = "ended"
-
 
 def submit_anthropic(
     anthropic_client: Any,
@@ -687,5 +697,57 @@ def retrieve_anthropic(
             all_errors.extend(block_errors)
 
     return chapter_results, all_errors, all_san
+
+
+# ---------------------------------------------------------------------------
+# Provider dispatcher
+# ---------------------------------------------------------------------------
+
+def submit_batch_job(
+    provider: str,
+    model: str,
+    reasoning_effort: str | None,
+    chapter_batches: list[dict],
+    jobs_dir: Path,
+    job_metadata_base: dict,
+    temperature: float | None,
+    max_output_tokens: int | None,
+) -> tuple[str, Path]:
+    """Dispatch chapter_batches to the appropriate provider's batch API.
+
+    Returns (job_id, metadata_file_path).
+    """
+    if provider == "google":
+        from google import genai as _genai
+        client = _genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
+        return submit_google(
+            genai_client=client, model=model, reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches, jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+            temperature=temperature, max_output_tokens=max_output_tokens,
+        )
+    elif provider == "openai":
+        import openai as _openai
+        client = _openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
+        return submit_openai(
+            openai_client=client, model=model, reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches, jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+            temperature=temperature, max_output_tokens=max_output_tokens,
+        )
+    elif provider == "anthropic":
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        return submit_anthropic(
+            anthropic_client=client, model=model, reasoning_effort=reasoning_effort,
+            chapter_batches=chapter_batches, jobs_dir=jobs_dir,
+            job_metadata_base=job_metadata_base,
+            temperature=temperature, max_output_tokens=max_output_tokens,
+        )
+    else:
+        raise ValueError(
+            f"Async batch mode not supported for provider {provider!r}. "
+            f"Use google, openai, or anthropic."
+        )
 
 

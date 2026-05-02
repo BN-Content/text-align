@@ -49,6 +49,12 @@ def process_usfm_tsv(target_data_dir: Path | str, edition: str) -> dict[str, Mig
             )
             if "required" in df.columns:
                 word.required = y_or_n(df["required"][row])
+            # Propagate the verse-level source range end (take the maximum across
+            # all tokens, including excluded ones — it's a verse-level property).
+            if word.source_verse_range_end:
+                verse = verses[source_verse]
+                if word.source_verse_range_end > verse.source_verse_range_end:
+                    verse.source_verse_range_end = word.source_verse_range_end
             if not word.exclude:
                 verses[source_verse].words[df["id"][row]] = word
     return verses

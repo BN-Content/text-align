@@ -24,7 +24,7 @@ from text_align.migrate.tsv import process_usfm_tsv
 
 from .llm import LLMClient
 from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
-from .source import load_source_verses
+from .source import collect_source_verse_range, load_source_verses
 from .util import _CORPUS_ID
 
 
@@ -380,9 +380,13 @@ def _process_corpus_sync(
             verse_target_ids: dict[str, set[str]] = {}
 
             for verse_id in batch_ids:
-                src_tokens = source_verses.get(verse_id, [])
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
+                if src_end and src_end > verse_id:
+                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                else:
+                    src_tokens = source_verses.get(verse_id, [])
 
                 cands = {
                     src_type: recs[verse_id]
@@ -487,9 +491,13 @@ def _process_corpus_async(
 
             verse_batch = []
             for verse_id in batch_ids:
-                src_tokens = source_verses.get(verse_id, [])
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
+                if src_end and src_end > verse_id:
+                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                else:
+                    src_tokens = source_verses.get(verse_id, [])
                 cands = {
                     src_type: recs[verse_id]
                     for src_type, recs in candidates_by_type.items()

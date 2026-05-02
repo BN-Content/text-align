@@ -159,12 +159,35 @@ def format_verse_block(
     target_inv = {v: k for k, v in target_map.items()}
 
     lines: list[str] = []
-    lines.append(f"--- VERSE {verse_id} ---")
+
+    # Detect whether source tokens span multiple source verses (merged-verse case,
+    # e.g. BSB 3JN 1:14 = SBLGNT 3JN 1:14-15).  Token IDs are BBCCCVVVWW…;
+    # the 8-char prefix BBCCCVVV is the source verse BCV.
+    first_sv = source_tokens[0].id[:8] if source_tokens else ""
+    last_sv = source_tokens[-1].id[:8] if source_tokens else ""
+
+    def _sv_label(vid: str) -> str:
+        """Return a chapter:verse label, omitting chapter when same as first_sv."""
+        ch, v = int(vid[2:5]), int(vid[5:8])
+        return f"{ch}:{v}" if int(first_sv[2:5]) != ch else str(v)
+
+    if first_sv and last_sv and first_sv != last_sv:
+        lines.append(
+            f"--- VERSE {verse_id} "
+            f"(source spans {source_corpus} {_sv_label(first_sv)}–{_sv_label(last_sv)}) ---"
+        )
+    else:
+        lines.append(f"--- VERSE {verse_id} ---")
     lines.append("")
 
     lines.append(f"SOURCE TOKENS ({source_corpus}):")
+    prev_sv = ""
     for num, token in zip(range(1, len(source_tokens) + 1), source_tokens):
+        cur_sv = token.id[:8]
+        if prev_sv and cur_sv != prev_sv:
+            lines.append(f"  -- verse {_sv_label(cur_sv)} --")
         lines.append(_format_source_token(num, token))
+        prev_sv = cur_sv
     lines.append("")
 
     lines.append("TARGET TOKENS:")

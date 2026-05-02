@@ -15,6 +15,7 @@ from .coverage import VerseRetrySpec
 from .llm import LLMClient
 from .prompt import build_batch_message, build_system_prompt, detect_phenomena, infer_testament
 from .refine import build_output_alignment
+from .source import collect_source_verse_range
 from .util import _chapter_id_from_path, _CORPUS_TESTAMENT
 
 
@@ -58,18 +59,29 @@ def merge_verse_results(
 
     replaced_verse_ids = set(new_records_by_verse.keys())
 
+    # For merged-verse cases (e.g. BSB 3JN 1:14 = SBLGNT 3JN 1:14-15) the new
+    # records reference source tokens from secondary source verses.  We must
+    # purge old records for those source verses too, or stale empty-target stubs
+    # from a previous (pre-prompt-fix) run survive the merge.
+    replaced_source_verses: set[str] = set(replaced_verse_ids)
+    for recs in new_records_by_verse.values():
+        for rec in recs:
+            for sid in rec.get("source") or []:
+                if len(sid) >= 8:
+                    replaced_source_verses.add(sid[:8])
+
     # Keep regular records for non-replaced verses
     kept: list[dict] = []
     for rec in old_records:
         src_ids = rec.get("source") or []
         vid = src_ids[0][:8] if src_ids else None
-        if vid not in replaced_verse_ids:
+        if vid not in replaced_source_verses:
             kept.append(rec)
 
     # Re-inflate NEQ entries for non-replaced verses so build_output_alignment
     # can reprocess them uniformly (it separates NEQ from regular records).
     for sid in old_neq_source:
-        if sid[:8] not in replaced_verse_ids:
+        if sid[:8] not in replaced_source_verses:
             kept.append({"source": [sid], "target": [], "meta": {"rel": "NEQ"}})
     for tid in old_neq_target:
         if tid[:8] not in replaced_verse_ids:
@@ -123,9 +135,13 @@ def retry_chapter_sync(
         verse_target_ids: dict[str, set[str]] = {}
 
         for verse_id in batch_ids:
-            src_tokens = source_verses.get(verse_id, [])
             tgt_verse = target_verses.get(verse_id)
             tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+            src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
+            if src_end and src_end > verse_id:
+                src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+            else:
+                src_tokens = source_verses.get(verse_id, [])
             verse_source_ids[verse_id] = {t.id for t in src_tokens}
             verse_target_ids[verse_id] = {t.id for t in tgt_tokens}
             verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))  # blank-slate cands
@@ -177,9 +193,13 @@ def build_retry_chapter_batches(
 
             verse_batch = []
             for verse_id in batch_ids:
-                src_tokens = source_verses.get(verse_id, [])
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
+                if src_end and src_end > verse_id:
+                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                else:
+                    src_tokens = source_verses.get(verse_id, [])
                 verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]

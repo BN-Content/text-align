@@ -9,6 +9,21 @@ from text_align.burrito.source import Source, SourceReader
 from .util import _CORPUS_ID
 
 
+def collect_source_verse_range(
+    source_verses: dict[str, list[Source]],
+    start_vid: str,
+    end_vid: str,
+) -> list[Source]:
+    """Return all source tokens for verse IDs in the inclusive range [start_vid, end_vid].
+
+    Verse IDs are 8-digit zero-padded BBCCCVVV strings; lexicographic comparison
+    equals numeric ordering, so cross-chapter and cross-book ranges work correctly.
+    Tokens from all matching verses are merged and returned sorted by token ID.
+    """
+    tokens = [t for vid, ts in source_verses.items() if start_vid <= vid <= end_vid for t in ts]
+    return sorted(tokens, key=lambda t: t.id)
+
+
 def load_source_verses(sources_dir: Path | str, corpus: str) -> dict[str, list[Source]]:
     """Load a source TSV and return a dict of BCV ID → ordered list of Source tokens.
 

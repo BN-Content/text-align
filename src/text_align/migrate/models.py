@@ -38,3 +38,9 @@ class MigrateVerse:
     usfm: str
     # str key is the token ID (for stable sort / order)
     words: dict[str, MigrateTarget] = dataclasses.field(default_factory=dict)
+    # Non-empty when this translation verse spans multiple source verses (e.g. a
+    # BSB verse that merges two SBLGNT verses).  Lexicographic comparison on the
+    # 8-digit BBCCCVVV IDs is equivalent to numeric ordering, so range checks
+    # like ``start_vid <= vid <= source_verse_range_end`` work correctly across
+    # chapter and book boundaries.
+    source_verse_range_end: str = ""

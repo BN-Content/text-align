@@ -468,6 +468,7 @@ def write_verse(
     acai_entities: dict[str, list[AcaiEntity]],
     sources_with_targets: dict,
     tag_acai: bool,
+    tgt_verse_bcvid: str = "",
 ) -> None:
     cells: list[dict] = []  # {"html": str, "source_ids": list[str]}
 
@@ -518,10 +519,13 @@ def write_verse(
         source_text = unused_source_ids[unused_id]
         src_bcv = BCVWPID(unused_id)
         is_nt = int(src_bcv.book_ID) > 39
+        same_verse = src_bcv.to_bcvid == tgt_verse_bcvid
         if is_nt:
-            idx_str = str(int(src_bcv.word_ID))
+            idx_str = (str(int(src_bcv.word_ID)) if same_verse
+                       else f"{int(src_bcv.verse_ID)}.{int(src_bcv.word_ID)}")
         else:
-            idx_str = f"{int(src_bcv.word_ID)}.{int(src_bcv.part_ID)}"
+            idx_str = (f"{int(src_bcv.word_ID)}.{int(src_bcv.part_ID)}" if same_verse
+                       else f"{int(src_bcv.verse_ID)}.{int(src_bcv.word_ID)}.{int(src_bcv.part_ID)}")
 
         is_neq = unused_id in neq_source
         marker = "≠" if is_neq else "•"
@@ -846,15 +850,52 @@ def main() -> None:
         neq_target = mgr.alignmentsreader.neq_target
         sources_with_targets = get_sources_with_targets(mgr.bcv["records"])
 
+        # ── build verse-mapping dicts for merged-verse support ──────────
+        # When a translation verse merges multiple source verses (e.g. BSB
+        # 3JN 1:14 = SBLGNT 3JN 1:14-15), alignment records whose first
+        # source token is from verse 15 are keyed under "63014015" in
+        # mgr.bcv["records"].  target_sourceverses["63014015"] is None
+        # (no BSB verse 15 exists), so without this mapping those records
+        # would be silently skipped and their source tokens would never
+        # appear in the unused-source display.
+        _src_to_tgt_verse: dict[str, str] = {}
+        for _rec_id, _rec_list in mgr.bcv["records"].items():
+            for _alignment in _rec_list:
+                if _alignment.target_selectors:
+                    _src_to_tgt_verse[_rec_id] = BCVWPID(_alignment.target_selectors[0]).to_bcvid
+                    break
+
+        _tgt_to_src_vids: dict[str, list[str]] = {}
+        for _sv, _tv in _src_to_tgt_verse.items():
+            _tgt_to_src_vids.setdefault(_tv, []).append(_sv)
+        for _sv in mgr.bcv["sources"]:
+            if _sv not in _src_to_tgt_verse:
+                _tgt_to_src_vids.setdefault(_sv, []).append(_sv)
+
+        _tgt_combined_sources: dict[str, list] = {
+            _tv: sorted(
+                [t for _sv in _svs for t in mgr.bcv["sources"].get(_sv, [])],
+                key=lambda t: t.id,
+            )
+            for _tv, _svs in _tgt_to_src_vids.items()
+        }
+
         # ── build AlignmentToken dict ────────────────────────────────────
         alignments: dict[str, list[AlignmentToken]] = {}
+        # Track which translation verse BCVs have alignment records so the
+        # unaligned-targets pass (below) only covers those verses.
+        aligned_tgt_verse_bcvs: set[str] = set()
 
         for record_id, record in mgr.bcv["records"].items():
-            sources = mgr.bcv["sources"].get(record_id, [])
+            tgt_vid = _src_to_tgt_verse.get(record_id, record_id)
+            sources = _tgt_combined_sources.get(tgt_vid, mgr.bcv["sources"].get(record_id, []))
             targets_source = mgr.bcv["target_sourceverses"].get(record_id)
+            if targets_source is None and tgt_vid != record_id:
+                targets_source = mgr.bcv["target_sourceverses"].get(tgt_vid)
             if targets_source is None:
                 print(f"  No target_sourceverses for {record_id}, skipping")
                 continue
+            aligned_tgt_verse_bcvs.add(tgt_vid)
 
             for alignment in record:
                 al_sources = get_alignment_sources(alignment.source_selectors, sources)
@@ -876,8 +917,14 @@ def main() -> None:
                 for tid in al_targets:
                     alignments.setdefault(tid, []).append(token)
 
-            # unaligned / NEQ-only targets
-            for target in targets_source:
+        # Unaligned / NEQ-only targets — run as a second pass after ALL alignment
+        # records have been processed.  Running this inside the records loop caused
+        # a shadowing bug for merged verses (e.g. BSB 3JN 1:14 = SBLGNT 1:14-15):
+        # empty-source placeholders for the secondary-source-verse targets were
+        # inserted before those records were processed, making the placeholder
+        # tok_list[0] at render time even after the correct token was appended.
+        for _tgt_vid in aligned_tgt_verse_bcvs:
+            for target in mgr.bcv["target_sourceverses"].get(_tgt_vid, []):
                 if target.id not in alignments:
                     alignments[target.id] = [AlignmentToken(
                         targets={target.id: target.text},
@@ -936,15 +983,13 @@ def main() -> None:
                 html_out = start_new_verse(html_out, current_bcv, is_r2l)
 
             src_bcvid = BCVWPID(verse_tids[0]).to_bcvid
-            unused = {}
-            if src_bcvid in mgr.bcv["sources"]:
-                unused = get_unused_verse_sources(
-                    verse_tids, alignments, mgr.bcv["sources"][src_bcvid]
-                )
+            combined = _tgt_combined_sources.get(src_bcvid, mgr.bcv["sources"].get(src_bcvid, []))
+            unused = get_unused_verse_sources(verse_tids, alignments, combined) if combined else {}
 
             write_verse(
                 html_out, verse_tids, alignments, unused,
                 neq_source, is_r2l, acai_word_map, sources_with_targets, tag_acai,
+                tgt_verse_bcvid=src_bcvid,
             )
 
         if html_out is not None:

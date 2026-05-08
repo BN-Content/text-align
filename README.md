@@ -85,22 +85,27 @@ src/text_align/
 
 ## Recommended workflow
 
-The primary workflow runs a cheap/fast model over the corpus first, audits quality without any LLM calls, then re-aligns only the verses that scored below the threshold with a better model:
+The primary workflow runs a cheap/fast model over the corpus first, cleans and audits quality without any LLM calls, then re-aligns only the verses that scored below the threshold with a better model:
 
 ```bash
 # 1. First pass — cheap/fast model
 refine-alignment --config OENGB --corpus nt \
   --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
 
-# 2. Audit scores (no LLM call)
+# 2. Clean alignment files in place (also runs automatically inside score/retry)
+clean-alignments --config OENGB --corpus nt
+
+# 3. Audit scores (no LLM call; runs clean pass internally before scoring)
 score-alignment --config OENGB --corpus nt --flagged-only --output scores.tsv
 
-# 3. Re-align flagged verses with a better model
+# 4. Re-align flagged verses with a better model (runs clean pass internally)
 retry-alignment --config OENGB --corpus nt \
   --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
 ```
 
 The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
+
+`clean-alignments` can also be run standalone at any point to inspect what the cleaner finds and fixes without triggering any LLM spend.
 
 Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged before committing to any LLM spend. Use `--batch-mode async` with any of the three frontier providers (Anthropic, OpenAI, Google) for ~50% cost reduction on `refine-alignment` and `retry-alignment`.
 
@@ -234,6 +239,33 @@ Google exposes only a coarse state enum (`JOB_STATE_PENDING` / `JOB_STATE_RUNNIN
 
 For retry jobs (submitted by `retry-alignment --batch-mode async`), `fetch-batch` merges the new verse records into existing chapter files rather than writing fresh ones. The job metadata file identifies retry jobs via `"job_type": "retry"`.
 
+#### `clean-alignments`
+
+Validates and repairs chapter JSON alignment files **in place**. Run after `refine-alignment` (or `fetch-batch`) to ensure that what scoring evaluates and what `render-alignment` displays are the same data. `score-alignment` and `retry-alignment` run this pass automatically before scoring; `clean-alignments` can also be run standalone for inspection.
+
+Checks performed:
+
+| Check | Action |
+|-------|--------|
+| Empty source or target array | Drop record |
+| Source token not in corpus TSV | Drop record |
+| Target token not in edition TSV | Drop record |
+| Token is secondary in one record but primary in another | Drop from secondary (repair); drop record if source becomes empty |
+| Same source token in ≥2 records after repair | Drop all offending records |
+| Same target token in ≥2 records | Drop all offending records |
+
+```
+clean-alignments \
+  --alignment-dir path/to/alignments-eng/exp/OENGB/LLM-REFINED \
+  --corpus nt \
+  --target-edition OENGB \
+  --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
+  [--sources-dir data/sources/] \
+  [--config OENGB]
+```
+
+Range filtering (`--book`, `--book-range`, `--chapter`, `--chapter-range`) works the same as the other tools.
+
 #### `score-alignment`
 
 Scores alignment quality for existing chapter JSON files and writes a per-verse TSV report. Does **not** call the LLM — use this between `refine-alignment` and `retry-alignment` to inspect quality and tune the retry threshold before committing to API spend.
@@ -274,6 +306,7 @@ retry-alignment \
   [--llm-model claude-opus-4-7] \
   [--reasoning-effort high] \
   [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
+  [--min-unaligned-src 2] \          # retry if N or more source tokens are unaligned (default: 2)
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4] \
@@ -285,14 +318,20 @@ retry-alignment \
   [--config OENGB]
 ```
 
-Range filtering (same flags as `refine-alignment`, minus `--verse` / `--verse-range`):
+Range and verse filtering:
 
-| Flag | Example |
-|------|---------|
-| `--book BB` | `--book 66` |
-| `--book-range START END` | `--book-range 65 66` |
-| `--chapter BBCCC` | `--chapter 66007` |
-| `--chapter-range START END` | `--chapter-range 66001 66022` |
+| Flag | Example | Notes |
+|------|---------|-------|
+| `--book BB` | `--book 66` | All chapters in a book |
+| `--book-range START END` | `--book-range 65 66` | Inclusive book range |
+| `--chapter BBCCC` | `--chapter 66007` | Single chapter |
+| `--chapter-range START END` | `--chapter-range 66001 66022` | Inclusive chapter range |
+| `--verse BBCCCVVV` | `--verse 41004003` | Force-retry one verse regardless of score |
+| `--verse-range START END` | `--verse-range 41004001 41004020` | Force-retry a verse range regardless of score |
+| `--verse-list VIDS` | `--verse-list 62002002,62003010` | Comma-separated verse IDs to force-retry |
+| `--verse-list-file FILE` | `--verse-list-file bad_verses.txt` | File of verse IDs (one per line) to force-retry |
+
+The `--verse*` flags bypass the quality scorer — the named verses are always retried. The chapter-level flags (`--book`, `--chapter`, etc.) still apply score filtering within the specified range. All flags in the table are mutually exclusive.
 
 ##### Async retry
 

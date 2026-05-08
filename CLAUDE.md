@@ -22,7 +22,7 @@ src/text_align/
 ├── burrito/       # SB 0.4 data model
 ├── migrate/       # diff-migrate, sim-migrate CLIs
 ├── align/         # acai-align CLI
-├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignment CLIs
+├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignment + clean-alignments CLIs
 │   ├── prompt/          # language-aware prompt system (see below)
 │   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter (sync)
 │   ├── async_batch.py   # provider batch-API helpers (Google, OpenAI, Anthropic)
@@ -33,6 +33,8 @@ src/text_align/
 │   ├── fetch_batch.py   # fetch-batch CLI entry point
 │   ├── retry.py         # verse merge/retry core logic
 │   ├── retry_cli.py     # retry-alignment CLI entry point
+│   ├── clean.py             # core cleaning logic (CleanResult, clean_chapter_file, run_clean_pass)
+│   ├── clean_cli.py         # clean-alignments CLI entry point
 │   └── score_alignments.py  # score-alignment CLI entry point
 └── render/        # render-alignment HTML visualizer
 ```
@@ -273,6 +275,30 @@ deviation k, and retry threshold. All overridable; defaults work for NT English.
 YAML config keys: `score_retry_threshold` (default 0.25). Weights are code defaults;
 adjust via `ScoringConfig` if needed.
 
+## clean-alignments (`refine/clean.py`, `refine/clean_cli.py`)
+
+Validates and repairs chapter JSON alignment files in place so that scoring and
+`render-alignment` see the same data. `score-alignment` and `retry-alignment` call
+`run_clean_pass()` automatically before scoring; `clean-alignments` can also be
+run standalone.
+
+Three-pass algorithm in `clean_chapter_file(path, source_ids, target_ids)`:
+
+1. **Per-record validity** — drops records with empty source/target, source tokens
+   absent from the corpus TSV (`MISSINGSOURCE`), or target tokens absent from the
+   edition TSV (`MISSINGTARGETALL` / `MISSINGTARGETSOME`).
+2. **Secondary-primary conflict repair** — if a token is secondary in one record
+   but primary in another, it is removed from the secondary record's `source` and
+   `meta.secondary.source`. If this empties the source array the record is dropped
+   (`SECONDARYCONFLICT_DROP`); otherwise the record is kept as repaired
+   (`SECONDARYCONFLICT`).
+3. **Cross-record duplicate detection** — any source or target token still appearing
+   in multiple records after pass 2 causes all offending records to be dropped
+   (`DUPLICATESOURCE` / `DUPLICATETARGET`).
+
+`run_clean_pass(chapter_files, source_verses, target_verses)` drives the loop and
+returns `(files_changed, total_dropped, total_repaired)`.
+
 ## score-alignment (`refine/score_alignments.py`)
 
 Standalone audit tool. Reads chapter JSON files and writes a per-verse TSV report (columns:
@@ -298,17 +324,20 @@ Primary use: run between `refine-alignment` and `retry-alignment` to inspect qua
 before committing to a retry spend, and to tune the threshold against manually reviewed
 chapters.
 
-## Two-pass workflow (cheap model → score → retry)
+## Two-pass workflow (cheap model → clean → score → retry)
 
 ```bash
 # 1. First pass — cheap/fast model
 refine-alignment --config MYEDITION --corpus nt \
   --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
 
-# 2. Audit scores (no LLM call)
+# 2. Clean alignment files in place (optional standalone; also runs inside score/retry)
+clean-alignments --config MYEDITION --corpus nt
+
+# 3. Audit scores — clean pass runs automatically before scoring
 score-alignment --config MYEDITION --corpus nt --flagged-only --output scores.tsv
 
-# 3. Retry flagged verses with a better model
+# 4. Retry flagged verses — clean pass runs automatically before scoring
 retry-alignment --config MYEDITION --corpus nt \
   --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
 ```
@@ -324,7 +353,7 @@ and re-aligns them from scratch.
 
 **Detection** (`scoring.py`, `coverage.py`): a verse is flagged when either condition
 holds: (a) `score_chapter_file()` returns `composite > --score-retry-threshold`
-(default 0.25), or (b) `find_low_coverage_verses()` finds more than
+(default 0.25), or (b) `find_low_coverage_verses()` finds at least
 `--min-unaligned-src` (default 2) unaligned source tokens. Both checks run for every
 chapter; a verse needs only one to trigger.
 

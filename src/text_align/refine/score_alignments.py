@@ -17,6 +17,7 @@ from pathlib import Path
 from text_align import ROOT
 from text_align.config import load_config_from_args, require
 
+from .clean import run_clean_pass
 from .retry import _filter_chapter_files, discover_chapter_files
 from .scoring import ScoringConfig, VerseScore, score_chapter_file
 from .source import load_source_verses
@@ -104,6 +105,15 @@ def main() -> None:
         from text_align.migrate.tsv import process_usfm_tsv
         print(f"  Loading target tokens ({args.target_edition}) ...", file=sys.stderr)
         target_verses = process_usfm_tsv(args.target_tsv_dir, args.target_edition)
+
+    print("  Cleaning alignment files ...", file=sys.stderr)
+    files_changed, dropped, repaired = run_clean_pass(chapter_files, source_verses, target_verses)
+    if files_changed:
+        print(
+            f"  Cleaned {files_changed} file(s): "
+            f"{dropped} record(s) dropped, {repaired} record(s) repaired.",
+            file=sys.stderr,
+        )
 
     scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
 

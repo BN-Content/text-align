@@ -39,7 +39,7 @@ def find_low_coverage_verses(
     source_verses: dict[str, list],
     min_unaligned_src: int = 2,
 ) -> list[VerseRetrySpec]:
-    """Return retry specs for verses with more than min_unaligned_src unaligned source tokens.
+    """Return retry specs for verses with at least min_unaligned_src unaligned source tokens.
 
     A source token is considered covered if it appears in any record's source list
     or in the chapter-level nonEquivalent.source set.
@@ -68,7 +68,7 @@ def find_low_coverage_verses(
         all_src_ids = {t.id for t in source_verses[verse_id]}
         covered = covered_by_verse.get(verse_id, set())
         uncovered = sorted(all_src_ids - covered)
-        if len(uncovered) > min_unaligned_src:
+        if len(uncovered) >= min_unaligned_src:
             retry_specs.append(VerseRetrySpec(
                 verse_id=verse_id,
                 chapter_id=chapter_id,

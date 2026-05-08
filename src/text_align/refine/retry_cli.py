@@ -16,6 +16,7 @@ from text_align import ROOT
 from text_align.config import load_config_from_args, require
 from text_align.migrate.tsv import process_usfm_tsv
 
+from .clean import run_clean_pass
 from .coverage import VerseRetrySpec, find_low_coverage_verses
 from .llm import LLMClient
 from .retry import (
@@ -80,7 +81,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--score-retry-threshold", type=float, default=0.25,
                    help="Composite penalty threshold above which a verse is retried (default: 0.25)")
     p.add_argument("--min-unaligned-src", type=int, default=2,
-                   help="Also retry verses with more than N unaligned source tokens (default: 2)")
+                   help="Also retry verses with N or more unaligned source tokens (default: 2)")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: re-align immediately and write results (default); "
                         "async: submit to provider batch API and exit "
@@ -137,7 +138,7 @@ def main() -> None:
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")
     print(f"  Alignment dir:   {args.alignment_dir}")
-    print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>{args.min_unaligned_src}")
+    print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>={args.min_unaligned_src}")
     if not args.dry_run:
         print(f"  Provider:        {args.llm_provider} / {args.llm_model}{effort_str}")
         print(f"  Mode:            {args.batch_mode}")
@@ -163,9 +164,19 @@ def main() -> None:
         raise SystemExit("No chapter JSON files found in --alignment-dir.")
     print(f"  Evaluating {len(chapter_files)} chapter file(s) ...")
 
-    # Load source tokens
+    # Load source and target tokens (needed for clean pass and scoring)
     print(f"  Loading source tokens ({corpus_id}) ...")
     source_verses = load_source_verses(args.sources_dir, args.corpus)
+    print(f"  Loading target tokens ({args.target_edition}) ...")
+    target_verses = process_usfm_tsv(args.target_tsv_dir, args.target_edition)
+
+    print("  Cleaning alignment files ...")
+    files_changed, dropped, repaired = run_clean_pass(chapter_files, source_verses, target_verses)
+    if files_changed:
+        print(
+            f"  Cleaned {files_changed} file(s): "
+            f"{dropped} record(s) dropped, {repaired} record(s) repaired."
+        )
 
     scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
 
@@ -222,10 +233,6 @@ def main() -> None:
 
     if args.dry_run:
         return
-
-    # Load target tokens
-    print(f"\n  Loading target tokens ({args.target_edition}) ...")
-    target_verses = process_usfm_tsv(args.target_tsv_dir, args.target_edition)
 
     llm_client = LLMClient(
         provider=args.llm_provider,

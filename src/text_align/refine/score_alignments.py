@@ -18,6 +18,7 @@ from text_align import ROOT
 from text_align.config import load_config_from_args, require
 
 from .clean import run_clean_pass
+from .coverage import find_low_coverage_verses
 from .retry import _filter_chapter_files, discover_chapter_files
 from .scoring import ScoringConfig, VerseScore, score_chapter_file
 from .source import load_source_verses
@@ -35,6 +36,7 @@ _TSV_FIELDS = [
     "signal_4",
     "signal_5",
     "needs_retry",
+    "coverage_flagged",
     "structural_errors",
     "article_neq",
 ]
@@ -65,6 +67,8 @@ def parse_args() -> argparse.Namespace:
                    help="Corpus: 'nt' for SBLGNT, 'ot' for WLCM")
     p.add_argument("--score-retry-threshold", type=float, default=0.25,
                    help="Penalty threshold for needs_retry flag (default: 0.25)")
+    p.add_argument("--min-unaligned-src", type=int, default=2,
+                   help="Also flag verses with N or more unaligned source tokens (default: 2)")
     p.add_argument("--output", default=None, type=Path,
                    help="Write TSV report to this file (default: stdout)")
     p.add_argument("--flagged-only", action="store_true", default=False,
@@ -94,7 +98,7 @@ def main() -> None:
 
     print(f"score-alignment: {args.target_language}", file=sys.stderr)
     print(f"  Alignment dir:   {args.alignment_dir}", file=sys.stderr)
-    print(f"  Retry threshold: {args.score_retry_threshold:.2f}", file=sys.stderr)
+    print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>={args.min_unaligned_src}", file=sys.stderr)
     print(f"  Chapters:        {len(chapter_files)}", file=sys.stderr)
 
     print(f"  Loading source tokens ({corpus_id}) ...", file=sys.stderr)
@@ -118,18 +122,29 @@ def main() -> None:
     scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
 
     all_scores: list[VerseScore] = []
+    all_coverage_flagged: set[str] = set()
     for cf in chapter_files:
         verse_scores = score_chapter_file(
             cf, source_verses, args.target_language, scoring_config,
             target_verses=target_verses,
         )
         all_scores.extend(verse_scores)
+        all_coverage_flagged.update(
+            spec.verse_id
+            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
+        )
 
     if args.flagged_only:
-        all_scores = [vs for vs in all_scores if vs.needs_retry]
+        all_scores = [
+            vs for vs in all_scores
+            if vs.needs_retry or vs.verse_id in all_coverage_flagged
+        ]
 
     total = len(all_scores)
-    flagged = sum(1 for vs in all_scores if vs.needs_retry)
+    flagged = sum(
+        1 for vs in all_scores
+        if vs.needs_retry or vs.verse_id in all_coverage_flagged
+    )
     print(
         f"  Scored {total} verse(s); {flagged} flagged for retry "
         f"({100*flagged/total:.1f}%)" if total else "  No verses scored.",
@@ -141,6 +156,7 @@ def main() -> None:
         writer = csv.DictWriter(out_stream, fieldnames=_TSV_FIELDS, delimiter="\t")
         writer.writeheader()
         for vs in all_scores:
+            coverage_flagged = vs.verse_id in all_coverage_flagged
             writer.writerow({
                 "verse_id":          vs.verse_id,
                 "composite":         f"{vs.composite:.4f}",
@@ -149,7 +165,8 @@ def main() -> None:
                 "signal_3":          f"{vs.signal_3:.4f}",
                 "signal_4":          f"{vs.signal_4:.4f}",
                 "signal_5":          f"{vs.signal_5:.4f}",
-                "needs_retry":       str(vs.needs_retry),
+                "needs_retry":       str(vs.needs_retry or coverage_flagged),
+                "coverage_flagged":  str(coverage_flagged),
                 "structural_errors": vs.structural_errors,
                 "article_neq":       vs.article_neq_count,
             })

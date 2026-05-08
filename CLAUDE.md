@@ -302,8 +302,13 @@ returns `(files_changed, total_dropped, total_repaired)`.
 ## score-alignment (`refine/score_alignments.py`)
 
 Standalone audit tool. Reads chapter JSON files and writes a per-verse TSV report (columns:
-`verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `structural_errors`) to
-stdout or `--output`. Does **not** call the LLM.
+`verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `coverage_flagged`,
+`structural_errors`, `article_neq`) to stdout or `--output`. Does **not** call the LLM.
+
+Uses the same dual flagging logic as `retry-alignment`: a verse is flagged when either
+(a) composite score > `--score-retry-threshold`, or (b) `find_low_coverage_verses()`
+finds ≥ `--min-unaligned-src` uncovered source tokens. The `needs_retry` column reflects
+the combined result; `coverage_flagged` indicates which verses were flagged by (b).
 
 ```bash
 score-alignment \
@@ -311,6 +316,7 @@ score-alignment \
   --alignment-dir path/to/LLM-REFINED \
   [--target-tsv-dir path/to/targets/OENGB]   # enables signal 2
   [--score-retry-threshold 0.25] \
+  [--min-unaligned-src 2] \
   [--flagged-only] \
   [--output scores.tsv]
 ```

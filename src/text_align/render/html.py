@@ -197,7 +197,7 @@ def _render_cell(
     if token.is_neq_tgt:
         tgt_classes.append("neq")
 
-    if tag_acai and token.sources and not token.is_neq_tgt:
+    if tag_acai and token.sources and not token.is_neq_tgt and not is_secondary:
         acai_hits = [ae for sid in token.sources for ae in acai_entities.get(sid, [])]
         if acai_hits:
             tgt_classes.append("acai-hl")

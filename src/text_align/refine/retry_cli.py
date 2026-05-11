@@ -90,6 +90,11 @@ def parse_args() -> argparse.Namespace:
                    help=f"Directory for async batch job metadata (default: {_JOBS_DIR})")
     p.add_argument("--dry-run", action="store_true", default=False,
                    help="Report flagged verses without calling the LLM")
+    p.add_argument("--semantic-model", default="sentence-transformers/LaBSE",
+                   help="sentence-transformers model for semantic similarity check "
+                        "(default: sentence-transformers/LaBSE). Pass empty string to disable.")
+    p.add_argument("--semantic-threshold", type=float, default=0.60,
+                   help="Cosine similarity below which a record is flagged (default: 0.60)")
 
     range_group = p.add_mutually_exclusive_group()
     range_group.add_argument("--verse", default=None, metavar="BBCCCVVV",
@@ -111,8 +116,17 @@ def parse_args() -> argparse.Namespace:
     range_group.add_argument("--chapter-range", default=None, nargs=2, metavar=("START", "END"),
                              help="Limit to a chapter range, e.g. --chapter-range 66001 66022")
 
+    p.add_argument("--fallback-threshold", type=float, default=0.25,
+                   help="If flagged verses / total verses >= this value, use the refine model "
+                        "instead of the retry model (default: 0.25)")
+
     p.set_defaults(**config_defaults)
     args = p.parse_args()
+
+    # Save refine-phase model settings before retry overrides are applied.
+    args._refine_llm_provider   = args.llm_provider
+    args._refine_llm_model      = args.llm_model
+    args._refine_reasoning_effort = args.reasoning_effort
 
     # Retry-specific model keys fall back to the refine model keys when absent.
     # This allows a single config to use one model for both passes, or separate
@@ -131,16 +145,18 @@ def parse_args() -> argparse.Namespace:
     return args
 
 
+def _effort_str(effort: str | None) -> str:
+    return f" (reasoning_effort={effort})" if effort else ""
+
+
 def main() -> None:
     args = parse_args()
     corpus_id = _CORPUS_ID[args.corpus]
-    effort_str = f" (reasoning_effort={args.reasoning_effort})" if args.reasoning_effort else ""
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")
     print(f"  Alignment dir:   {args.alignment_dir}")
     print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>={args.min_unaligned_src}")
     if not args.dry_run:
-        print(f"  Provider:        {args.llm_provider} / {args.llm_model}{effort_str}")
         print(f"  Mode:            {args.batch_mode}")
 
     # Build forced-verse set from --verse-list or --verse-list-file
@@ -178,7 +194,11 @@ def main() -> None:
             f"{dropped} record(s) dropped, {repaired} record(s) repaired."
         )
 
-    scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
+    scoring_config = ScoringConfig(
+        retry_threshold=args.score_retry_threshold,
+        semantic_model=args.semantic_model,
+        semantic_threshold=args.semantic_threshold,
+    )
 
     # Verse-level force-include: these verses are retried regardless of score.
     forced_verse: str | None = getattr(args, "verse", None)
@@ -196,12 +216,15 @@ def main() -> None:
     # Score each chapter file and collect verses that need retry
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]] = {}
     chapter_paths: dict[str, Path] = {}
+    total_verse_count = 0
 
     for cf in chapter_files:
         chapter_id = _chapter_id_from_path(cf)
         verse_scores = score_chapter_file(
-            cf, source_verses, args.target_language, scoring_config
+            cf, source_verses, args.target_language, scoring_config,
+            target_verses=target_verses,
         )
+        total_verse_count += len(verse_scores)
         coverage_flagged = {
             spec.verse_id
             for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
@@ -225,6 +248,26 @@ def main() -> None:
     if not retry_specs_by_chapter:
         print("\n  No verses flagged — nothing to retry.")
         return
+
+    # Fallback to refine model when flagged rate is high enough that targeted
+    # retry with the expensive model is not warranted.
+    flagged_rate = total_flagged / total_verse_count if total_verse_count else 0.0
+    retry_differs = (
+        args.llm_model != args._refine_llm_model
+        or args.llm_provider != args._refine_llm_provider
+    )
+    if retry_differs and flagged_rate >= args.fallback_threshold:
+        args.llm_provider     = args._refine_llm_provider
+        args.llm_model        = args._refine_llm_model
+        args.reasoning_effort = args._refine_reasoning_effort
+        print(
+            f"\n  Flagged rate {flagged_rate:.1%} >= {args.fallback_threshold:.0%} — "
+            f"falling back to refine model"
+        )
+    print(
+        f"  Using: {args.llm_provider} / {args.llm_model}"
+        f"{_effort_str(args.reasoning_effort)}"
+    )
 
     print(f"\n  {total_flagged} verse(s) flagged across {len(retry_specs_by_chapter)} chapter(s):")
     for chapter_id in sorted(retry_specs_by_chapter):

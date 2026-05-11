@@ -90,7 +90,7 @@ creator: text-align
 # reasoning_effort: high
 
 # ---------------------------------------------------------------------------
-# retry-alignment settings
+# retry-alignment / score-alignment settings
 # ---------------------------------------------------------------------------
 
 # LLM provider and model for retry-alignment (the second-pass / quality-repair step).
@@ -101,19 +101,38 @@ creator: text-align
 # retry_llm_model: claude-sonnet-4-6
 # retry_reasoning_effort: high
 
-# Alignment quality scoring threshold for retry-alignment and score-alignment.
-# Verses with a composite penalty score above this value are flagged for retry.
+# Composite penalty threshold for score-alignment and retry-alignment.
+# Verses with a composite score above this value are flagged needs_retry.
 # Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
 # score_retry_threshold: 0.25
 
-# Legacy coverage threshold (deprecated; superseded by score_retry_threshold).
-# Flag verses with more than this many unaligned source tokens.
+# Also flag verses with N or more unaligned source tokens regardless of composite.
+# Default: 2.
 # min_unaligned_src: 2
+
+# Semantic similarity model (score-alignment and retry-alignment).
+# For each alignment record, embeds primary source token glosses and primary
+# target token text; records below semantic_threshold set needs_retry=True
+# unconditionally on that verse. Only content-bearing POS (noun/verb/adj) are
+# scored; idiom records are excluded. Requires --target-tsv-dir / target_tsv_dir.
+# Pass empty string to disable the check.
+# semantic_model: sentence-transformers/LaBSE
+# semantic_threshold: 0.60
+
+# Fallback threshold for retry-alignment: if flagged_verses / total_verses
+# meets or exceeds this value AND a separate retry model is configured,
+# retry-alignment uses the cheaper refine model instead of the retry model.
+# Rationale: a high flagged rate indicates systemic quality issues better
+# addressed by a full re-pass than targeted expensive retries.
+# Range 0–1. Default: 0.25.
+# fallback_threshold: 0.25
 
 # ---------------------------------------------------------------------------
 # sim-migrate settings
 # ---------------------------------------------------------------------------
 
+# Similarity model for sim-migrate token matching.
+# This is separate from semantic_model (score/retry alignment quality check above).
 # sentence-transformers/LaBSE  (default, broad coverage)
 # cointegrated/SONAR_200_text_encoder  (for languages LaBSE doesn't cover)
 model: sentence-transformers/LaBSE

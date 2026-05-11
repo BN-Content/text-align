@@ -92,6 +92,9 @@ class ScoringConfig:
     deviation_k: float = 1.5
     # Retry gate
     retry_threshold: float = 0.25
+    # Optional semantic similarity check (separate flag, not part of composite)
+    semantic_model: str | None = None
+    semantic_threshold: float = 0.60
 
 
 @dataclass
@@ -105,6 +108,7 @@ class VerseScore:
     composite: float = 0.0
     structural_errors: int = 0
     article_neq_count: int = 0
+    semantic_low_sim_count: int = 0
     needs_retry: bool = False
 
 
@@ -278,6 +282,7 @@ def score_chapter_file(
     lang: str,
     config: ScoringConfig,
     target_verses: Any | None = None,
+    record_details: list | None = None,
 ) -> list[VerseScore]:
     """Score all verses in a chapter JSON file.
 
@@ -315,6 +320,7 @@ def score_chapter_file(
 
     chapter_id = _chapter_id_from_path(chapter_json_path)
     verse_scores: list[VerseScore] = []
+    chapter_tgt_text: dict[str, str] = {}
 
     for verse_id in sorted(v for v in source_verses if v[:5] == chapter_id):
         src_tokens = source_verses.get(verse_id, [])
@@ -330,6 +336,7 @@ def score_chapter_file(
                     tok_id: tok.text.lower()
                     for tok_id, tok in tgt_verse.words.items()
                 }
+                chapter_tgt_text.update(tgt_text_by_id)
 
         vs = score_verse(
             verse_id=verse_id,
@@ -344,4 +351,25 @@ def score_chapter_file(
         )
         verse_scores.append(vs)
 
-    return score_chapter(verse_scores, config)
+    verse_scores = score_chapter(verse_scores, config)
+
+    if config.semantic_model:
+        from .semantic import apply_semantic_scores
+        chapter_src_by_id = {
+            t.id: t
+            for vid, tokens in source_verses.items()
+            if vid[:5] == chapter_id
+            for t in tokens
+        }
+        apply_semantic_scores(
+            verse_scores,
+            records_by_verse,
+            chapter_src_by_id,
+            chapter_tgt_text,
+            config.semantic_model,
+            config.semantic_threshold,
+            chapter_id=chapter_id,
+            record_details=record_details,
+        )
+
+    return verse_scores

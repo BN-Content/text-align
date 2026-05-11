@@ -38,7 +38,7 @@ from-scratch: true
 # openrouter
 llm_provider: openrouter
 #reasoning_effort: medium
-#llm_model: google/gemma-4-26b-a4b-it
+#llm_model: google/gemma-4-26b-a4b-it:exacto
 #llm_model: moonshotai/kimi-k2.5:exacto
 #llm_model: moonshotai/kimi-k2.6:exacto
 #batch_size: 4
@@ -52,19 +52,25 @@ llm_model: deepseek/deepseek-v4-pro:exacto
 # retry-alignment settings
 # ---------------------------------------------------------------------------
 
+fallback_threshold: 0.25
+
 # LLM provider and model for retry-alignment (the second-pass / quality-repair step).
 # If absent, retry-alignment falls back to the llm_provider / llm_model /
 # reasoning_effort values above. Set these to use a different (typically better)
 # model for the retry pass than the initial refine pass.
 retry_llm_provider: anthropic
-#retry_llm_model: claude-sonnet-4-6
 retry_llm_model: claude-opus-4-7
 retry_reasoning_effort: high
+# DeepSeek
+#retry_llm_provider: openrouter
+#retry_llm_model: deepseek/deepseek-v4-pro:exacto
+#retry_reasoning_effort: high
 
 # Alignment quality scoring threshold for retry-alignment and score-alignment.
 # Verses with a composite penalty score above this value are flagged for retry.
 # Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
-core_retry_threshold: 0.25
+score_retry_threshold: 0.25
+semantic_threshold: 0.6
 
 # Legacy coverage threshold (deprecated; superseded by score_retry_threshold).
 # Flag verses with more than this many unaligned source tokens.

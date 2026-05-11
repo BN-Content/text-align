@@ -39,6 +39,7 @@ _TSV_FIELDS = [
     "coverage_flagged",
     "structural_errors",
     "article_neq",
+    "semantic_low_sim",
 ]
 
 
@@ -71,8 +72,15 @@ def parse_args() -> argparse.Namespace:
                    help="Also flag verses with N or more unaligned source tokens (default: 2)")
     p.add_argument("--output", default=None, type=Path,
                    help="Write TSV report to this file (default: stdout)")
+    p.add_argument("--semantic-detail-output", default=None, type=Path,
+                   help="Write per-record semantic similarity details to this TSV file")
     p.add_argument("--flagged-only", action="store_true", default=False,
                    help="Only output verses where needs_retry is True")
+    p.add_argument("--semantic-model", default="sentence-transformers/LaBSE",
+                   help="sentence-transformers model for semantic similarity check "
+                        "(default: sentence-transformers/LaBSE). Pass empty string to disable.")
+    p.add_argument("--semantic-threshold", type=float, default=0.60,
+                   help="Cosine similarity below which a record is flagged (default: 0.60)")
 
     range_group = p.add_mutually_exclusive_group()
     range_group.add_argument("--book", default=None, metavar="BB")
@@ -99,6 +107,15 @@ def main() -> None:
     print(f"score-alignment: {args.target_language}", file=sys.stderr)
     print(f"  Alignment dir:   {args.alignment_dir}", file=sys.stderr)
     print(f"  Retry threshold: score>{args.score_retry_threshold:.2f} or unaligned-src>={args.min_unaligned_src}", file=sys.stderr)
+    if args.semantic_model:
+        if not (args.target_tsv_dir and args.target_edition):
+            print(
+                "  Warning: --semantic-model requires --target-tsv-dir and --target-edition; "
+                "semantic check will be skipped.",
+                file=sys.stderr,
+            )
+        else:
+            print(f"  Semantic model:  {args.semantic_model} (threshold={args.semantic_threshold:.2f})", file=sys.stderr)
     print(f"  Chapters:        {len(chapter_files)}", file=sys.stderr)
 
     print(f"  Loading source tokens ({corpus_id}) ...", file=sys.stderr)
@@ -119,7 +136,13 @@ def main() -> None:
             file=sys.stderr,
         )
 
-    scoring_config = ScoringConfig(retry_threshold=args.score_retry_threshold)
+    scoring_config = ScoringConfig(
+        retry_threshold=args.score_retry_threshold,
+        semantic_model=args.semantic_model,
+        semantic_threshold=args.semantic_threshold,
+    )
+
+    semantic_details: list | None = [] if args.semantic_detail_output else None
 
     all_scores: list[VerseScore] = []
     all_coverage_flagged: set[str] = set()
@@ -127,6 +150,7 @@ def main() -> None:
         verse_scores = score_chapter_file(
             cf, source_verses, args.target_language, scoring_config,
             target_verses=target_verses,
+            record_details=semantic_details,
         )
         all_scores.extend(verse_scores)
         all_coverage_flagged.update(
@@ -169,10 +193,25 @@ def main() -> None:
                 "coverage_flagged":  str(coverage_flagged),
                 "structural_errors": vs.structural_errors,
                 "article_neq":       vs.article_neq_count,
+                "semantic_low_sim":  vs.semantic_low_sim_count,
             })
     finally:
         if args.output:
             out_stream.close()
+
+    if semantic_details is not None and args.semantic_detail_output:
+        _DETAIL_FIELDS = [
+            "verse_id", "src_ids", "src_lemmas", "src_gloss", "src_gloss_alt",
+            "tgt_ids", "tgt_text", "similarity", "below_threshold",
+        ]
+        with open(args.semantic_detail_output, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=_DETAIL_FIELDS, delimiter="\t")
+            writer.writeheader()
+            writer.writerows(semantic_details)
+        print(
+            f"  Semantic detail: {len(semantic_details)} record(s) → {args.semantic_detail_output}",
+            file=sys.stderr,
+        )
 
 
 if __name__ == "__main__":

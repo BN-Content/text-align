@@ -72,8 +72,9 @@ src/text_align/
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # Per-verse source-token coverage evaluation (legacy)
-│   ├── scoring.py       # Composite alignment quality scorer (five signals)
+│   ├── scoring.py       # Composite alignment quality scorer (five signals + semantic flag)
 │   ├── scoring_stopwords.py  # Per-language stopword sets for scorer
+│   ├── semantic.py      # Semantic similarity check (sentence-transformers/LaBSE)
 │   ├── refine.py        # refine-alignment CLI
 │   ├── fetch_batch.py   # fetch-batch CLI
 │   ├── retry.py         # Verse merge/retry core logic
@@ -272,6 +273,10 @@ Scores alignment quality for existing chapter JSON files and writes a per-verse 
 
 Each verse receives a composite penalty score (0–1, higher = worse) from five signals: weighted source-token coverage, translation content-word coverage, NEQ overuse, token smearing (N:M records where both sides have multiple primary tokens), and per-verse deviation from chapter mean.
 
+In addition to the composite score, two post-hoc checks flag verses unconditionally:
+- **`article_neq`** — articles (Greek definite article, Hebrew article) that appear in the NEQ list are always a mistake and force `needs_retry=True`.
+- **`semantic_low_sim`** — for content-word (noun/verb/adjective) alignment records, embeds the source English gloss and target word text using LaBSE and flags records below `--semantic-threshold` (default 0.60). Any verse with at least one such record is forced `needs_retry=True`. Requires `--target-tsv-dir`.
+
 Flagging uses the same dual logic as `retry-alignment`: a verse is marked `needs_retry=True` when either (a) composite score > `--score-retry-threshold`, or (b) the verse has ≥ `--min-unaligned-src` uncovered source tokens. The `coverage_flagged` column distinguishes which verses were caught by condition (b).
 
 ```
@@ -280,16 +285,21 @@ score-alignment \
   --corpus nt \
   --target-language eng \
   [--target-edition OENGB] \
-  [--target-tsv-dir path/to/alignments-eng/data/targets/OENGB]  # enables signal 2
+  [--target-tsv-dir path/to/alignments-eng/data/targets/OENGB]  # enables signal 2 + semantic
   [--sources-dir data/sources/] \
   [--score-retry-threshold 0.25] \
   [--min-unaligned-src 2] \
+  [--semantic-model sentence-transformers/LaBSE]  # default; pass "" to disable
+  [--semantic-threshold 0.60] \
+  [--semantic-detail-output detail.tsv] \          # per-record similarity TSV for calibration
   [--flagged-only] \
   [--output scores.tsv] \
   [--config OENGB]
 ```
 
-Output columns: `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `coverage_flagged`, `structural_errors`, `article_neq`.
+Output columns: `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `coverage_flagged`, `structural_errors`, `article_neq`, `semantic_low_sim`.
+
+`--semantic-detail-output` writes a separate per-record TSV with columns `verse_id`, `src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`, `below_threshold`. Use this to inspect the similarity distribution for specific lemmas (e.g. filter `src_lemmas` for εἰμί) and calibrate the threshold.
 
 #### `retry-alignment`
 
@@ -310,6 +320,9 @@ retry-alignment \
   [--reasoning-effort high] \
   [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
   [--min-unaligned-src 2] \          # retry if N or more source tokens are unaligned (default: 2)
+  [--semantic-model sentence-transformers/LaBSE]  # default; pass "" to disable
+  [--semantic-threshold 0.60] \
+  [--fallback-threshold 0.25] \       # if flagged% >= this, use refine model instead of retry model
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4] \
@@ -320,6 +333,8 @@ retry-alignment \
   [--dry-run]                         # report flagged verses without calling the LLM
   [--config OENGB]
 ```
+
+`--fallback-threshold`: if the fraction of flagged verses across the run meets or exceeds this value (default 0.25), `retry-alignment` uses the refine-phase model instead of the configured retry model. Rationale: a high flagged rate suggests systemic quality issues better addressed by a fresh cheap pass than targeted expensive retries. Only takes effect when a separate retry model is configured (via `retry_llm_model` in the YAML or `--llm-model` after retry override). The model actually used is always printed before the verse list.
 
 Range and verse filtering:
 

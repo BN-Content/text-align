@@ -303,7 +303,7 @@ returns `(files_changed, total_dropped, total_repaired)`.
 
 Standalone audit tool. Reads chapter JSON files and writes a per-verse TSV report (columns:
 `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `coverage_flagged`,
-`structural_errors`, `article_neq`) to stdout or `--output`. Does **not** call the LLM.
+`structural_errors`, `article_neq`, `semantic_low_sim`) to stdout or `--output`. Does **not** call the LLM.
 
 Uses the same dual flagging logic as `retry-alignment`: a verse is flagged when either
 (a) composite score > `--score-retry-threshold`, or (b) `find_low_coverage_verses()`
@@ -314,9 +314,12 @@ the combined result; `coverage_flagged` indicates which verses were flagged by (
 score-alignment \
   --config OENGB --corpus nt \
   --alignment-dir path/to/LLM-REFINED \
-  [--target-tsv-dir path/to/targets/OENGB]   # enables signal 2
+  [--target-tsv-dir path/to/targets/OENGB]   # enables signal 2 and semantic check
   [--score-retry-threshold 0.25] \
   [--min-unaligned-src 2] \
+  [--semantic-model sentence-transformers/LaBSE] \   # default; pass "" to disable
+  [--semantic-threshold 0.60] \
+  [--semantic-detail-output detail.tsv] \            # per-record similarity TSV
   [--flagged-only] \
   [--output scores.tsv]
 ```
@@ -326,9 +329,65 @@ is unconditionally flagged `needs_retry=True` regardless of the composite score 
 NEQ'd articles are always a mistake (articles must be primary to "the"/pronoun/reinstated
 proper noun, or secondary to their head noun/adjective/participle).
 
+TSV also includes a `semantic_low_sim` column (integer count of records below threshold).
+Any verse with `semantic_low_sim > 0` is unconditionally flagged `needs_retry=True`.
+Requires `--target-tsv-dir`; silently skips if target text is unavailable.
+
+`--semantic-detail-output PATH` writes a separate per-record TSV (columns: `verse_id`,
+`src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`,
+`below_threshold`). Primary use: filter by `src_lemmas` to inspect the similarity
+distribution for specific lemmas and calibrate the threshold.
+
 Primary use: run between `refine-alignment` and `retry-alignment` to inspect quality
 before committing to a retry spend, and to tune the threshold against manually reviewed
 chapters.
+
+## Semantic similarity scoring (`refine/semantic.py`)
+
+Post-hoc check (runs automatically when `--target-tsv-dir` is provided): for each
+eligible alignment record, embeds the source gloss and target word text using
+`sentence-transformers/LaBSE` and computes cosine similarity. Records below
+`--semantic-threshold` (default 0.60) contribute to a per-verse `semantic_low_sim_count`;
+any verse with count > 0 is flagged `needs_retry=True`.
+
+**Eligible records:** only records where at least one primary source token is a
+content-bearing POS: `noun`, `verb`, `adj` (NT), `adjective` (OT). Function words
+(articles, conjunctions, prepositions, pronouns) are excluded — they are too flexible
+in translation to produce reliable similarity signals. Idiom records (`meta.is_idiom`)
+are also excluded.
+
+**Source-side text:** `gloss2` when non-empty (bare core meaning, no contextual syntax
+markers), falling back to `gloss`. Dots in `gloss2` are replaced with spaces to handle
+OT forms like `"he.created"` → `"he created"`. English glosses are used rather than
+source-language lemmas because LaBSE's ancient-language embedding spaces (Koine Greek,
+Biblical Hebrew) are dominated by Modern Greek / Modern Hebrew web text and are not
+reliable for biblical vocabulary. POS names differ between corpora: NT uses `adj`, OT
+uses `adjective`; both are included in `_CONTENT_POS`.
+
+**Model:** any `sentence-transformers`-compatible model; default is
+`sentence-transformers/LaBSE` (109 languages, ~470 MB). Model is lazy-loaded and
+cached at module level — first call downloads and loads it; subsequent calls reuse it.
+Swap via `--semantic-model` to any HuggingFace model if LaBSE coverage is insufficient
+for a target language. Pass `--semantic-model ""` to disable the check entirely.
+
+**Batching:** all records across the chapter are collected into a single encoder call
+for efficiency. A per-chapter diagnostic line is printed to stderr:
+`Semantic [BBCCC] N pairs, sim min=X mean=Y max=Z, N record(s) below T`
+
+**Per-record detail output:** `--semantic-detail-output PATH` on `score-alignment`
+writes a TSV with `verse_id`, `src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`,
+`tgt_text`, `similarity`, `below_threshold` for every scored record. Filter by
+`src_lemmas` to inspect the similarity distribution for any specific lemma.
+
+**Implementation:** `apply_semantic_scores(verse_scores, records_by_verse, src_by_id,
+tgt_text_by_id, model_name, threshold, chapter_id, record_details)` in `semantic.py`.
+`score_chapter_file` in `scoring.py` threads `record_details` through. Both
+`score-alignment` and `retry-alignment` pass `target_verses` to `score_chapter_file`
+so the semantic check has target text available.
+
+**YAML config keys:** `semantic_model`, `semantic_threshold`.
+
+Available on `score-alignment` and `retry-alignment`; not on `refine-alignment`.
 
 ## Two-pass workflow (cheap model → clean → score → retry)
 
@@ -374,6 +433,14 @@ records in the existing chapter JSON. For non-replaced verses, regular records
 are kept as-is; NEQ entries are re-inflated into `{"meta": {"rel": "NEQ"}}`
 records so `build_output_alignment` can reprocess them uniformly. The resulting
 file is written in place.
+
+**Fallback threshold** (`--fallback-threshold`, default 0.25): if
+`total_flagged / total_verses >= threshold` and a separate retry model is configured,
+`retry-alignment` reverts to the refine-phase model instead. Rationale: a high flagged
+rate indicates systemic quality issues better addressed by a cheap re-pass than targeted
+expensive retries. The model actually used is always printed before the verse list.
+Saved in `args._refine_llm_provider/model/reasoning_effort` before retry overrides are
+applied; decision is made after scoring completes.
 
 **Async support**: `--batch-mode async` submits retry verses to the provider
 batch API (same three providers as `refine-alignment`). Job metadata carries

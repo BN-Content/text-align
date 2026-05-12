@@ -545,7 +545,8 @@ def _process_corpus_async(
 
     print(f"  Submitted: {job_id}")
     print(f"  Job metadata: {meta_path}")
-    print(f"  Retrieve results with: fetch-batch {meta_path}")
+    from .fetch_batch import fetch_wait
+    fetch_wait(meta_path)
 
 
 # ---------------------------------------------------------------------------
@@ -620,8 +621,8 @@ def parse_args() -> argparse.Namespace:
                    help="Skip candidate loading and align entirely from source/target tokens")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: call LLM and write results immediately (default); "
-                        "async: submit to provider batch API and exit "
-                        "(use fetch-batch to retrieve results)")
+                        "async: submit to provider batch API, then block until "
+                        "results are ready and write chapter files (same output as sync)")
     p.add_argument("--jobs-dir", default=_JOBS_DIR, type=Path,
                    help=f"Directory for async batch job metadata (default: {_JOBS_DIR})")
 

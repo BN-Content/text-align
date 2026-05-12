@@ -84,8 +84,8 @@ def parse_args() -> argparse.Namespace:
                    help="Also retry verses with N or more unaligned source tokens (default: 2)")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: re-align immediately and write results (default); "
-                        "async: submit to provider batch API and exit "
-                        "(use fetch-batch to retrieve and merge results)")
+                        "async: submit to provider batch API, then block until "
+                        "results are ready and merge verse records (same output as sync)")
     p.add_argument("--jobs-dir", default=_JOBS_DIR, type=Path,
                    help=f"Directory for async batch job metadata (default: {_JOBS_DIR})")
     p.add_argument("--dry-run", action="store_true", default=False,
@@ -400,7 +400,8 @@ def _run_async(
 
     print(f"  Submitted: {job_id}")
     print(f"  Job metadata: {meta_path}")
-    print(f"  Retrieve and merge results with: fetch-batch {meta_path}")
+    from .fetch_batch import fetch_wait
+    fetch_wait(meta_path)
 
 
 if __name__ == "__main__":

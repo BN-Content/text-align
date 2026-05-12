@@ -393,6 +393,23 @@ def parse_args() -> argparse.Namespace:
     return p.parse_args()
 
 
+def fetch_wait(meta_path: Path, wait_interval: int = 60) -> None:
+    """Fetch batch results with --wait; called programmatically after async submission."""
+    job_meta = load_job_metadata(meta_path)
+    provider = job_meta.get("provider", "")
+    if provider == "google":
+        _fetch_google(job_meta, poll_only=False, wait=True, wait_interval=wait_interval)
+    elif provider == "openai":
+        _fetch_openai(job_meta, poll_only=False, wait=True, wait_interval=wait_interval)
+    elif provider == "anthropic":
+        _fetch_anthropic(job_meta, poll_only=False, wait=True, wait_interval=wait_interval)
+    else:
+        raise SystemExit(
+            f"Provider {provider!r} is not supported. "
+            f"Supported providers: 'google', 'openai', 'anthropic'."
+        )
+
+
 def main() -> None:
     args = parse_args()
 

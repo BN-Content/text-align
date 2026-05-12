@@ -2,10 +2,10 @@
 
 ## Goal
 
-Run `refine-alignment` for the full NT either locally or via GitHub Actions, with
-parallel execution at chapter granularity and a simple progress/status story.
-OT alignment will use a similar approach but is deferred; the design should not
-preclude it.
+Run `refine-alignment` + `retry-alignment` for the full NT either locally or via
+GitHub Actions, with parallel execution at chapter granularity and a simple
+progress/status story.  OT alignment will use a similar approach but is deferred;
+the design should not preclude it.
 
 ---
 
@@ -24,6 +24,31 @@ preclude it.
 - **Chapter = unit of parallelism** — one GHA matrix job per chapter. This is the
   natural boundary: it matches the output file, `--skip-existing` skips at exactly
   the right granularity, and a timed-out job wastes at most one chapter's work.
+- **refine + retry in the same matrix job** — retry depends directly on refine output
+  for the same chapter, so doing both in one job avoids artifact hand-off and keeps
+  per-chapter work self-contained.
+
+---
+
+## Per-chapter job sequence
+
+Each matrix job runs this sequence end-to-end for its chapter:
+
+```
+1. refine-alignment  (initial pass, cheap model)
+         │
+         ▼
+2. retry-alignment   (loop while exit code 2 — fallback model active)
+   ├── exit 2 → loop back (flagged rate ≥ fallback-threshold; cheap model used)
+   └── exit 0 → done   (flagged rate < fallback-threshold; retry_llm_* model used
+                         for this final pass — or nothing needed)
+         │
+         ▼
+3. upload artifact
+```
+
+The final expensive `retry_llm_*` pass happens naturally as the **last** loop iteration
+that exits 0.  No explicit "one final run" step is needed.
 
 ---
 
@@ -97,7 +122,43 @@ Default is `false` so existing behavior is unchanged unless the flag is passed.
 In GHA, always pass `--skip-existing` so a re-triggered job doesn't redo a chapter
 that completed before a timeout.
 
-### B. `scripts/nt_chapters.py` — chapter matrix and status
+### B. Exit codes for `retry-alignment`
+
+`retry-alignment` must communicate whether the fallback model was active so that the
+GHA loop knows whether to iterate again.
+
+New exit code contract (add to `retry_cli.py:main()`):
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | No retries needed, **or** retry_llm_* model was used — done |
+| 1 | Unhandled exception (Python default) |
+| 2 | Fallback triggered: flagged rate ≥ `--fallback-threshold`; cheap model used — run again |
+
+Implementation: after the fallback decision block (around line 259 of `retry_cli.py`),
+stash whether the fallback was used:
+
+```python
+used_fallback = False
+if retry_differs and flagged_rate >= args.fallback_threshold:
+    args.llm_provider     = args._refine_llm_provider
+    args.llm_model        = args._refine_llm_model
+    args.reasoning_effort = args._refine_reasoning_effort
+    used_fallback = True
+    print(...)
+```
+
+Then at the end of `main()`, after the sync/async call returns:
+
+```python
+if used_fallback:
+    sys.exit(2)
+```
+
+When `retry_differs` is `False` (only one model configured), `used_fallback` stays
+`False` and the loop runs once and exits 0 — correct behavior.
+
+### C. `scripts/nt_chapters.py` — chapter matrix and status
 
 Reads `data/sources/SBLGNT.tsv`, counts unique verse IDs per chapter, and produces
 the GHA matrix or a human-readable status report.
@@ -128,7 +189,7 @@ Options:
 - `--edition NAME` — required for `--status`
 - `--output-dir PATH` — override the default output path derivation
 
-### C. GHA matrix ceiling and short-chapter bundling
+### D. GHA matrix ceiling and short-chapter bundling
 
 The NT has ~261 chapters; GHA's matrix limit is **256 jobs**. The fix is to bundle
 the shortest chapters (those under ~30 verses) with an adjacent chapter into a single
@@ -141,12 +202,12 @@ Bundled jobs pass `--chapter-range START END` covering two adjacent chapters.
 `nt_chapters.py --json` encapsulates this logic: it emits 256 or fewer matrix
 entries, bundling short chapters automatically.
 
-### D. `.github/workflows/align-nt.yml`
+### E. `.github/workflows/align-nt.yml`
 
 Three-job pipeline:
 
 ```
-plan ──→ refine (matrix, up to 256 parallel chapter jobs) ──→ collect (commit back)
+plan ──→ refine+retry (matrix, up to 256 parallel chapter jobs) ──→ collect (commit back)
 ```
 
 **Workflow inputs** (`workflow_dispatch`):
@@ -156,29 +217,44 @@ plan ──→ refine (matrix, up to 256 parallel chapter jobs) ──→ collec
 | `config` | yes | — | Edition config name (e.g. `BSB`) |
 | `chapter` | no | — | Re-run a single chapter or range, e.g. `40013` or `40001 40002` |
 | `model` | no | — | Override the model in the config YAML |
+| `max-retry-passes` | no | `5` | Max retry loop iterations before giving up |
 
 **`plan` job**: runs `nt_chapters.py --json`. If `chapter` input is provided, emits
 a single-element matrix instead of the full list.
 
-**`refine` job** (matrix, `fail-fast: false`, `max-parallel: 20`,
-`timeout-minutes: 300`):
+**`refine+retry` job** (matrix, `fail-fast: false`, `max-parallel: 20`,
+`timeout-minutes: 360`):
+
 ```bash
+# Step 1 — initial alignment
 poetry run refine-alignment \
   --config ${{ inputs.config }} \
-  --corpora nt \
-  --chapter ${{ matrix.chunk.chapter }}      # or --chapter-range for bundled pairs
+  --corpus nt \
+  --chapter ${{ matrix.chunk.chapter }} \
   --skip-existing
+
+# Step 2 — retry loop
+MAX_PASSES=${{ inputs.max-retry-passes || 5 }}
+for i in $(seq 1 $MAX_PASSES); do
+  poetry run retry-alignment \
+    --config ${{ inputs.config }} \
+    --corpus nt \
+    --chapter ${{ matrix.chunk.chapter }}
+  rc=$?
+  [ $rc -eq 0 ] && break           # retry model used (or nothing needed) — done
+  [ $rc -ne 2 ] && exit $rc        # unexpected error — fail the job
+  echo "Pass $i: fallback model used, looping..."
+done
 ```
-The `timeout-minutes: 300` cap (5 hours) ensures GHA kills a hung job cleanly rather
-than consuming the full 6-hour slot. In practice most chapters should complete in
-under 3 hours even for complex content; observed worst case was Matt 13 (58 verses)
-at a few hours locally.
+
+The `timeout-minutes: 360` cap (6 hours) gives a chapter enough time for refine +
+up to 5 retry passes while still ensuring GHA kills a hung job cleanly.
 
 API keys injected via env from repo secrets (`OPENROUTER_API_KEY`,
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`). Each job uploads its
 output file(s) as a GHA artifact named `align-{chunk.id}`.
 
-**`collect` job** (runs after all refine jobs, `permissions: contents: write`):
+**`collect` job** (runs after all refine+retry jobs, `permissions: contents: write`):
 Downloads all `align-*` artifacts, copies files into
 `alignments-eng/exp/{config}/LLM-REFINED/`, commits and pushes with
 `github-actions[bot]` identity. Skips commit if no files changed (idempotent).
@@ -190,14 +266,17 @@ Downloads all `align-*` artifacts, copies files into
 ```
 Local (single chapter, development/testing):
   cd C:/git/BN-Content/text-align
-  poetry run refine-alignment --config BSB --corpora nt --chapter 40001
+  poetry run refine-alignment --config BSB --corpus nt --chapter 40001
+  poetry run retry-alignment  --config BSB --corpus nt --chapter 40001
 
 Local (full NT, sequential):
-  poetry run refine-alignment --config BSB --corpora nt
+  poetry run refine-alignment --config BSB --corpus nt
+  # then retry loop manually or via script
 
 GHA (full NT, parallel):
   → trigger align-nt workflow with config=BSB
-  → up to 256 chapter jobs run simultaneously (~3 hrs worst case vs days sequential)
+  → up to 256 chapter jobs run simultaneously; each does refine + retry loop
+  → collect job commits results back to repo
 
 GHA (re-run one failed/timed-out chapter):
   → trigger with config=BSB, chapter=40013
@@ -208,6 +287,6 @@ GHA (re-run one failed/timed-out chapter):
 ## Not in scope (for now)
 
 - OT alignment — deferred; the same workflow structure will apply when the time comes
-- `score-alignment` and `retry-alignment` in GHA (run locally after pulling output)
+- `score-alignment` standalone reporting in GHA (run locally after pulling output)
 - HTML visualization in GHA
 - diff-migrate, sim-migrate, acai-align paths

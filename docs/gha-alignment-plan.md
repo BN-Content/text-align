@@ -15,8 +15,13 @@ the design should not preclude it.
   `alignment_sources` and migration tooling are irrelevant for this workflow.
 - **ACAI** — only needed for HTML visualization, not for alignment itself. Not checked
   out in the alignment workflow.
-- **OpenRouter is sync-only** — no batch API. All LLM calls are sequential within a
-  chapter job, but chapter jobs run in parallel across the GHA matrix.
+- **Async batch mode by default** — `--batch-mode async` submits all LLM calls for a
+  chapter to the provider's batch API, then immediately blocks on `fetch-batch --wait`
+  internally. The caller sees the same blocking behaviour as sync, but uses batch-API
+  pricing (typically 50% cheaper for Anthropic/OpenAI) and avoids per-request rate
+  limits. No separate `fetch-batch` step is needed in GHA.
+- **OpenRouter is sync-only** — it raises an error on `--batch-mode async`. Pass
+  `batch-mode: sync` in the workflow input when using an OpenRouter config.
 - **Single repo** — all data (source TSVs, target TSVs, output JSON, HTML) lives in
   `text-align`. The Clear repo is no longer needed for alignment runs.
 - **`refine-alignment` is provider-agnostic** — the GHA workflow calls the same CLI
@@ -217,6 +222,7 @@ plan ──→ refine+retry (matrix, up to 256 parallel chapter jobs) ──→ 
 | `config` | yes | — | Edition config name (e.g. `BSB`) |
 | `chapter` | no | — | Re-run a single chapter or range, e.g. `40013` or `40001 40002` |
 | `model` | no | — | Override the model in the config YAML |
+| `batch-mode` | no | `async` | `async` (batch API, cheaper) or `sync` (required for OpenRouter) |
 | `max-retry-passes` | no | `5` | Max retry loop iterations before giving up |
 
 **`plan` job**: runs `nt_chapters.py --json`. If `chapter` input is provided, emits
@@ -226,12 +232,18 @@ a single-element matrix instead of the full list.
 `timeout-minutes: 360`):
 
 ```bash
+BATCH_FLAG="--batch-mode ${{ inputs.batch-mode || 'async' }}"
+
 # Step 1 — initial alignment
+# --batch-mode async submits to provider batch API then blocks internally until
+# results are fetched; no separate fetch-batch step is needed.
+# --batch-mode sync can be used for OpenRouter (no batch API).
 poetry run refine-alignment \
   --config ${{ inputs.config }} \
   --corpus nt \
   --chapter ${{ matrix.chunk.chapter }} \
-  --skip-existing
+  --skip-existing \
+  $BATCH_FLAG
 
 # Step 2 — retry loop
 MAX_PASSES=${{ inputs.max-retry-passes || 5 }}
@@ -239,7 +251,8 @@ for i in $(seq 1 $MAX_PASSES); do
   poetry run retry-alignment \
     --config ${{ inputs.config }} \
     --corpus nt \
-    --chapter ${{ matrix.chunk.chapter }}
+    --chapter ${{ matrix.chunk.chapter }} \
+    $BATCH_FLAG
   rc=$?
   [ $rc -eq 0 ] && break           # retry model used (or nothing needed) — done
   [ $rc -ne 2 ] && exit $rc        # unexpected error — fail the job
@@ -248,7 +261,10 @@ done
 ```
 
 The `timeout-minutes: 360` cap (6 hours) gives a chapter enough time for refine +
-up to 5 retry passes while still ensuring GHA kills a hung job cleanly.
+up to 5 retry passes. Async batch processing adds latency per pass (typically minutes
+to ~1 hour per pass vs. seconds per verse for sync), but trades that for cheaper API
+pricing and no per-request rate-limit pressure. In practice, NT chapter batch jobs
+complete well within the 6-hour window.
 
 API keys injected via env from repo secrets (`OPENROUTER_API_KEY`,
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`). Each job uploads its

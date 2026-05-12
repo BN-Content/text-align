@@ -48,7 +48,8 @@ class TargetEntity:
 # Constants
 # ---------------------------------------------------------------------------
 
-ACAI_TYPES: list[str] = ["people", "places", "groups", "deities"]
+ACAI_TYPES: list[str] = ["people", "places", "groups", "deities", "keyterms",
+                         "fauna", "flora", "realia"]
 TYPE_TO_FOLDER_MAP: dict[str, str] = {
     "person": "people",
     "place": "places",
@@ -57,6 +58,7 @@ TYPE_TO_FOLDER_MAP: dict[str, str] = {
     "fauna": "fauna",
     "flora": "flora",
     "realia": "realia",
+    "keyterm": "keyterms",
 }
 MINIMUM_GOOD_SCORE: float = 0.70
 

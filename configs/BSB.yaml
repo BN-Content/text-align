@@ -26,8 +26,8 @@ from-scratch: true
 #llm_model: claude-opus-4-7
 #reasoning_effort: high
 # OpenAI
-#llm_provider: openai
-#llm_model: gpt-5.4-mini
+llm_provider: openai
+llm_model: gpt-5-mini
 #llm_model: gpt-5.4
 #reasoning_effort: low
 # Google
@@ -36,15 +36,14 @@ from-scratch: true
 ##llm_model: gemini-3-flash-preview
 #llm_model: gemini-3.1-pro-preview
 # openrouter
-llm_provider: openrouter
+#llm_provider: openrouter
 #reasoning_effort: medium
 #llm_model: google/gemma-4-26b-a4b-it:exacto
 #llm_model: moonshotai/kimi-k2.5:exacto
 #llm_model: moonshotai/kimi-k2.6:exacto
-#batch_size: 4
 #llm_model: qwen/qwen3.6-plus:exacto
 #llm_model: z-ai/glm-5.1:exacto
-llm_model: deepseek/deepseek-v4-pro:exacto
+#llm_model: deepseek/deepseek-v4-pro:exacto
 #llm_model: deepseek/deepseek-v4-flash:exacto
 #llm_model: mistralai/mistral-large-2512:exacto
 
@@ -58,13 +57,18 @@ fallback_threshold: 0.25
 # If absent, retry-alignment falls back to the llm_provider / llm_model /
 # reasoning_effort values above. Set these to use a different (typically better)
 # model for the retry pass than the initial refine pass.
-retry_llm_provider: anthropic
-retry_llm_model: claude-opus-4-7
-retry_reasoning_effort: high
+#retry_llm_provider: anthropic
+#retry_llm_model: claude-opus-4-7
+#retry_reasoning_effort: high
 # DeepSeek
 #retry_llm_provider: openrouter
 #retry_llm_model: deepseek/deepseek-v4-pro:exacto
 #retry_reasoning_effort: high
+# OpenAI
+retry_llm_provider: openai
+#retry_llm_model: gpt-5.4-mini
+retry_llm_model: gpt-5.5
+retry_reasoning_effort: high
 
 # Alignment quality scoring threshold for retry-alignment and score-alignment.
 # Verses with a composite penalty score above this value are flagged for retry.

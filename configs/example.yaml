@@ -105,6 +105,8 @@ creator: text-align
 # Verses with a composite score above this value are flagged needs_retry.
 # Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
 # score_retry_threshold: 0.25
+# default is 0.35, this would override
+# semantic_threshold: 0.35
 
 # Also flag verses with N or more unaligned source tokens regardless of composite.
 # Default: 2.

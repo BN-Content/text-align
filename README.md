@@ -275,7 +275,7 @@ Each verse receives a composite penalty score (0–1, higher = worse) from five 
 
 In addition to the composite score, two post-hoc checks flag verses unconditionally:
 - **`article_neq`** — articles (Greek definite article, Hebrew article) that appear in the NEQ list are always a mistake and force `needs_retry=True`.
-- **`semantic_low_sim`** — for content-word (noun/verb/adjective) alignment records, embeds the source English gloss and target word text using LaBSE and flags records below `--semantic-threshold` (default 0.60). Any verse with at least one such record is forced `needs_retry=True`. Requires `--target-tsv-dir`.
+- **`semantic_low_sim`** — for content-word (noun/verb/adjective) alignment records, embeds the source English gloss and target word text using LaBSE and flags records below `--semantic-threshold` (default 0.35). Any verse with at least one such record is forced `needs_retry=True`. Requires `--target-tsv-dir`.
 
 Flagging uses the same dual logic as `retry-alignment`: a verse is marked `needs_retry=True` when either (a) composite score > `--score-retry-threshold`, or (b) the verse has ≥ `--min-unaligned-src` uncovered source tokens. The `coverage_flagged` column distinguishes which verses were caught by condition (b).
 
@@ -290,8 +290,8 @@ score-alignment \
   [--score-retry-threshold 0.25] \
   [--min-unaligned-src 2] \
   [--semantic-model sentence-transformers/LaBSE]  # default; pass "" to disable
-  [--semantic-threshold 0.60] \
-  [--semantic-detail-output detail.tsv] \          # per-record similarity TSV for calibration
+  [--semantic-threshold 0.35] \
+  [--semantic-detail-output] \                     # write per-record similarity TSV to output/semantic_detail_YYYY-MM-DD.tsv
   [--flagged-only] \
   [--output scores.tsv] \
   [--config OENGB]
@@ -299,7 +299,7 @@ score-alignment \
 
 Output columns: `verse_id`, `composite`, `signal_1`–`signal_5`, `needs_retry`, `coverage_flagged`, `structural_errors`, `article_neq`, `semantic_low_sim`.
 
-`--semantic-detail-output` writes a separate per-record TSV with columns `verse_id`, `src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`, `below_threshold`. Use this to inspect the similarity distribution for specific lemmas (e.g. filter `src_lemmas` for εἰμί) and calibrate the threshold.
+`--semantic-detail-output` (boolean flag, no value) writes a separate per-record TSV to `output/semantic_detail_YYYY-MM-DD.tsv` with columns `verse_id`, `src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`, `below_threshold`. Use this to inspect the similarity distribution for specific lemmas (e.g. filter `src_lemmas` for εἰμί) and calibrate the threshold.
 
 #### `retry-alignment`
 
@@ -321,7 +321,7 @@ retry-alignment \
   [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
   [--min-unaligned-src 2] \          # retry if N or more source tokens are unaligned (default: 2)
   [--semantic-model sentence-transformers/LaBSE]  # default; pass "" to disable
-  [--semantic-threshold 0.60] \
+  [--semantic-threshold 0.35] \
   [--fallback-threshold 0.25] \       # if flagged% >= this, use refine model instead of retry model
   [--batch-size 5] \
   [--max-retries 2] \

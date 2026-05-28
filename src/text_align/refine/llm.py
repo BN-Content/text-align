@@ -521,6 +521,9 @@ class LLMClient:
                 raise ImportError("Install the google-genai package: poetry add google-genai")
             return genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 
+    def _is_deepseek_openrouter(self) -> bool:
+        return self.provider == "openrouter" and "deepseek" in self.model.lower()
+
     def _track_openrouter_cost(self, response) -> None:
         """Accumulate per-call cost from an OpenRouter response and print running total."""
         usage = getattr(response, "usage", None)
@@ -625,6 +628,13 @@ class LLMClient:
                 _oa_kwargs["temperature"] = self.temperature
             if self.max_output_tokens is not None:
                 _oa_kwargs["max_completion_tokens"] = self.max_output_tokens
+            if self._is_deepseek_openrouter():
+                model = _oa_kwargs["model"]
+                for _sfx in (":nitro", ":exacto"):
+                    if model.endswith(_sfx):
+                        _oa_kwargs["model"] = model[: -len(_sfx)]
+                        break
+                _oa_kwargs["extra_body"] = {"provider": {"order": ["DeepSeek", "deepseek"], "allow_fallbacks": False}}
             try:
                 response = _api_call_with_backoff(
                     lambda: self._client.chat.completions.create(**_oa_kwargs),

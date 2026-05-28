@@ -94,7 +94,7 @@ class ScoringConfig:
     retry_threshold: float = 0.25
     # Optional semantic similarity check (separate flag, not part of composite)
     semantic_model: str | None = None
-    semantic_threshold: float = 0.60
+    semantic_threshold: float = 0.35
 
 
 @dataclass

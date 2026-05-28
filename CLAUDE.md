@@ -89,6 +89,15 @@ a per-call + running total after each API call. A session total is printed at th
 `refine-alignment` and `retry-alignment` when `--llm-provider openrouter` is active.
 Async batch mode is not supported for `openrouter`.
 
+## OpenRouter DeepSeek provider ordering (`refine/llm.py`)
+
+When the provider is `openrouter` and the model slug contains `deepseek` (case-insensitive),
+`_call_openai` automatically adds `extra_body={"provider": {"order": ["DeepSeek", "deepseek"],
+"allow_fallbacks": False}}` to the API call. This pins routing to DeepSeek's own
+infrastructure (cheapest option) and disables silent fallback to other providers.
+Any `:nitro` or `:exacto` variant suffix is stripped from the model name in the same
+call, as those suffixes conflict with explicit provider ordering.
+
 ## Model names
 
 Never substitute a user-specified model name for a known one, even if the name looks
@@ -318,8 +327,8 @@ score-alignment \
   [--score-retry-threshold 0.25] \
   [--min-unaligned-src 2] \
   [--semantic-model sentence-transformers/LaBSE] \   # default; pass "" to disable
-  [--semantic-threshold 0.60] \
-  [--semantic-detail-output detail.tsv] \            # per-record similarity TSV
+  [--semantic-threshold 0.35] \
+  [--semantic-detail-output] \                        # write per-record similarity TSV to output/semantic_detail_YYYY-MM-DD.tsv
   [--flagged-only] \
   [--output scores.tsv]
 ```
@@ -333,10 +342,11 @@ TSV also includes a `semantic_low_sim` column (integer count of records below th
 Any verse with `semantic_low_sim > 0` is unconditionally flagged `needs_retry=True`.
 Requires `--target-tsv-dir`; silently skips if target text is unavailable.
 
-`--semantic-detail-output PATH` writes a separate per-record TSV (columns: `verse_id`,
-`src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`,
-`below_threshold`). Primary use: filter by `src_lemmas` to inspect the similarity
-distribution for specific lemmas and calibrate the threshold.
+`--semantic-detail-output` (boolean flag, no value) writes a per-record TSV to
+`output/semantic_detail_YYYY-MM-DD.tsv` (columns: `verse_id`, `src_ids`, `src_lemmas`,
+`src_gloss`, `tgt_ids`, `tgt_text`, `similarity`, `below_threshold`). Primary use:
+filter by `src_lemmas` to inspect the similarity distribution for specific lemmas and
+calibrate the threshold.
 
 Primary use: run between `refine-alignment` and `retry-alignment` to inspect quality
 before committing to a retry spend, and to tune the threshold against manually reviewed
@@ -347,7 +357,7 @@ chapters.
 Post-hoc check (runs automatically when `--target-tsv-dir` is provided): for each
 eligible alignment record, embeds the source gloss and target word text using
 `sentence-transformers/LaBSE` and computes cosine similarity. Records below
-`--semantic-threshold` (default 0.60) contribute to a per-verse `semantic_low_sim_count`;
+`--semantic-threshold` (default 0.35) contribute to a per-verse `semantic_low_sim_count`;
 any verse with count > 0 is flagged `needs_retry=True`.
 
 **Eligible records:** only records where at least one primary source token is a
@@ -374,10 +384,11 @@ for a target language. Pass `--semantic-model ""` to disable the check entirely.
 for efficiency. A per-chapter diagnostic line is printed to stderr:
 `Semantic [BBCCC] N pairs, sim min=X mean=Y max=Z, N record(s) below T`
 
-**Per-record detail output:** `--semantic-detail-output PATH` on `score-alignment`
-writes a TSV with `verse_id`, `src_ids`, `src_lemmas`, `src_gloss`, `tgt_ids`,
-`tgt_text`, `similarity`, `below_threshold` for every scored record. Filter by
-`src_lemmas` to inspect the similarity distribution for any specific lemma.
+**Per-record detail output:** `--semantic-detail-output` (boolean flag) on `score-alignment`
+writes a TSV to `output/semantic_detail_YYYY-MM-DD.tsv` with `verse_id`, `src_ids`,
+`src_lemmas`, `src_gloss`, `tgt_ids`, `tgt_text`, `similarity`, `below_threshold` for
+every scored record. Filter by `src_lemmas` to inspect the similarity distribution for
+any specific lemma.
 
 **Implementation:** `apply_semantic_scores(verse_scores, records_by_verse, src_by_id,
 tgt_text_by_id, model_name, threshold, chapter_id, record_details)` in `semantic.py`.

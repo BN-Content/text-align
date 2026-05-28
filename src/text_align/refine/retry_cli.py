@@ -93,8 +93,8 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--semantic-model", default="sentence-transformers/LaBSE",
                    help="sentence-transformers model for semantic similarity check "
                         "(default: sentence-transformers/LaBSE). Pass empty string to disable.")
-    p.add_argument("--semantic-threshold", type=float, default=0.60,
-                   help="Cosine similarity below which a record is flagged (default: 0.60)")
+    p.add_argument("--semantic-threshold", type=float, default=0.35,
+                   help="Cosine similarity below which a record is flagged (default: 0.35)")
 
     range_group = p.add_mutually_exclusive_group()
     range_group.add_argument("--verse", default=None, metavar="BBCCCVVV",

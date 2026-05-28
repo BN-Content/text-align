@@ -72,15 +72,15 @@ def parse_args() -> argparse.Namespace:
                    help="Also flag verses with N or more unaligned source tokens (default: 2)")
     p.add_argument("--output", default=None, type=Path,
                    help="Write TSV report to this file (default: stdout)")
-    p.add_argument("--semantic-detail-output", default=None, type=Path,
-                   help="Write per-record semantic similarity details to this TSV file")
+    p.add_argument("--semantic-detail-output", action="store_true", default=False,
+                   help="Write per-record semantic similarity details to output/semantic_detail_YYYY-MM-DD.tsv")
     p.add_argument("--flagged-only", action="store_true", default=False,
                    help="Only output verses where needs_retry is True")
     p.add_argument("--semantic-model", default="sentence-transformers/LaBSE",
                    help="sentence-transformers model for semantic similarity check "
                         "(default: sentence-transformers/LaBSE). Pass empty string to disable.")
-    p.add_argument("--semantic-threshold", type=float, default=0.60,
-                   help="Cosine similarity below which a record is flagged (default: 0.60)")
+    p.add_argument("--semantic-threshold", type=float, default=0.35,
+                   help="Cosine similarity below which a record is flagged (default: 0.35)")
 
     range_group = p.add_mutually_exclusive_group()
     range_group.add_argument("--book", default=None, metavar="BB")
@@ -97,6 +97,9 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.semantic_detail_output:
+        from datetime import date
+        args.semantic_detail_output = Path("output") / f"semantic_detail_{date.today()}.tsv"
     corpus_id = _CORPUS_ID[args.corpus]
 
     chapter_files = discover_chapter_files(args.alignment_dir)

@@ -1,20 +1,29 @@
 """Provider-agnostic LLM call layer for refine-alignment.
 
-Supports OpenAI, Anthropic, and Google (Gemini).  Provider packages are
-imported lazily so only the package for the active provider needs to be
-installed.
+Supports OpenAI, Anthropic, Google (Gemini), OpenRouter, and Gloo.  Provider
+packages are imported lazily so only the package for the active provider needs
+to be installed.
 
 Environment variables:
-    OPENAI_API_KEY    — required when provider is "openai"
-    ANTHROPIC_API_KEY — required when provider is "anthropic"
-    GEMINI_API_KEY    — required when provider is "google"
+    OPENAI_API_KEY        — required when provider is "openai"
+    ANTHROPIC_API_KEY     — required when provider is "anthropic"
+    GEMINI_API_KEY        — required when provider is "google"
+    OPENROUTER_API_KEY    — required when provider is "openrouter"
+    GLOO_CLIENT_ID        — required when provider is "gloo"
+    GLOO_CLIENT_SECRET    — required when provider is "gloo"
 """
 
+import base64
 import json
 import os
 import time
 
+import requests
+from dotenv import load_dotenv
+
 from .prompt import reverse_map_records
+
+load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Tool schema
@@ -139,6 +148,75 @@ def _gemini_tool_schema(neutral: dict):
             parameters=neutral["parameters"],
         )
     ])
+
+
+# ---------------------------------------------------------------------------
+# Gloo OAuth2 auth
+# ---------------------------------------------------------------------------
+
+_GLOO_TOKEN_URL = "https://platform.ai.gloo.com/oauth2/token"
+_GLOO_COMPLETIONS_URL = "https://platform.ai.gloo.com/ai/v2/chat/completions"
+
+
+class _GlooAuth:
+    """OAuth2 client-credentials token manager for the Gloo AI platform.
+
+    Tokens have a 1-hour TTL; the token is refreshed automatically 60 s before
+    expiry so long-running alignment jobs never hit an expired-token error.
+    """
+
+    def __init__(self, client_id: str, client_secret: str) -> None:
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._access_token: str | None = None
+        self._expires_at: float = 0.0
+
+    def _fetch_token(self) -> None:
+        import requests
+        auth = base64.b64encode(
+            f"{self._client_id}:{self._client_secret}".encode()
+        ).decode()
+        resp = requests.post(
+            _GLOO_TOKEN_URL,
+            headers={
+                "Content-Type": "application/x-www-form-urlencoded",
+                "Authorization": f"Basic {auth}",
+            },
+            data={"grant_type": "client_credentials", "scope": "api/access"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        self._access_token = data["access_token"]
+        self._expires_at = time.time() + data["expires_in"]
+
+    def _token(self) -> str:
+        if not self._access_token or time.time() > (self._expires_at - 60):
+            self._fetch_token()
+        return self._access_token  # type: ignore[return-value]
+
+    def post(self, payload: dict, timeout: int = 240) -> dict:
+        import requests
+        resp = requests.post(
+            _GLOO_COMPLETIONS_URL,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {self._token()}",
+            },
+            json=payload,
+            timeout=timeout,
+        )
+        try:
+            resp.raise_for_status()
+        except requests.exceptions.HTTPError as exc:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise requests.exceptions.HTTPError(
+                f"{exc} — {detail}", response=resp
+            ) from exc
+        return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -344,10 +422,10 @@ def _iter_verse_entries(
 # API-level backoff retry
 # ---------------------------------------------------------------------------
 
-_RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 503})
+_RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 503})
 
 # Transient network/decode errors that warrant a retry regardless of HTTP status.
-_RETRIABLE_EXC_TYPES: tuple[type, ...] = (json.JSONDecodeError,)
+_RETRIABLE_EXC_TYPES: tuple[type, ...] = (json.JSONDecodeError, requests.exceptions.Timeout)
 
 
 def _status_code(exc: Exception) -> int | None:
@@ -453,9 +531,11 @@ class LLMClient:
     """Provider-agnostic client for refine-alignment LLM calls.
 
     Args:
-        provider: ``"openai"``, ``"anthropic"``, ``"google"``, or ``"openrouter"``.
+        provider: ``"openai"``, ``"anthropic"``, ``"google"``, ``"openrouter"``,
+            or ``"gloo"``.
         model: Model name, e.g. ``"gpt-5.4-mini"``, ``"claude-sonnet-4-6"``,
-            ``"gemini-3.1-flash"``, or any OpenRouter model slug.
+            ``"gemini-3.1-flash"``, any OpenRouter model slug, or a Gloo model
+            ID such as ``"gloo-anthropic-claude-sonnet-4.5"``.
         temperature: Sampling temperature passed explicitly to the provider.
             ``None`` (default) lets the provider use its own default.  Set this
             to match the value you use in sync calls so async batch requests
@@ -478,10 +558,10 @@ class LLMClient:
         temperature: float = 1,
         max_output_tokens: int = 32000,
     ) -> None:
-        if provider not in ("openai", "anthropic", "google", "openrouter"):
+        if provider not in ("openai", "anthropic", "google", "openrouter", "gloo"):
             raise ValueError(
                 f"Unknown provider {provider!r}. "
-                f"Use 'openai', 'anthropic', 'google', or 'openrouter'."
+                f"Use 'openai', 'anthropic', 'google', 'openrouter', or 'gloo'."
             )
         self.provider = provider
         self.model = model
@@ -514,6 +594,18 @@ class LLMClient:
                 api_key=os.environ.get("OPENROUTER_API_KEY"),
                 base_url="https://openrouter.ai/api/v1",
             )
+        elif self.provider == "gloo":
+            try:
+                import requests  # noqa: F401 — verify requests is available
+            except ImportError:
+                raise ImportError("Install the requests package: poetry add requests")
+            client_id = os.environ.get("GLOO_CLIENT_ID", "")
+            client_secret = os.environ.get("GLOO_CLIENT_SECRET", "")
+            if not client_id or not client_secret:
+                raise EnvironmentError(
+                    "GLOO_CLIENT_ID and GLOO_CLIENT_SECRET must be set for provider 'gloo'."
+                )
+            return _GlooAuth(client_id, client_secret)
         else:
             try:
                 from google import genai
@@ -576,6 +668,11 @@ class LLMClient:
             )
         elif self.provider == "anthropic":
             return self._call_anthropic(
+                system_prompt, user_message, verse_source_ids, verse_target_ids,
+                verse_token_maps, max_retries
+            )
+        elif self.provider == "gloo":
+            return self._call_gloo(
                 system_prompt, user_message, verse_source_ids, verse_target_ids,
                 verse_token_maps, max_retries
             )
@@ -1016,5 +1113,112 @@ class LLMClient:
                     types.Part(text=_build_retry_message(verse_errors))
                 ],
             ))
+
+        return results, all_errors, all_san_details
+
+    # ------------------------------------------------------------------
+    # Gloo AI
+    # ------------------------------------------------------------------
+
+    def _call_gloo(
+        self,
+        system_prompt: str,
+        user_message: str,
+        verse_source_ids: dict[str, set[str]],
+        verse_target_ids: dict[str, set[str]],
+        verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
+        max_retries: int,
+    ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
+        """Gloo AI completions — OpenAI-compatible format, OAuth2 auth via _GlooAuth."""
+        messages: list[dict] = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user",   "content": user_message},
+        ]
+        tool_schema = [_openai_tool_schema(_NEUTRAL_TOOL_SCHEMA)]
+        tool_choice = {"type": "function", "function": {"name": TOOL_NAME}}
+
+        results: dict[str, list[dict]] = {}
+        all_errors: list[str] = []
+        all_san_details: list[str] = []
+
+        for attempt in range(max_retries + 1):
+            payload: dict = {
+                "model": self.model,
+                "messages": messages,
+                "tools": tool_schema,
+                "tool_choice": tool_choice,
+            }
+            if self.temperature is not None:
+                payload["temperature"] = self.temperature
+            if self.max_output_tokens is not None:
+                payload["max_tokens"] = self.max_output_tokens
+
+            response = _api_call_with_backoff(
+                lambda: self._client.post(payload),
+                self.max_api_retries,
+                "Gloo",
+            )
+
+            choice = response["choices"][0]
+            if choice.get("finish_reason") == "length":
+                print(
+                    "  WARNING: response truncated (finish_reason=length) — "
+                    "some verses may be missing. Reduce --batch-size."
+                )
+
+            assistant_msg = choice["message"]
+            tool_calls = assistant_msg.get("tool_calls") or []
+
+            if not tool_calls:
+                if attempt < max_retries:
+                    print("  NOTE: model returned no tool call — nudging to retry")
+                    messages.append({"role": "assistant", "content": assistant_msg.get("content") or ""})
+                    messages.append({"role": "user", "content": "You did not call the alignment tool. You must call it now to provide the verse alignments."})
+                    continue
+                else:
+                    all_errors.append("model returned no tool call after all retries")
+                    break
+
+            verse_errors: dict[str, list[str]] = {}
+            tool_results: list[dict] = []
+
+            for tc in tool_calls:
+                try:
+                    data = json.loads(tc["function"]["arguments"])
+                except json.JSONDecodeError as exc:
+                    all_errors.append(f"JSON parse error in tool call: {exc}")
+                    tool_results.append({
+                        "role": "tool",
+                        "content": f"parse error: {exc}",
+                        "tool_call_id": tc["id"],
+                    })
+                    continue
+
+                tc_errors = _process_tool_call_data(
+                    data, results, verse_errors, all_errors, all_san_details,
+                    verse_source_ids, verse_target_ids, verse_token_maps,
+                )
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tc["id"],
+                    "content": (
+                        "Validation errors:\n" + "\n".join(f"  - {e}" for e in tc_errors)
+                        if tc_errors else "ok"
+                    ),
+                })
+
+            if not verse_errors or attempt == max_retries:
+                if verse_errors:
+                    for vid, errs in verse_errors.items():
+                        all_errors.extend(f"VERSE {vid} (unresolved): {e}" for e in errs)
+                break
+
+            messages.append({
+                "role": "assistant",
+                "content": assistant_msg.get("content"),
+                "tool_calls": tool_calls,
+            })
+            messages.extend(tool_results)
+            messages.append({"role": "user", "content": _build_retry_message(verse_errors)})
 
         return results, all_errors, all_san_details

@@ -59,7 +59,7 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--corpus", default=None, choices=["ot", "nt"],
                    help="Corpus: 'nt' for SBLGNT, 'ot' for WLCM")
     p.add_argument("--llm-provider", default="anthropic",
-                   choices=["openai", "anthropic", "google", "openrouter"],
+                   choices=["openai", "anthropic", "google", "openrouter", "gloo"],
                    help="LLM provider (default: anthropic)")
     p.add_argument("--llm-model", default=None,
                    help="Model name for the chosen provider")

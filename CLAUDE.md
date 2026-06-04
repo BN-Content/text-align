@@ -67,7 +67,7 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 
 ## LLM providers (`refine/llm.py`)
 
-`LLMClient` supports three providers, selected by the `provider` argument:
+`LLMClient` supports five providers, selected by the `provider` argument:
 
 | Provider | Env var | Notes |
 |----------|---------|-------|
@@ -75,10 +75,11 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 | `anthropic` | `ANTHROPIC_API_KEY` | Extended thinking via `thinking` block |
 | `google` | `GEMINI_API_KEY` | Gemini 3+ `thinkingLevel` via `ThinkingConfig` |
 | `openrouter` | `OPENROUTER_API_KEY` | OpenAI-compatible proxy to 200+ models (Qwen, Kimi, GLM, …); sync-only; per-call cost tracked in `LLMClient.session_cost` |
+| `gloo` | `GLOO_CLIENT_ID`, `GLOO_CLIENT_SECRET` | Gloo AI Studio; OAuth2 bearer token (1-hr TTL, auto-refreshed); OpenAI-compatible format; routes to Anthropic/OpenAI/Google; sync-only; no reasoning_effort; model IDs like `gloo-anthropic-claude-sonnet-4.5` |
 
 `reasoning_effort` (none/minimal/low/medium/high) maps to `reasoning_effort` for OpenAI
 and `thinkingLevel` for Google. Omitting it sends no thinking config. Ignored for
-`openrouter` (always uses the chat completions path).
+`openrouter` and `gloo` (always use the chat completions path).
 
 ## OpenRouter cost tracking (`refine/llm.py`)
 
@@ -87,7 +88,7 @@ the session. `_track_openrouter_cost(response)` reads `response.usage.model_extr
 (Pydantic captures extra fields OpenRouter adds to the standard usage object) and prints
 a per-call + running total after each API call. A session total is printed at the end of
 `refine-alignment` and `retry-alignment` when `--llm-provider openrouter` is active.
-Async batch mode is not supported for `openrouter`.
+Async batch mode is not supported for `openrouter` or `gloo`.
 
 ## OpenRouter DeepSeek provider ordering (`refine/llm.py`)
 
@@ -97,6 +98,40 @@ When the provider is `openrouter` and the model slug contains `deepseek` (case-i
 infrastructure (cheapest option) and disables silent fallback to other providers.
 Any `:nitro` or `:exacto` variant suffix is stripped from the model name in the same
 call, as those suffixes conflict with explicit provider ordering.
+
+## Gloo AI provider (`refine/llm.py`)
+
+`_GlooAuth` handles OAuth2 client-credentials auth for Gloo AI Studio.  Tokens have a
+1-hour TTL; `_GlooAuth._token()` auto-refreshes 60 s before expiry so long-running jobs
+never hit an expired-token error.  Credentials are read from `GLOO_CLIENT_ID` /
+`GLOO_CLIENT_SECRET`.
+
+`_call_gloo` uses the OpenAI-compatible chat completions format (same tool schema,
+same response shape) but calls `_GlooAuth.post(payload)` directly with `requests`
+instead of an SDK client, receiving a plain `dict` response.  The retry/validation
+loop is identical to the non-reasoning `_call_openai` path.  `reasoning_effort` is
+ignored (Gloo routes to the underlying provider; no pass-through for thinking config).
+Async batch mode is not supported for Gloo.
+
+Gloo model IDs follow the pattern `gloo-{family}-{model}`, e.g.:
+- `gloo-anthropic-claude-sonnet-4.5`
+- `gloo-openai-gpt-4.1-mini`
+- `gloo-google-gemini-2.5-flash`
+
+`_status_code()` handles `requests.HTTPError` via the string-prefix fallback
+(`"429 Client Error: …"` → 429), so `_api_call_with_backoff` retries correctly.
+
+`_GlooAuth.post` catches `HTTPError` from `raise_for_status()` and re-raises it with
+the full response body appended (`— {detail}`) so error messages include the server's
+explanation rather than just the HTTP status line.
+
+## Environment variable loading (`refine/llm.py`)
+
+`load_dotenv()` is called at module import time, so a `.env` file in the project root
+is loaded automatically before any provider client is initialised. All provider env vars
+(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `OPENROUTER_API_KEY`,
+`GLOO_CLIENT_ID`, `GLOO_CLIENT_SECRET`) can be set there. `.env.example` in the repo
+root documents all supported variables. `.env` is gitignored.
 
 ## Model names
 
@@ -112,16 +147,17 @@ unfamiliar (e.g. `gpt-5.4-mini`, `gemini-3-flash-preview`). Trust the user.
 
 ## LLM robustness (`refine/llm.py`)
 
-`_iter_verse_entries(data, errors)` is a helper used by all four provider call paths
-(`_call_openai`, `_call_openai_responses`, `_call_anthropic`, `_call_gemini`). It
+`_iter_verse_entries(data, errors)` is a helper used by all five provider call paths
+(`_call_openai`, `_call_openai_responses`, `_call_anthropic`, `_call_gemini`, `_call_gloo`). It
 iterates the `verses` array from a tool-call response, skipping and logging any entry
 that is not a dict. This guards against malformed model output (e.g. a string element
 in the array) that would otherwise crash with `AttributeError` on `.get()`.
 
 `_api_call_with_backoff(fn, max_retries, provider)` wraps each provider's API call.
-It retries on 429 (rate-limited) and 503 (overloaded) with exponential backoff (2s,
-4s, 8s, …) up to `max_retries` times, and fails fast on non-retriable errors.
-`_status_code(exc)` extracts the HTTP status code from any provider exception.
+It retries on 429 (rate-limited), 500 (provider inference error), and 503 (overloaded)
+with exponential backoff (2s, 4s, 8s, …) up to `max_retries` times, and on
+`requests.exceptions.Timeout`. Fails fast on non-retriable errors. `_status_code(exc)`
+extracts the HTTP status code from any provider exception.
 Exposed via `--max-api-retries` (default 4) in `refine-alignment`.
 
 ## render-alignment header (`render/html.py`)

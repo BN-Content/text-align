@@ -19,6 +19,18 @@ Requires Python ≥ 3.10. Dependencies are managed with [Poetry](https://python-
 poetry install
 ```
 
+## Credentials / `.env` file
+
+API credentials are read from environment variables. You can set them in a `.env` file in the project root — it is loaded automatically at startup.
+
+```bash
+copy .env.example .env   # Windows
+cp .env.example .env     # macOS/Linux
+# then fill in the keys you need
+```
+
+`.env` is gitignored. See `.env.example` for all supported variables.
+
 ## Project config files
 
 Each alignment project (source → target translation pair) can be described in a YAML file under `configs/`. All CLI tools accept `--config <name>` (`.yaml` extension assumed), which loads that file as argument defaults. Any argument can still be overridden on the command line.
@@ -69,7 +81,7 @@ src/text_align/
 │   │   ├── por.py       #   Portuguese (auto-registered)
 │   │   ├── spa.py       #   Latin American Spanish (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
-│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter)
+│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter / Gloo)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # Per-verse source-token coverage evaluation (legacy)
 │   ├── scoring.py       # Composite alignment quality scorer (five signals + semantic flag)
@@ -116,15 +128,16 @@ Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged 
 
 #### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, or any model via OpenRouter). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, OpenRouter, or Gloo). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
 Output is **one file per chapter**: `SBLGNT-<edition>-<BB>-<CCC>-manual.json` (NT) or `WLCM-<edition>-<BB>-<CCC>-manual.json` (OT). For example, Mark 3 produces `SBLGNT-OENGB-41-003-manual.json`.
 
-Requires the appropriate API key in the environment:
+Requires the appropriate credentials in the environment:
 - `OPENAI_API_KEY` for OpenAI models
 - `ANTHROPIC_API_KEY` for Anthropic models
 - `GEMINI_API_KEY` for Google Gemini models
 - `OPENROUTER_API_KEY` for OpenRouter (access to Qwen, Kimi, GLM, Mistral, and 200+ other models via a single account)
+- `GLOO_CLIENT_ID` + `GLOO_CLIENT_SECRET` for Gloo AI Studio (routes to Anthropic/OpenAI/Google)
 
 ```
 refine-alignment \
@@ -135,12 +148,13 @@ refine-alignment \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
   [--from-scratch]               # align without candidates
   [--corpora ot nt] \
-  [--llm-provider openai]        # openai | anthropic | google | openrouter
-  [--llm-model gpt-5.4-mini] \  #   openrouter: use any model slug, e.g. qwen/qwen3-235b-a22b
+  [--llm-provider openai]        # openai | anthropic | google | openrouter | gloo
+  [--llm-model gpt-5.4-mini] \  #   openrouter: any model slug, e.g. qwen/qwen3-235b-a22b
+                                 #   gloo: model ID, e.g. gloo-anthropic-claude-sonnet-4.5
   [--reasoning-effort high]      # none/minimal/low/medium/high
                                  #   OpenAI gpt-5.x → reasoning_effort (Responses API)
                                  #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
-                                 #   ignored for openrouter (always uses chat completions)
+                                 #   ignored for openrouter and gloo (always uses chat completions)
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4]          # retries on 429/503 with exponential backoff
@@ -190,11 +204,31 @@ refine-alignment --config OENGB --chapter 41003 \
   --llm-provider openrouter --llm-model moonshotai/kimi-k2
 ```
 
+##### Gloo AI Studio (sync only)
+
+[Gloo AI Studio](https://studio.ai.gloo.com) is a faith-oriented AI platform that routes to Anthropic, OpenAI, and Google models through a single API. Authentication uses OAuth2 client credentials (1-hour token, auto-refreshed). Set `GLOO_CLIENT_ID` and `GLOO_CLIENT_SECRET` and pass `--llm-provider gloo` with a full Gloo model ID.
+
+```bash
+# Claude Sonnet via Gloo
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider gloo --llm-model gloo-anthropic-claude-sonnet-4.5
+
+# GPT-4.1 Mini via Gloo
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider gloo --llm-model gloo-openai-gpt-4.1-mini
+
+# Gemini 2.5 Flash via Gloo
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider gloo --llm-model gloo-google-gemini-2.5-flash
+```
+
+Credentials are available from the [Gloo AI Studio dashboard](https://studio.ai.gloo.com).
+
 ##### Async batch mode
 
 Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results with `fetch-batch`.
 
-Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter`** — use `--batch-mode sync` with OpenRouter.
+Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter` or `gloo`** — use `--batch-mode sync` with those providers.
 
 ```bash
 # Submit (Google)
@@ -315,7 +349,7 @@ retry-alignment \
   --target-edition OENGB \
   --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
   [--sources-dir data/sources/] \
-  [--llm-provider anthropic]          # openai | anthropic | google | openrouter (default: anthropic)
+  [--llm-provider anthropic]          # openai | anthropic | google | openrouter | gloo (default: anthropic)
   [--llm-model claude-opus-4-7] \
   [--reasoning-effort high] \
   [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
@@ -437,7 +471,7 @@ Group-level extensions (in `meta` on the group, alongside `creator` and `conform
 |-------|------|---------|
 | `meta.nonEquivalent.source` | `string[]` | Source token IDs positively determined to have no translation equivalent |
 | `meta.nonEquivalent.target` | `string[]` | Target token IDs positively determined to have no source correspondent |
-| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`) |
+| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`, `gloo`) |
 | `meta.llm.model` | `string` | Model name, e.g. `gpt-5.4-mini` |
 | `meta.llm.reasoning_effort` | `string` | Reasoning effort level if set, e.g. `high` |
 | `meta.retry_llm.provider` | `string` | Provider used by `retry-alignment` (only present when a retry pass has run) |

@@ -164,6 +164,39 @@ def retry_chapter_sync(
         new_records_by_verse.update(results)
         all_errors.extend(errors)
 
+    missing = [vid for vid in verse_ids if vid not in new_records_by_verse]
+    if missing:
+        print(f"  Resubmitting {len(missing)} verse(s) with no results ...")
+        for verse_id in missing:
+            tgt_verse = target_verses.get(verse_id)
+            tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
+            src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
+            if src_end and src_end > verse_id:
+                src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+            else:
+                src_tokens = source_verses.get(verse_id, [])
+            verse_batch = [(verse_id, src_tokens, tgt_tokens, {})]
+            all_src = [t for _, src, _, _ in verse_batch for t in src]
+            testament = infer_testament(all_src)
+            phenomena = detect_phenomena(all_src)
+            system_msg = build_system_prompt(phenomena, target_language, testament=testament)
+            user_msg, batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
+            r_results, r_errors, _san = llm_client.call_batch(
+                system_prompt=system_msg,
+                user_message=user_msg,
+                verse_source_ids={verse_id: {t.id for t in src_tokens}},
+                verse_target_ids={verse_id: {t.id for t in tgt_tokens}},
+                verse_token_maps=batch_maps,
+                max_retries=max_retries,
+            )
+            n_r = sum(len(v) for v in r_results.values())
+            status = f"{len(r_results)}/1 verses, {n_r} records"
+            if r_errors:
+                status += f", {len(r_errors)} error(s)"
+            print(f"  Resubmit {verse_id}: {status}")
+            new_records_by_verse.update(r_results)
+            all_errors.extend(r_errors)
+
     if not new_records_by_verse:
         return 0, all_errors
 

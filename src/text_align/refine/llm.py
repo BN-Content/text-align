@@ -509,6 +509,17 @@ def _process_tool_call_data(
     return call_errors
 
 
+def _try_parse_json(s: str) -> dict:
+    """Parse JSON, recovering from 'Extra data' by ignoring trailing garbage."""
+    try:
+        return json.loads(s)
+    except json.JSONDecodeError as exc:
+        if "Extra data" in str(exc):
+            obj, _ = json.JSONDecoder().raw_decode(s)
+            return obj
+        raise
+
+
 def _build_retry_message(verse_errors: dict[str, list[str]]) -> str:
     lines = [
         "The following verses had validation errors in your previous response.",
@@ -740,8 +751,8 @@ class LLMClient:
                 )
             except RuntimeError as exc:
                 msg = str(exc)
-                if not _tool_choice_dropped and "tool_choice" in msg and "thinking" in msg.lower():
-                    print("  NOTE: model rejected tool_choice in thinking mode — retrying without it")
+                if not _tool_choice_dropped and "tool_choice" in msg:
+                    print("  NOTE: model/provider rejected tool_choice — retrying without it")
                     _tool_choice_dropped = True
                     continue
                 raise
@@ -773,7 +784,7 @@ class LLMClient:
 
             for tc in tool_calls:
                 try:
-                    data = json.loads(tc.function.arguments)
+                    data = _try_parse_json(tc.function.arguments)
                 except json.JSONDecodeError as exc:
                     all_errors.append(f"JSON parse error in tool call: {exc}")
                     tool_results.append({
@@ -883,7 +894,7 @@ class LLMClient:
 
             for tc in tool_calls:
                 try:
-                    data = json.loads(tc.arguments)
+                    data = _try_parse_json(tc.arguments)
                 except json.JSONDecodeError as exc:
                     all_errors.append(f"JSON parse error in tool call: {exc}")
                     tool_results.append({
@@ -1184,7 +1195,7 @@ class LLMClient:
 
             for tc in tool_calls:
                 try:
-                    data = json.loads(tc["function"]["arguments"])
+                    data = _try_parse_json(tc["function"]["arguments"])
                 except json.JSONDecodeError as exc:
                     all_errors.append(f"JSON parse error in tool call: {exc}")
                     tool_results.append({

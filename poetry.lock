@@ -3377,14 +3377,14 @@ files = [
 
 [[package]]
 name = "stopwordsiso"
-version = "0.6.1"
-description = "Collection of stopwords for multiple languages. Using ISO 639-1 language code."
+version = "0.7.0"
+description = "Collection of stopwords for multiple languages, using ISO 639-1 language code."
 optional = false
-python-versions = "*"
+python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "stopwordsiso-0.6.1-py3-none-any.whl", hash = "sha256:c9bff4ed5fdddbfb56998c99d5b11460c2fea0134403e0c4104f63b7c665fffc"},
-    {file = "stopwordsiso-0.6.1.tar.gz", hash = "sha256:5be2b4f25afc296fca4f626710b98168949057f81a655e2dbdf670ddfce2af50"},
+    {file = "stopwordsiso-0.7.0-py3-none-any.whl", hash = "sha256:99025477be8082ae872ccafcad0ca9020801e7bbc00d35728423f5c057723a7a"},
+    {file = "stopwordsiso-0.7.0.tar.gz", hash = "sha256:cc3fd2ca524fa02f24609a133eb2a27afe803fe86fa2761cdb7b0b4bced53b4c"},
 ]
 
 [[package]]
@@ -3907,4 +3907,4 @@ files = [
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.14"
-content-hash = "da6c31519c1bb3da37974c346d5eb14fc629702f0357aff72893a009e93f3961"
+content-hash = "78c03b20074a5f99d7bc67a8b9e4a843849eaa95bae6c006cb89fd1953401191"

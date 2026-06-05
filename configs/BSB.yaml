@@ -21,7 +21,7 @@ alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # smaller chunks?
-batch-size: 3
+batch-size: 4
 
 # Anthropic
 #llm_provider: anthropic

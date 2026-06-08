@@ -190,11 +190,17 @@ Candidates are read from `<output-dir>/../<SOURCE-TYPE>/`. Use `--from-scratch` 
 
 ##### OpenRouter (sync only)
 
-[OpenRouter](https://openrouter.ai/) provides a single OpenAI-compatible API that routes to 200+ models — Qwen, Kimi, GLM, Mistral, Llama, and more — without requiring separate accounts. Set `OPENROUTER_API_KEY` and pass `--llm-provider openrouter` with any OpenRouter model slug.
+[OpenRouter](https://openrouter.ai/) provides a single OpenAI-compatible API that routes to 200+ models — DeepSeek, Qwen, Kimi, GLM, Mistral, Llama, and more — without requiring separate accounts. Set `OPENROUTER_API_KEY` and pass `--llm-provider openrouter` with any OpenRouter model slug.
 
 Per-call cost (USD) is printed after each verse batch and a session total is printed at the end of the run.
 
+Some models (e.g. `deepseek/deepseek-v4-pro`) do not support `tool_choice`; these are detected automatically and called without it.
+
 ```bash
+# DeepSeek V4 Pro via OpenRouter (good cheap first-pass model)
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider openrouter --llm-model deepseek/deepseek-v4-pro
+
 # Qwen 3 235B via OpenRouter
 refine-alignment --config OENGB --chapter 41003 \
   --llm-provider openrouter --llm-model qwen/qwen3-235b-a22b

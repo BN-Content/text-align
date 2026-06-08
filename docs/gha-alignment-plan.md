@@ -60,27 +60,29 @@ that exits 0.  No explicit "one final run" step is needed.
 ## Data layout (within text-align repo)
 
 Mirrors the Clear repo hierarchy, with `alignments_root` changed from
-`C:/git/Clear` to `.` (relative to the project root):
+`C:/git/Clear` to `./data/alignments` (relative to the project root):
 
 ```
-alignments-eng/
-  data/
-    targets/
-      BSB/
-        nt_BSB.tsv        ← moved from Clear repo
-        ot_BSB.tsv
-      OENGB/
-        nt_OENGB.tsv
-        ...
-  exp/
-    BSB/
-      LLM-REFINED/        ← chapter JSON output (committed to git)
-        SBLGNT-BSB-40-001-manual.json
-        SBLGNT-BSB-40-002-manual.json
-        ...
-    OENGB/
-      LLM-REFINED/
-        ...
+data/
+  alignments/
+    alignments-eng/
+      data/
+        targets/
+          BSB/
+            nt_BSB.tsv        ← copied from Clear repo
+            ot_BSB.tsv
+          OENGB/
+            nt_OENGB.tsv
+            ...
+      exp/
+        BSB/
+          LLM-REFINED/        ← chapter JSON output (committed to git)
+            SBLGNT-BSB-40-001-manual.json
+            SBLGNT-BSB-40-002-manual.json
+            ...
+        OENGB/
+          LLM-REFINED/
+            ...
 ```
 
 TSV files and chapter JSON files are committed directly to git — they are small text
@@ -96,7 +98,7 @@ alignments_root: C:/git/Clear
 ```
 With:
 ```yaml
-alignments_root: .
+alignments_root: ./data/alignments
 ```
 
 Running `refine-alignment` from the project root (`C:/git/BN-Content/text-align`
@@ -209,10 +211,10 @@ entries, bundling short chapters automatically.
 
 ### E. `.github/workflows/align-nt.yml`
 
-Three-job pipeline:
+Four-job pipeline:
 
 ```
-plan ──→ refine+retry (matrix, up to 256 parallel chapter jobs) ──→ collect (commit back)
+plan ──→ warmup (cache LaBSE) ──→ refine+retry (matrix, up to 256 parallel chapter jobs) ──→ collect (commit back)
 ```
 
 **Workflow inputs** (`workflow_dispatch`):
@@ -228,8 +230,41 @@ plan ──→ refine+retry (matrix, up to 256 parallel chapter jobs) ──→ 
 **`plan` job**: runs `nt_chapters.py --json`. If `chapter` input is provided, emits
 a single-element matrix instead of the full list.
 
-**`refine+retry` job** (matrix, `fail-fast: false`, `max-parallel: 20`,
+**`warmup` job** (`needs: plan`): pre-downloads `sentence-transformers/LaBSE` (~470 MB)
+into the GHA model cache so all 256 matrix jobs can restore from it rather than each
+downloading the model independently.  `retry-alignment` defaults to LaBSE for its
+semantic similarity check (`--semantic-model sentence-transformers/LaBSE`), so without
+this step every chapter job would pay the download cost on a cold runner.
+
+```yaml
+# warmup job steps (abbreviated)
+- uses: actions/cache@v4
+  id: hf-cache
+  with:
+    path: ~/.cache/huggingface/hub
+    key: hf-labse-v1
+- name: Download LaBSE
+  if: steps.hf-cache.outputs.cache-hit != 'true'
+  run: |
+    poetry run python -c "
+    from sentence_transformers import SentenceTransformer
+    SentenceTransformer('sentence-transformers/LaBSE')
+    print('LaBSE ready')
+    "
+```
+
+**`refine+retry` job** (matrix, `needs: warmup`, `fail-fast: false`, `max-parallel: 20`,
 `timeout-minutes: 360`):
+
+Each matrix job restores LaBSE from the warmup cache before running `retry-alignment`:
+
+```yaml
+- uses: actions/cache/restore@v4
+  with:
+    path: ~/.cache/huggingface/hub
+    key: hf-labse-v1
+    fail-on-cache-miss: true
+```
 
 ```bash
 BATCH_FLAG="--batch-mode ${{ inputs.batch-mode || 'async' }}"
@@ -266,14 +301,30 @@ to ~1 hour per pass vs. seconds per verse for sync), but trades that for cheaper
 pricing and no per-request rate-limit pressure. In practice, NT chapter batch jobs
 complete well within the 6-hour window.
 
+`retry-alignment` requires `--target-tsv-dir`; the config YAML's `alignments_root: ./data/alignments`
+causes `load_config_from_args` to derive this path automatically, so no explicit flag
+is needed in the workflow.  It resolves to `data/alignments/alignments-eng/data/targets/{edition}/`
+relative to the checkout root.
+
 API keys injected via env from repo secrets (`OPENROUTER_API_KEY`,
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`). Each job uploads its
 output file(s) as a GHA artifact named `align-{chunk.id}`.
 
 **`collect` job** (runs after all refine+retry jobs, `permissions: contents: write`):
-Downloads all `align-*` artifacts, copies files into
-`alignments-eng/exp/{config}/LLM-REFINED/`, commits and pushes with
-`github-actions[bot]` identity. Skips commit if no files changed (idempotent).
+Downloads all per-chapter artifacts (each named `align-{chunk.id}`, containing the
+chapter JSON written by that matrix job) into a single staging directory:
+
+```yaml
+- uses: actions/download-artifact@v4
+  with:
+    pattern: align-*
+    merge-multiple: true
+    path: staging/
+```
+
+Copies files from `staging/` into `data/alignments/alignments-eng/exp/{config}/LLM-REFINED/`, commits
+and pushes with `github-actions[bot]` identity. Skips commit if no files changed
+(idempotent).
 
 ---
 

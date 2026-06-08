@@ -147,6 +147,13 @@ unfamiliar (e.g. `gpt-5.4-mini`, `gemini-3-flash-preview`). Trust the user.
 
 ## LLM robustness (`refine/llm.py`)
 
+`_TOOL_CHOICE_INCOMPATIBLE` is a module-level `frozenset` of model names known to
+reject `tool_choice`.  `_call_openai` and `_call_gloo` initialize
+`_tool_choice_dropped = self.model in _TOOL_CHOICE_INCOMPATIBLE` so these models omit
+`tool_choice` from the first call rather than trying-then-dropping on error.  Current
+members: `deepseek/deepseek-v4-pro` (openrouter), `gloo-deepseek-v4-pro` (gloo).
+The runtime catch-and-retry in `_call_openai` remains active for unknown models.
+
 `_iter_verse_entries(data, errors)` is a helper used by all five provider call paths
 (`_call_openai`, `_call_openai_responses`, `_call_anthropic`, `_call_gemini`, `_call_gloo`). It
 iterates the `verses` array from a tool-call response, skipping and logging any entry

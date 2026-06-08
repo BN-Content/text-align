@@ -31,6 +31,13 @@ load_dotenv()
 
 TOOL_NAME = "submit_verse_alignments"
 
+# Models known to reject tool_choice; omit it from the first call rather than
+# trying and catching the error.
+_TOOL_CHOICE_INCOMPATIBLE: frozenset[str] = frozenset({
+    "deepseek/deepseek-v4-pro",   # openrouter
+    "gloo-deepseek-v4-pro",       # gloo
+})
+
 # Neutral tool schema; translated to provider-specific format before each call.
 # The tool accepts ALL verses in the batch in a single call so that providers
 # which only make one forced tool call per turn still return every verse.
@@ -722,7 +729,7 @@ class LLMClient:
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
         all_san_details: list[str] = []
-        _tool_choice_dropped = False
+        _tool_choice_dropped = self.model in _TOOL_CHOICE_INCOMPATIBLE
 
         for attempt in range(max_retries + 1):
             _oa_kwargs: dict = dict(
@@ -1151,14 +1158,16 @@ class LLMClient:
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
         all_san_details: list[str] = []
+        _tool_choice_dropped = self.model in _TOOL_CHOICE_INCOMPATIBLE
 
         for attempt in range(max_retries + 1):
             payload: dict = {
                 "model": self.model,
                 "messages": messages,
                 "tools": tool_schema,
-                "tool_choice": tool_choice,
             }
+            if not _tool_choice_dropped:
+                payload["tool_choice"] = tool_choice
             if self.temperature is not None:
                 payload["temperature"] = self.temperature
             if self.max_output_tokens is not None:

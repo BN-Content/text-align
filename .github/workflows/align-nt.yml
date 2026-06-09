@@ -84,9 +84,9 @@ jobs:
     name: "${{ matrix.chunk.label }}"
     needs: warmup
     runs-on: ubuntu-latest
-    fail-fast: false
     timeout-minutes: 360
     strategy:
+      fail-fast: false
       max-parallel: 20
       matrix:
         chunk: ${{ fromJson(needs.plan.outputs.matrix) }}

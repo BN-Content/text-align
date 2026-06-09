@@ -11,6 +11,10 @@ on:
         description: Single chapter to (re-)run, e.g. 40013. Leave blank for full NT.
         required: false
         type: string
+      book:
+        description: Single book to run, e.g. 41 for Mark. Leave blank for full NT.
+        required: false
+        type: string
       model:
         description: Override the model from the config YAML
         required: false
@@ -50,6 +54,8 @@ jobs:
         run: |
           if [[ -n "${{ inputs.chapter }}" ]]; then
             MATRIX=$(poetry run python scripts/nt_chapters.py --json --chapter "${{ inputs.chapter }}")
+          elif [[ -n "${{ inputs.book }}" ]]; then
+            MATRIX=$(poetry run python scripts/nt_chapters.py --json --book "${{ inputs.book }}")
           else
             MATRIX=$(poetry run python scripts/nt_chapters.py --json)
           fi

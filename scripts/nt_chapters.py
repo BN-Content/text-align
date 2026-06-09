@@ -137,11 +137,13 @@ def cmd_table(chapters: list[tuple[str, int]]) -> None:
 def cmd_json(
     chapters: list[tuple[str, int]],
     single_chapter: str | None = None,
+    book: str | None = None,
 ) -> None:
     """Emit the GHA matrix JSON.
 
-    When single_chapter is set, emit a single-entry matrix for that chapter
-    (used by the GHA plan job when the 'chapter' workflow input is provided).
+    When single_chapter is set, emit a single-entry matrix for that chapter.
+    When book is set (2-digit BB), emit one entry per chapter in that book.
+    Otherwise emit the full bundled NT matrix.
     """
     if single_chapter:
         ch_id = str(single_chapter).zfill(5)
@@ -150,6 +152,17 @@ def cmd_json(
                     "label": _chapter_label(ch_id, vc)}]
         print(json.dumps(entries, ensure_ascii=False))
         print("# 1 matrix entry (single-chapter override)", file=sys.stderr)
+        return
+
+    if book:
+        bb = str(book).zfill(2)
+        book_chapters = [(ch, vc) for ch, vc in chapters if ch[:2] == bb]
+        entries = [
+            {"id": ch, "start": ch, "end": ch, "label": _chapter_label(ch, vc)}
+            for ch, vc in book_chapters
+        ]
+        print(json.dumps(entries, ensure_ascii=False))
+        print(f"# {len(entries)} matrix entries (book {bb})", file=sys.stderr)
         return
 
     entries = _build_matrix(chapters)
@@ -210,6 +223,8 @@ def parse_args() -> argparse.Namespace:
                    help=f"Directory containing SBLGNT.tsv (default: {_SOURCES_DIR})")
     p.add_argument("--chapter", default=None, metavar="BBCCC",
                    help="With --json: emit a single-entry matrix for this chapter")
+    p.add_argument("--book", default=None, metavar="BB",
+                   help="With --json: emit one entry per chapter for this book (e.g. 41 for Mark)")
     return p.parse_args()
 
 
@@ -218,7 +233,7 @@ def main() -> None:
     chapters = _load_nt_chapters(args.sources_dir)
 
     if args.json:
-        cmd_json(chapters, single_chapter=args.chapter)
+        cmd_json(chapters, single_chapter=args.chapter, book=args.book)
         return
 
     if args.status:

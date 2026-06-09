@@ -128,7 +128,6 @@ jobs:
           [[ -n "${{ inputs.model }}" ]] && EXTRA="--llm-model ${{ inputs.model }}"
           poetry run refine-alignment \
             --config ${{ inputs.config }} \
-            --corpus nt \
             --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
             --skip-existing \
             --batch-mode ${{ inputs.batch-mode || 'async' }} \

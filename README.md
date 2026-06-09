@@ -8,8 +8,12 @@ Alignments map tokens in a translation to tokens in the source text (Greek NT or
 
 | Canon | Corpus | File |
 |-------|--------|------|
-| NT | SBLGNT | `data/sources/SBLGNT.tsv` |
+| NT | MACULA Greek (SBLGNT) | `data/sources/SBLGNT.tsv` |
 | OT | MACULA Hebrew (WLCM) | `data/sources/WLCM.tsv` |
+
+**MACULA Greek (SBLGNT)** — The SBL Greek New Testament is copyright © 2010 Society of Biblical Literature and Logos Bible Software. Licensed under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/). The source data used here is the [MACULA Greek Linguistic Datasets](https://github.com/Clear-Bible/macula-greek) (copyright © Clear Bible, Inc.), which augment the SBLGNT with morphology, lemmas, and glosses.
+
+**MACULA Hebrew (WLCM)** — The MACULA Hebrew Linguistic Datasets are copyright © Clear Bible, Inc. Licensed under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/). Source: [github.com/Clear-Bible/macula-hebrew](https://github.com/Clear-Bible/macula-hebrew).
 
 ## Installation
 
@@ -91,6 +95,8 @@ src/text_align/
 │   ├── fetch_batch.py   # fetch-batch CLI
 │   ├── retry.py         # Verse merge/retry core logic
 │   ├── retry_cli.py     # retry-alignment CLI
+│   ├── clean.py         # Core cleaning logic (CleanResult, clean_chapter_file, run_clean_pass)
+│   ├── clean_cli.py     # clean-alignments CLI
 │   └── score_alignments.py  # score-alignment CLI
 └── render/
     └── html.py          # render-alignment CLI
@@ -121,6 +127,8 @@ The YAML config supports separate model keys for the retry pass (`retry_llm_prov
 `clean-alignments` can also be run standalone at any point to inspect what the cleaner finds and fixes without triggering any LLM spend.
 
 Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged before committing to any LLM spend. Use `--batch-mode async` with any of the three frontier providers (Anthropic, OpenAI, Google) for ~50% cost reduction on `refine-alignment` and `retry-alignment`.
+
+A GitHub Actions workflow (`.github/workflows/align-nt.yml`) is provided for running the full NT pipeline in parallel — one job per chapter — with automatic LaBSE cache warm-up and result collection back to the repository.
 
 ## CLI tools
 
@@ -502,6 +510,16 @@ See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek
 - Mounce Reverse Interlinear guidelines reference cases
 - Automated → LLM sharpening workflow
 
+## Licensing
+
+### Alignment data
+
+Alignment data produced by this project will be published at [Bible Aquifer](https://github.com/BibleAquifer) under a [Creative Commons Attribution-ShareAlike 4.0 International License](https://creativecommons.org/licenses/by-sa/4.0/) (CC BY-SA 4.0). Alignment files present in this repository are works in progress and are not the canonical release.
+
+### Code
+
+The code in this repository is licensed under the [MIT License](LICENSE).
+
 ## Appendix: Migration and seeding tools
 
 These tools create initial alignment candidates by migrating from an existing aligned translation. They are not needed when aligning from scratch (`--from-scratch` on the command line, or `from_scratch: true` in the config).
@@ -546,8 +564,8 @@ acai-align \
   --target-language spa \
   --target-edition BONBV \
   --targets-dir  path/to/alignments-spa/data/targets/BONBV \
-  --acai-data-dir C:/git/BibleAquifer/ACAI \
-  --trabina-dir  C:/git/BN-Content/trabina/data/weighted \
+  --acai-data-dir path/to/ACAI \
+  --trabina-dir  path/to/trabina/data/weighted \
   --output-dir   path/to/alignments-spa/exp/BONBV/ACAI \
   [--include-secondaries] \
   [--acai-types people places groups deities]

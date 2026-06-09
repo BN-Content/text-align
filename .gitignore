@@ -178,7 +178,7 @@ cython_debug/
 # Project-specific: local data, batch job metadata, scratch files
 # data/
 jobs/
-test_*.py
+/test_*.py
 
 # Abstra
 # Abstra is an AI-powered process automation framework.

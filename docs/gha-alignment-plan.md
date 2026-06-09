@@ -209,6 +209,74 @@ Bundled jobs pass `--chapter-range START END` covering two adjacent chapters.
 `nt_chapters.py --json` encapsulates this logic: it emits 256 or fewer matrix
 entries, bundling short chapters automatically.
 
+### F. `retry-alignment` retry sidecar
+
+After each chapter's retry pass, `retry_cli.py:main()` writes a small JSON sidecar
+alongside the chapter alignment file:
+
+```
+SBLGNT-BSB-46-001-manual.retries.json
+```
+
+Content:
+```json
+{
+  "edition": "BSB",
+  "chapter_id": "46001",
+  "passes": 2,
+  "retried_verses": ["46001003", "46001007", "46001012"]
+}
+```
+
+Written only when at least one verse was retried; skipped when `retry-alignment` finds
+nothing to do.  The file is committed alongside the chapter JSON so the retry history
+is available for post-hoc analysis as well as in GHA.
+
+### G. `scripts/alignment_summary.py` — whole-run summary
+
+Reads all chapter JSONs (and `.retries.json` sidecars when present) from the
+`LLM-REFINED` directory, compares verse coverage against the source TSV, and emits a
+summary.
+
+**Usage:**
+
+```bash
+python scripts/alignment_summary.py --config BSB --corpus nt [--markdown]
+```
+
+`--markdown` emits GitHub-flavoured markdown for piping to `$GITHUB_STEP_SUMMARY`;
+default is plain text for local use.
+
+**Output (example):**
+
+```
+## Alignment Summary — BSB NT
+
+| Metric | Value |
+|--------|-------|
+| Chapters complete | 258 / 261 |
+| Failed chapters   | 3 |
+| Verses aligned    | 7,841 / 7,957 |
+| Failed verses     | 116 |
+| Verses retried    | 432 |
+
+### Failed chapters
+- 40028  Matt 28
+- 66020  Rev 20
+- 66021  Rev 21
+
+### Failed verses (first 20 of 116)
+40001003  40003007  40005019  ...
+```
+
+Failed chapters are those where the output JSON is absent or contains zero records.
+Failed verses are verses present in the source TSV but absent from (or having zero
+records in) the chapter JSON.  Retried verses are the union of all `retried_verses`
+arrays across `.retries.json` sidecars.
+
+In GHA the summary renders as a formatted table directly on the workflow run page
+(no log-digging required).  Run locally after `git pull` to audit a completed run.
+
 ### E. `.github/workflows/align-nt.yml`
 
 Four-job pipeline:
@@ -308,7 +376,8 @@ relative to the checkout root.
 
 API keys injected via env from repo secrets (`OPENROUTER_API_KEY`,
 `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`). Each job uploads its
-output file(s) as a GHA artifact named `align-{chunk.id}`.
+output file(s) — the chapter JSON and the `.retries.json` sidecar if one was written —
+as a GHA artifact named `align-{chunk.id}`.
 
 **`collect` job** (runs after all refine+retry jobs, `permissions: contents: write`):
 Downloads all per-chapter artifacts (each named `align-{chunk.id}`, containing the
@@ -325,6 +394,23 @@ chapter JSON written by that matrix job) into a single staging directory:
 Copies files from `staging/` into `data/alignments/alignments-eng/exp/{config}/LLM-REFINED/`, commits
 and pushes with `github-actions[bot]` identity. Skips commit if no files changed
 (idempotent).
+
+After committing, runs `alignment_summary.py` and writes the output to
+`$GITHUB_STEP_SUMMARY` so the table appears directly on the workflow run page:
+
+```yaml
+- name: Summarise results
+  run: |
+    poetry run python scripts/alignment_summary.py \
+      --config ${{ inputs.config }} --corpus nt --markdown \
+      >> $GITHUB_STEP_SUMMARY
+```
+
+The summary covers: chapters complete vs. total, failed chapters (list), verses
+aligned vs. total, failed verses (count + first 20), and verses retried (from
+`.retries.json` sidecars).  Failed chapters and failed verses are also visible in
+the GHA log; `alignment_summary.py` can be re-run locally after `git pull` for the
+same view.
 
 ---
 

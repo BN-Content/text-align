@@ -429,7 +429,7 @@ def _iter_verse_entries(
 # API-level backoff retry
 # ---------------------------------------------------------------------------
 
-_RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 503})
+_RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({429, 500, 503, 504})
 
 # Transient network/decode errors that warrant a retry regardless of HTTP status.
 _RETRIABLE_EXC_TYPES: tuple[type, ...] = (json.JSONDecodeError, requests.exceptions.Timeout)
@@ -444,7 +444,7 @@ def _status_code(exc: Exception) -> int | None:
             pass
     # Fallback: the Google SDK embeds the code at the start of the str repr
     s = str(exc)
-    for code in (429, 503, 500):
+    for code in (429, 503, 504, 500):
         if s.startswith(str(code)):
             return code
     return None
@@ -453,8 +453,8 @@ def _status_code(exc: Exception) -> int | None:
 def _api_call_with_backoff(fn, max_retries: int, provider: str):
     """Call fn(), retrying on transient API errors with exponential backoff.
 
-    Retries on 429 (rate-limited), 503 (overloaded), and malformed-JSON
-    responses up to *max_retries* times.  Raises RuntimeError immediately on
+    Retries on 429 (rate-limited), 500/503 (provider error), 504 (gateway
+    timeout), and malformed-JSON responses up to *max_retries* times.  Raises RuntimeError immediately on
     non-retriable errors or after exhausting retries.  Delays: 2s, 4s, 8s, …
     """
     for attempt in range(max_retries + 1):

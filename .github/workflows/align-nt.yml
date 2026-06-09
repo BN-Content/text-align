@@ -47,10 +47,11 @@ jobs:
         id: matrix
         run: |
           if [[ -n "${{ inputs.chapter }}" ]]; then
-            MATRIX=$(poetry run python scripts/nt_chapters.py --json --chapter "${{ inputs.chapter }}" 2>/dev/null)
+            MATRIX=$(poetry run python scripts/nt_chapters.py --json --chapter "${{ inputs.chapter }}")
           else
-            MATRIX=$(poetry run python scripts/nt_chapters.py --json 2>/dev/null)
+            MATRIX=$(poetry run python scripts/nt_chapters.py --json)
           fi
+          echo "Matrix JSON: $MATRIX"
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
 
   warmup:

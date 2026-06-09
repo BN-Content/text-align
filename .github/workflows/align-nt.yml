@@ -1,0 +1,193 @@
+name: Align NT
+
+on:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: Edition config name (e.g. BSB)
+        required: true
+        type: string
+      chapter:
+        description: Single chapter to (re-)run, e.g. 40013. Leave blank for full NT.
+        required: false
+        type: string
+      model:
+        description: Override the model from the config YAML
+        required: false
+        type: string
+      batch-mode:
+        description: Batch mode
+        required: false
+        default: async
+        type: choice
+        options:
+          - async
+          - sync
+      max-retry-passes:
+        description: Max retry loop iterations per chapter
+        required: false
+        default: '5'
+        type: string
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Build chapter matrix
+        id: matrix
+        run: |
+          if [[ -n "${{ inputs.chapter }}" ]]; then
+            MATRIX=$(poetry run python scripts/nt_chapters.py --json --chapter "${{ inputs.chapter }}" 2>/dev/null)
+          else
+            MATRIX=$(poetry run python scripts/nt_chapters.py --json 2>/dev/null)
+          fi
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+
+  warmup:
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Cache LaBSE model
+        id: hf-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: hf-labse-v1
+      - name: Download LaBSE
+        if: steps.hf-cache.outputs.cache-hit != 'true'
+        run: |
+          poetry run python -c "
+          from sentence_transformers import SentenceTransformer
+          SentenceTransformer('sentence-transformers/LaBSE')
+          print('LaBSE ready')
+          "
+
+  refine-and-retry:
+    name: "${{ matrix.chunk.label }}"
+    needs: warmup
+    runs-on: ubuntu-latest
+    fail-fast: false
+    timeout-minutes: 360
+    strategy:
+      max-parallel: 20
+      matrix:
+        chunk: ${{ fromJson(needs.plan.outputs.matrix) }}
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      GLOO_CLIENT_ID: ${{ secrets.GLOO_CLIENT_ID }}
+      GLOO_CLIENT_SECRET: ${{ secrets.GLOO_CLIENT_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Restore LaBSE cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.cache/huggingface/hub
+          key: hf-labse-v1
+          fail-on-cache-miss: true
+      - name: Refine
+        run: |
+          EXTRA=""
+          [[ -n "${{ inputs.model }}" ]] && EXTRA="--llm-model ${{ inputs.model }}"
+          poetry run refine-alignment \
+            --config ${{ inputs.config }} \
+            --corpus nt \
+            --chapter-range ${{ matrix.chunk.start }} ${{ matrix.chunk.end }} \
+            --skip-existing \
+            --batch-mode ${{ inputs.batch-mode || 'async' }} \
+            $EXTRA
+      - name: Retry loop
+        run: |
+          MAX_PASSES=${{ inputs.max-retry-passes || 5 }}
+          for i in $(seq 1 "$MAX_PASSES"); do
+            poetry run retry-alignment \
+              --config ${{ inputs.config }} \
+              --corpus nt \
+              --chapter-range ${{ matrix.chunk.start }} ${{ matrix.chunk.end }} \
+              --batch-mode ${{ inputs.batch-mode || 'async' }}
+            rc=$?
+            [ "$rc" -eq 0 ] && break
+            [ "$rc" -ne 2 ] && exit "$rc"
+            echo "Pass $i: fallback model triggered, looping..."
+          done
+      - name: Upload chapter artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: align-${{ matrix.chunk.id }}
+          path: data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED/
+          if-no-files-found: warn
+
+  collect:
+    needs: refine-and-retry
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Poetry
+        run: pipx install poetry
+      - name: Install dependencies
+        run: poetry install --no-interaction
+      - name: Download all chapter artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: align-*
+          merge-multiple: true
+          path: staging/
+      - name: Copy artifacts into repo
+        run: |
+          DEST="data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED"
+          mkdir -p "$DEST"
+          if ls staging/*.json 1>/dev/null 2>&1; then
+            cp -v staging/*.json "$DEST/"
+          else
+            echo "No JSON files found in staging/"
+          fi
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED/"
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}"
+            git push
+          fi
+      - name: Summarise results
+        run: |
+          poetry run python scripts/alignment_summary.py \
+            --config ${{ inputs.config }} --corpus nt --markdown \
+            >> "$GITHUB_STEP_SUMMARY"

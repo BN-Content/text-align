@@ -210,3 +210,6 @@ jobs/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Artifact download staging area
+staging/

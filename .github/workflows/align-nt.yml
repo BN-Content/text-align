@@ -54,7 +54,7 @@ jobs:
             MATRIX=$(poetry run python scripts/nt_chapters.py --json)
           fi
           echo "Matrix JSON: $MATRIX"
-          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "matrix={\"include\": $MATRIX}" >> "$GITHUB_OUTPUT"
 
   warmup:
     needs: plan
@@ -87,14 +87,13 @@ jobs:
 
   refine-and-retry:
     name: "${{ matrix.label }}"
-    needs: warmup
+    needs: [plan, warmup]
     runs-on: ubuntu-latest
     timeout-minutes: 360
     strategy:
       fail-fast: false
       max-parallel: 20
-      matrix:
-        include: ${{ fromJson(needs.plan.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.plan.outputs.matrix) }}
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

@@ -3,7 +3,7 @@
 #
 # Invoke any tool with:  --config JFA11
 
-alignments_root: C:/git/Clear
+alignments_root: ./data/alignments
 
 # ---------------------------------------------------------------------------
 # Identity

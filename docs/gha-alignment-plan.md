@@ -90,9 +90,35 @@ files and don't warrant LFS.
 
 ---
 
+## Seeding data from the Clear repo (`scripts/sync_clear_data.ps1`)
+
+One-time (and re-runnable) sync from `C:\git\Clear` into `.\data\alignments\`:
+
+```powershell
+pwsh scripts\sync_clear_data.ps1
+```
+
+The script:
+- Iterates every `alignments-???` directory in `C:\git\Clear`, skipping
+  `alignments-cookiecutter` and `alignments-from-Randall`
+- For each repo, robocopy copies only the files the toolchain needs:
+  - `data\targets\**\nt_*.tsv`, `ot_*.tsv` — translation token TSVs
+  - `data\alignments\**\SBLGNT-*-manual.json`, `WLCM-*-manual.json` — existing
+    manual alignment JSONs (reference / migration source)
+- Fails fast if robocopy returns exit code ≥ 8 (actual error; codes 0–7 are
+  informational)
+- Rewrites every `configs/*.yaml` that still contains
+  `alignments_root: C:/git/Clear` → `alignments_root: ./data/alignments`
+
+The script is idempotent: re-running it skips unchanged files and leaves
+already-updated configs alone.
+
+---
+
 ## Config change (BSB.yaml and others)
 
-Replace:
+`sync_clear_data.ps1` handles this automatically. The manual equivalent is to
+replace:
 ```yaml
 alignments_root: C:/git/Clear
 ```

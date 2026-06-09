@@ -176,7 +176,7 @@ cython_debug/
 .idea/
 
 # Project-specific: local data, batch job metadata, scratch files
-data/
+# data/
 jobs/
 test_*.py
 

@@ -82,7 +82,7 @@ jobs:
           "
 
   refine-and-retry:
-    name: "${{ matrix.chunk.label }}"
+    name: "${{ matrix.label }}"
     needs: warmup
     runs-on: ubuntu-latest
     timeout-minutes: 360
@@ -90,7 +90,7 @@ jobs:
       fail-fast: false
       max-parallel: 20
       matrix:
-        chunk: ${{ fromJson(needs.plan.outputs.matrix) }}
+        include: ${{ fromJson(needs.plan.outputs.matrix) }}
     env:
       OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -120,7 +120,7 @@ jobs:
           poetry run refine-alignment \
             --config ${{ inputs.config }} \
             --corpus nt \
-            --chapter-range ${{ matrix.chunk.start }} ${{ matrix.chunk.end }} \
+            --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
             --skip-existing \
             --batch-mode ${{ inputs.batch-mode || 'async' }} \
             $EXTRA
@@ -131,7 +131,7 @@ jobs:
             poetry run retry-alignment \
               --config ${{ inputs.config }} \
               --corpus nt \
-              --chapter-range ${{ matrix.chunk.start }} ${{ matrix.chunk.end }} \
+              --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
               --batch-mode ${{ inputs.batch-mode || 'async' }}
             rc=$?
             [ "$rc" -eq 0 ] && break
@@ -142,7 +142,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: align-${{ matrix.chunk.id }}
+          name: align-${{ matrix.id }}
           path: data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED/
           if-no-files-found: warn
 

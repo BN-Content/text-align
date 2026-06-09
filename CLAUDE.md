@@ -161,9 +161,9 @@ that is not a dict. This guards against malformed model output (e.g. a string el
 in the array) that would otherwise crash with `AttributeError` on `.get()`.
 
 `_api_call_with_backoff(fn, max_retries, provider)` wraps each provider's API call.
-It retries on 429 (rate-limited), 500 (provider inference error), and 503 (overloaded)
-with exponential backoff (2s, 4s, 8s, …) up to `max_retries` times, and on
-`requests.exceptions.Timeout`. Fails fast on non-retriable errors. `_status_code(exc)`
+It retries on 429 (rate-limited), 500/502/503 (provider error), 504 (gateway timeout),
+520/522/524 (Cloudflare transient) with exponential backoff (2s, 4s, 8s, …) up to
+`max_retries` times, and on `requests.exceptions.Timeout`. Fails fast on non-retriable errors. `_status_code(exc)`
 extracts the HTTP status code from any provider exception.
 Exposed via `--max-api-retries` (default 4) in `refine-alignment`.
 

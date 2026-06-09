@@ -257,6 +257,7 @@ def process_corpus(
     from_scratch: bool = False,
     batch_mode: str = "sync",
     jobs_dir: Path = _JOBS_DIR,
+    skip_existing: bool = False,
 ) -> None:
     """Process one corpus (``"nt"`` or ``"ot"``) and write chapter-based output JSON files."""
     corpus_id = _CORPUS_ID[corpus]
@@ -328,6 +329,7 @@ def process_corpus(
             batch_size=batch_size,
             creator=creator,
             jobs_dir=jobs_dir,
+            skip_existing=skip_existing,
         )
     else:
         _process_corpus_sync(
@@ -343,6 +345,7 @@ def process_corpus(
             batch_size=batch_size,
             max_retries=max_retries,
             creator=creator,
+            skip_existing=skip_existing,
         )
 
 
@@ -359,6 +362,7 @@ def _process_corpus_sync(
     batch_size: int,
     max_retries: int,
     creator: str,
+    skip_existing: bool = False,
 ) -> None:
     """Synchronous path: call LLM per batch, write one file per chapter."""
     all_san_details_total: list[str] = []
@@ -366,6 +370,11 @@ def _process_corpus_sync(
     total_records = 0
 
     for chapter_id, chapter_verse_ids in chapters.items():
+        if skip_existing:
+            out_path = output_dir / f"{corpus_id}-{target_edition}-{chapter_id[:2]}-{chapter_id[2:]}-manual.json"
+            if out_path.exists():
+                print(f"  Chapter {chapter_id}: skipping (output exists)")
+                continue
         chapter_records: list[dict] = []
         chapter_errors: list[str] = []
         chapter_san: list[str] = []
@@ -521,6 +530,7 @@ def _process_corpus_async(
     batch_size: int,
     creator: str,
     jobs_dir: Path,
+    skip_existing: bool = False,
 ) -> None:
     """Async path: build all request payloads and submit to provider batch API."""
     from .async_batch import submit_batch_job
@@ -528,6 +538,11 @@ def _process_corpus_async(
     chapter_batches: list[dict] = []
 
     for chapter_id, chapter_verse_ids in chapters.items():
+        if skip_existing:
+            out_path = output_dir / f"{corpus_id}-{target_edition}-{chapter_id[:2]}-{chapter_id[2:]}-manual.json"
+            if out_path.exists():
+                print(f"  Chapter {chapter_id}: skipping (output exists)")
+                continue
         for batch_index, batch_start in enumerate(range(0, len(chapter_verse_ids), batch_size)):
             batch_ids = chapter_verse_ids[batch_start:batch_start + batch_size]
 
@@ -661,6 +676,9 @@ def parse_args() -> argparse.Namespace:
                    help="Creator string for alignment meta (default: text-align)")
     p.add_argument("--from-scratch", action="store_true", default=False,
                    help="Skip candidate loading and align entirely from source/target tokens")
+    p.add_argument("--skip-existing", action="store_true", default=False,
+                   help="Skip chapters whose output file already exists. "
+                        "Pass in GHA so re-triggered jobs don't redo completed chapters.")
     p.add_argument("--batch-mode", choices=["sync", "async"], default="sync",
                    help="sync: call LLM and write results immediately (default); "
                         "async: submit to provider batch API, then block until "
@@ -706,6 +724,8 @@ def main() -> None:
         print(f"  Sources:   (from scratch — no candidates)")
     else:
         print(f"  Sources:   {', '.join(args.alignment_sources)}")
+    if args.skip_existing:
+        print(f"  Skip existing: yes")
     print(f"  Output:    {args.output_dir}")
     print(f"  Mode:      {args.batch_mode}")
 
@@ -750,6 +770,7 @@ def main() -> None:
             from_scratch=args.from_scratch,
             batch_mode=args.batch_mode,
             jobs_dir=args.jobs_dir,
+            skip_existing=args.skip_existing,
         )
 
     if args.llm_provider == "openrouter" and llm_client.session_cost:

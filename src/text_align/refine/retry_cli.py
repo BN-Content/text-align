@@ -10,6 +10,8 @@ CLI entry point: retry-alignment
 from __future__ import annotations
 
 import argparse
+import json
+import sys
 from pathlib import Path
 
 from text_align import ROOT
@@ -149,6 +151,45 @@ def _effort_str(effort: str | None) -> str:
     return f" (reasoning_effort={effort})" if effort else ""
 
 
+def _write_retry_sidecars(
+    retry_specs_by_chapter: dict[str, list[VerseRetrySpec]],
+    chapter_paths: dict[str, Path],
+    target_edition: str,
+) -> None:
+    """Write (or update) a .retries.json sidecar for each retried chapter.
+
+    On repeated runs the passes count increments and retried_verses accumulates
+    the union across all passes.
+    """
+    for chapter_id, specs in retry_specs_by_chapter.items():
+        chapter_path = chapter_paths[chapter_id]
+        sidecar_path = chapter_path.parent / (chapter_path.stem + ".retries.json")
+
+        new_verses = {spec.verse_id for spec in specs}
+        passes = 1
+        prior_verses: set[str] = set()
+        if sidecar_path.exists():
+            try:
+                existing = json.loads(sidecar_path.read_text(encoding="utf-8"))
+                passes = existing.get("passes", 0) + 1
+                prior_verses = set(existing.get("retried_verses", []))
+            except (json.JSONDecodeError, KeyError):
+                pass
+
+        sidecar_path.write_text(
+            json.dumps(
+                {
+                    "edition": target_edition,
+                    "chapter_id": chapter_id,
+                    "passes": passes,
+                    "retried_verses": sorted(prior_verses | new_verses),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
+
+
 def main() -> None:
     args = parse_args()
     corpus_id = _CORPUS_ID[args.corpus]
@@ -256,10 +297,12 @@ def main() -> None:
         args.llm_model != args._refine_llm_model
         or args.llm_provider != args._refine_llm_provider
     )
+    used_fallback = False
     if retry_differs and flagged_rate >= args.fallback_threshold:
         args.llm_provider     = args._refine_llm_provider
         args.llm_model        = args._refine_llm_model
         args.reasoning_effort = args._refine_reasoning_effort
+        used_fallback = True
         print(
             f"\n  Flagged rate {flagged_rate:.1%} >= {args.fallback_threshold:.0%} — "
             f"falling back to refine model"
@@ -297,8 +340,13 @@ def main() -> None:
             retry_specs_by_chapter, chapter_paths, llm_client,
         )
 
+    _write_retry_sidecars(retry_specs_by_chapter, chapter_paths, args.target_edition)
+
     if args.llm_provider == "openrouter" and llm_client.session_cost:
         print(f"\nOpenRouter session cost: ${llm_client.session_cost:.4f}")
+
+    if used_fallback:
+        sys.exit(2)
 
 
 def _run_sync(

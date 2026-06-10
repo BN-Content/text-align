@@ -17,7 +17,7 @@ Alignments map tokens in a translation to tokens in the source text (Greek NT or
 
 ## Target translation TSVs
 
-Each target translation is represented as a pair of word-level TSV files (one for OT, one for NT) under `data/targets/<edition>/`. These files are produced by Biblica's [kathairo](https://pypi.org/project/kathairo/) library, which tokenizes Bible translation text into the token-per-row format the alignment tools expect.
+Each target translation is represented as a pair of word-level TSV files (one for OT, one for NT) under `data/targets/<edition>/`. These files are produced by Biblica's [kathairo](https://pypi.org/project/kathairo/) library, which reads USFM or USX and produces the token-per-row TSV format the alignment tools expect.
 
 ```
 data/targets/<edition>/

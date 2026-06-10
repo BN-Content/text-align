@@ -442,9 +442,16 @@ def _status_code(exc: Exception) -> int | None:
             return int(exc.status_code)
         except (TypeError, ValueError):
             pass
-    # Fallback: the Google SDK embeds the code at the start of the str repr
+    # requests.exceptions.HTTPError stores the response on exc.response
+    if hasattr(exc, "response") and hasattr(exc.response, "status_code"):
+        try:
+            return int(exc.response.status_code)
+        except (TypeError, ValueError):
+            pass
+    # Fallback: the Google SDK (and re-raised requests errors) embed the code
+    # at the start of the str repr — cover all retriable codes.
     s = str(exc)
-    for code in (429, 503, 504, 500):
+    for code in _RETRIABLE_STATUS_CODES:
         if s.startswith(str(code)):
             return code
     return None

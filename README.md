@@ -450,7 +450,7 @@ Generate per-chapter HTML alignment visualizations in SBL Reverse Interlinear st
 | ≠ | Token positively confirmed as non-equivalent (NEQ) |
 | ‹ … › | Multiple source tokens behind one target token/phrase |
 
-Secondary (grammatically implied) tokens are rendered in italic grey. Idiomatic records are rendered in italic. ACAI entity tokens are highlighted.
+Secondary (grammatically implied) tokens are rendered in italic grey. Idiomatic records are rendered in italic. [ACAI](https://github.com/BibleAquifer/ACAI) entity tokens are highlighted.
 
 ```
 render-alignment \
@@ -460,7 +460,7 @@ render-alignment \
   --output-dir path/to/alignments-spa/viz \
   [--alignment-dir path/to/exp/BONBV/LLM-REFINED]  # override default alignments/ path
   [--target-edition-name "Biblia de Nuestra Familia Versión Breve"] \
-  [--acai-data-dir C:/git/BibleAquifer/ACAI] \
+  [--acai-data-dir PATH]  # default derived from git-root (https://github.com/BibleAquifer/ACAI); set null in config to disable
   [--r2l]
 ```
 
@@ -595,8 +595,8 @@ acai-align \
   --target-language spa \
   --target-edition BONBV \
   --targets-dir  path/to/alignments-spa/data/targets/BONBV \
-  --acai-data-dir path/to/ACAI \
-  --trabina-dir  path/to/trabina/data/weighted \
+  [--acai-data-dir PATH]   # derived automatically; see https://github.com/BibleAquifer/ACAI
+  [--trabina-dir PATH]     # derived automatically; see https://github.com/RickBrannan/trabina
   --output-dir   path/to/alignments-spa/exp/BONBV/ACAI \
   [--include-secondaries] \
   [--acai-types people places groups deities]

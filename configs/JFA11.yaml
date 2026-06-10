@@ -51,11 +51,8 @@ retry_llm_model: gloo-anthropic-claude-opus-4.7
 min_unaligned_src: 2
 
 # ---------------------------------------------------------------------------
-# ACAI and trabina
+# ACAI and trabina — paths derived automatically from git-root sibling layout
 # ---------------------------------------------------------------------------
-
-acai_data_dir: C:/git/BibleAquifer/ACAI
-trabina_dir: C:/git/BN-Content/trabina/data/weighted
 
 # ---------------------------------------------------------------------------
 # sim-migrate settings

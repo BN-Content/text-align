@@ -41,6 +41,16 @@ provided is derived automatically:
                            (only derived when ``alignment_suffix`` is set in the YAML;
                             used by render-alignment to point at a specific exp subdir)
 
+Two additional paths are derived unconditionally from the repo root (``ROOT``),
+regardless of ``alignments_root``.  They assume all repos share a common git-root
+parent (``ROOT.parent.parent``):
+
+    acai_data_dir → <git-root>/BibleAquifer/ACAI
+    trabina_dir   → <git-root>/BN-Content/trabina/data/weighted
+
+Set either key to ``null`` in the YAML to suppress the default (e.g. to disable
+ACAI annotations in render-alignment when the sibling repo is absent).
+
 Explicit values in the YAML always override derived ones.
 """
 
@@ -108,13 +118,27 @@ def derive_paths(
         output_dir → <root>/alignments-<trg_lang>/exp/<trg_ed>/<output_suffix>
     When False:
         output_dir → <root>/alignments-<trg_lang>/<output_suffix>
+
+    ACAI and trabina default paths are always derived relative to the repo root
+    (``ROOT``).  Set to ``null`` in the YAML to disable (e.g. to suppress ACAI
+    annotations in render-alignment):
+        acai_data_dir → <git-root>/BibleAquifer/ACAI
+        trabina_dir   → <git-root>/BN-Content/trabina/data/weighted
+    where ``<git-root>`` is two levels above the repo root (``ROOT.parent.parent``).
     """
+    result = dict(config)
+
+    # Derive ACAI / trabina paths from the shared git-root sibling layout.
+    # Only fills keys absent from the YAML; set to null to suppress.
+    _git_root = ROOT.parent.parent
+    result.setdefault("acai_data_dir", _git_root / "BibleAquifer" / "ACAI")
+    result.setdefault("trabina_dir",   _git_root / "BN-Content" / "trabina" / "data" / "weighted")
+
     root = config.get("alignments_root")
     if not root:
-        return config
+        return result
 
     root = Path(root)
-    result = dict(config)
 
     src_lang = config.get("source_language")
     src_ed   = config.get("source_edition")

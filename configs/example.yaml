@@ -50,9 +50,12 @@ source_language: eng
 # ---------------------------------------------------------------------------
 # ACAI and trabina — used by acai-align and render-alignment
 # ---------------------------------------------------------------------------
-
-acai_data_dir: C:/git/BibleAquifer/ACAI
-trabina_dir: C:/git/BN-Content/trabina/data/weighted
+#
+# Defaults are derived automatically from the repo's git-root sibling layout:
+#   acai_data_dir → <git-root>/BibleAquifer/ACAI
+#   trabina_dir   → <git-root>/BN-Content/trabina/data/weighted
+# Override here only if your layout differs from the standard.
+# Set to null to suppress ACAI annotation in render-alignment.
 
 # ---------------------------------------------------------------------------
 # Source/corpus settings — used by diff-migrate, sim-migrate, acai-align

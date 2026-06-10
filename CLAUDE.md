@@ -161,8 +161,8 @@ that is not a dict. This guards against malformed model output (e.g. a string el
 in the array) that would otherwise crash with `AttributeError` on `.get()`.
 
 `_api_call_with_backoff(fn, max_retries, provider)` wraps each provider's API call.
-It retries on 429 (rate-limited), 500/502/503 (provider error), 504 (gateway timeout),
-520/522/524 (Cloudflare transient) with exponential backoff (2s, 4s, 8s, …) up to
+It retries on 408 (provider timeout), 429 (rate-limited), 500/502/503 (provider error),
+504 (gateway timeout), 520/522/524 (Cloudflare transient) with exponential backoff (2s, 4s, 8s, …) up to
 `max_retries` times, and on `requests.exceptions.Timeout`. Fails fast on non-retriable errors. `_status_code(exc)`
 extracts the HTTP status code from any provider exception.
 Exposed via `--max-api-retries` (default 4) in `refine-alignment`.
@@ -510,10 +510,12 @@ strategy: stage the minimum data in, run GHA, copy results back out.
 **`copy-to-gha.py`** — run before triggering a GHA alignment job:
 1. Copies all `*.tsv` files from `C:/git/Clear/alignments-<lang>/data/targets/<edition>/`
    into `./data/alignments/alignments-<lang>/data/targets/<edition>/`
-2. Patches `alignments_root:` in `configs/<edition>.yaml` to `./data/alignments`
+2. If `C:/git/Clear/alignments-<lang>/exp/<edition>/<alignment_suffix>/` exists, copies
+   its JSON files into the matching staging path (enables incremental GHA runs).
+3. Patches `alignments_root:` in `configs/<edition>.yaml` to `./data/alignments`
 
-After running: `git add` the TSV(s) and the patched YAML, commit, push, then trigger the
-GHA `align-nt` workflow.
+After running: `git add` the TSV(s), any staged JSONs, and the patched YAML, commit,
+push, then trigger the GHA `align-nt` workflow.
 
 **`copy-from-gha.py`** — run after `git pull` brings GHA-committed results into the repo:
 1. Copies `./data/alignments/alignments-<lang>/exp/<edition>/<alignment_suffix>/*.json`

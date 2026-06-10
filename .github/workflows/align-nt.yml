@@ -143,12 +143,12 @@ jobs:
         run: |
           MAX_PASSES=${{ inputs.max-retry-passes || 5 }}
           for i in $(seq 1 "$MAX_PASSES"); do
+            rc=0
             poetry run retry-alignment \
               --config ${{ inputs.config }} \
               --corpus nt \
               --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
-              --batch-mode ${{ inputs.batch-mode || 'async' }}
-            rc=$?
+              --batch-mode ${{ inputs.batch-mode || 'async' }} || rc=$?
             [ "$rc" -eq 0 ] && break
             [ "$rc" -ne 2 ] && exit "$rc"
             echo "Pass $i: fallback model triggered, looping..."

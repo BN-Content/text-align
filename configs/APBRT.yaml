@@ -2,7 +2,7 @@
 #
 # Invoke any tool with:  --config APBRT
 
-alignments_root: ./data/alignments
+alignments_root: c:/git/Clear
 
 # ---------------------------------------------------------------------------
 # Identity
@@ -19,21 +19,36 @@ alignment_sources: [SIM-MIGRATED, DIFF-MIGRATED]
 alignment_suffix: LLM-REFINED
 from-scratch: true
 
-# Anthropic
-#llm_provider: anthropic
-#llm_model: claude-sonnet-4-6
-#llm_model: claude-opus-4-7
-#reasoning_effort: high
-# OpenAI
-llm_provider: openai
-#llm_model: gpt-5.4-mini
-llm_model: gpt-5.4
+# smaller chunks?
+batch-size: 4
+
+# Gloo
+llm_provider: gloo
 reasoning_effort: high
-# Google
-#reasoning_effort: high
-#llm_provider: google
-#llm_model: gemini-3-flash-preview
-#llm_model: gemini-3.1-pro-preview
+llm_model: gloo-google-gemini-3.5-flash # decent (better than not bad)
+
+# ---------------------------------------------------------------------------
+# retry-alignment settings
+# ---------------------------------------------------------------------------
+
+fallback_threshold: 0.30
+
+# LLM provider and model for retry-alignment (the second-pass / quality-repair step).
+# If absent, retry-alignment falls back to the llm_provider / llm_model /
+# reasoning_effort values above. Set these to use a different (typically better)
+# model for the retry pass than the initial refine pass.
+retry_reasoning_effort: high
+retry_llm_provider: gloo
+retry_llm_model: gloo-anthropic-claude-opus-4.7
+
+# Alignment quality scoring threshold for retry-alignment and score-alignment.
+# Verses with a composite penalty score above this value are flagged for retry.
+# Range 0–1; lower = more retries, higher = fewer. Default: 0.25.
+# semantic_threshold: 0.35
+
+# Legacy coverage threshold (deprecated; superseded by score_retry_threshold).
+# Flag verses with more than this many unaligned source tokens.
+min_unaligned_src: 2
 
 # ---------------------------------------------------------------------------
 # ACAI and trabina

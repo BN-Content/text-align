@@ -167,6 +167,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -193,7 +194,9 @@ jobs:
           else
             echo "No JSON files found in staging/"
           fi
-      - name: Commit results
+      - name: Commit results and open PR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -201,9 +204,15 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
+            BRANCH="gha/align-${{ inputs.config }}-${{ github.run_id }}"
+            git checkout -b "$BRANCH"
             git commit -m "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}"
-            git pull --rebase
-            git push
+            git push origin "$BRANCH"
+            gh pr create \
+              --title "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}" \
+              --body "Automated alignment output from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
+              --base main \
+              --head "$BRANCH"
           fi
       - name: Summarise results
         run: |

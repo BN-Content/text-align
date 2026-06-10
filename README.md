@@ -15,6 +15,18 @@ Alignments map tokens in a translation to tokens in the source text (Greek NT or
 
 **MACULA Hebrew (WLCM)** — The MACULA Hebrew Linguistic Datasets are copyright © Clear Bible, Inc. Licensed under a [Creative Commons Attribution 4.0 International License](https://creativecommons.org/licenses/by/4.0/). Source: [github.com/Clear-Bible/macula-hebrew](https://github.com/Clear-Bible/macula-hebrew).
 
+## Target translation TSVs
+
+Each target translation is represented as a pair of word-level TSV files (one for OT, one for NT) under `data/targets/<edition>/`. These files are produced by Biblica's [kathairo](https://pypi.org/project/kathairo/) library, which tokenizes Bible translation text into the token-per-row format the alignment tools expect.
+
+```
+data/targets/<edition>/
+    nt_<edition>.tsv
+    ot_<edition>.tsv
+```
+
+To add a new target translation, run kathairo against the translation's USFM source. Kathairo produces a single TSV for the whole translation; you will need to split it into OT and NT portions and place them in the appropriate directory, then create a config YAML under `configs/`.
+
 ## Installation
 
 Requires Python ≥ 3.10. Dependencies are managed with [Poetry](https://python-poetry.org/).

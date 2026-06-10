@@ -150,6 +150,13 @@ Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged 
 
 A GitHub Actions workflow (`.github/workflows/align-nt.yml`) is provided for running the full NT pipeline in parallel — one job per chapter — with automatic LaBSE cache warm-up and result collection back to the repository.
 
+Two helper scripts support a transitory data strategy for GHA runs, where only the minimum data needed for a given config is staged into this repo, the GHA run executes, and results are copied back out to the source alignments repo:
+
+- **`scripts/copy-to-gha.py --config <NAME>`** — copies all target TSVs for the config's edition from the Clear alignments repo into `data/alignments/`, and patches `alignments_root` in the config YAML to `./data/alignments`.
+- **`scripts/copy-from-gha.py --config <NAME>`** — copies the generated chapter JSON files (and viz, if present) from `data/alignments/` back to the Clear alignments repo, and restores `alignments_root` in the config YAML to `C:/git/Clear`.
+
+> **Note:** These scripts are specific to the [Bible Aquifer](https://github.com/BibleAquifer) internal workflow and depend on paths and repositories (`C:/git/Clear/alignments-*`) that are not publicly available. They are not intended for general use.
+
 ## CLI tools
 
 ### Refinement pipeline

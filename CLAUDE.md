@@ -501,6 +501,39 @@ batch API (same three providers as `refine-alignment`). Job metadata carries
 `"job_type": "retry"`. `fetch-batch` detects this and calls `merge_verse_results`
 instead of writing fresh chapter files.
 
+## GHA transitory data workflow (`scripts/copy-to-gha.py`, `scripts/copy-from-gha.py`)
+
+Alignment runs on GHA need only the translation TSV for a specific config — not the full
+contents of the Clear `alignments-*` repos. These two scripts implement a transitory
+strategy: stage the minimum data in, run GHA, copy results back out.
+
+**`copy-to-gha.py`** — run before triggering a GHA alignment job:
+1. Copies all `*.tsv` files from `C:/git/Clear/alignments-<lang>/data/targets/<edition>/`
+   into `./data/alignments/alignments-<lang>/data/targets/<edition>/`
+2. Patches `alignments_root:` in `configs/<edition>.yaml` to `./data/alignments`
+
+After running: `git add` the TSV(s) and the patched YAML, commit, push, then trigger the
+GHA `align-nt` workflow.
+
+**`copy-from-gha.py`** — run after `git pull` brings GHA-committed results into the repo:
+1. Copies `./data/alignments/alignments-<lang>/exp/<edition>/<alignment_suffix>/*.json`
+   to `C:/git/Clear/alignments-<lang>/exp/<edition>/<alignment_suffix>/`
+2. Copies `./data/alignments/alignments-<lang>/viz/<edition>/` into the Clear viz dir
+   (silently skipped if not present)
+3. Patches `alignments_root:` in `configs/<edition>.yaml` back to `C:/git/Clear`
+
+The `alignment_suffix` is read from the config YAML; defaults to `LLM-REFINED`.
+
+Both scripts accept `--config <NAME>` (required), `--clear-root <path>` (default
+`C:/git/Clear`), and `--dry-run`. Neither script invokes git or GHA.
+
+```bash
+python scripts/copy-to-gha.py  --config JFA11
+# ... git add / commit / push / trigger GHA ...
+# ... git pull after GHA completes ...
+python scripts/copy-from-gha.py --config JFA11
+```
+
 ## Testing
 
 Run tests with:

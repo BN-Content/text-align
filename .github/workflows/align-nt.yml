@@ -107,6 +107,7 @@ jobs:
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       GLOO_CLIENT_ID: ${{ secrets.GLOO_CLIENT_ID }}
       GLOO_CLIENT_SECRET: ${{ secrets.GLOO_CLIENT_SECRET }}
+      HF_HUB_OFFLINE: "1"
     steps:
       - name: Free disk space
         run: |

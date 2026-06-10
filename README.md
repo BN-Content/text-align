@@ -23,6 +23,14 @@ Requires Python ≥ 3.10. Dependencies are managed with [Poetry](https://python-
 poetry install
 ```
 
+## Testing
+
+```bash
+poetry run pytest
+```
+
+The test suite covers the cleaner (`tests/test_clean.py`) and quality scorer (`tests/test_scoring.py`). For a quick smoke test of a specific LLM provider, pass `--chapter 41003` to `refine-alignment` to limit scope to a single chapter.
+
 ## Credentials / `.env` file
 
 API credentials are read from environment variables. You can set them in a `.env` file in the project root — it is loaded automatically at startup.
@@ -509,6 +517,10 @@ See [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek
 - Grammatical construction cases (§9): finite verbs, participials, infinitivals, adjectives/adverbs, pronouns, prepositions, conjunctions/particles, discourse restructuring
 - Mounce Reverse Interlinear guidelines reference cases
 - Automated → LLM sharpening workflow
+
+## Contributing
+
+Bug reports and pull requests are welcome. Please open an issue first to discuss significant changes. All PRs require review and approval before merging.
 
 ## Licensing
 

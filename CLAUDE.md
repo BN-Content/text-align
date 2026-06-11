@@ -519,15 +519,17 @@ push, then trigger the GHA `align-nt` workflow.
 
 **`copy-from-gha.py`** — run after `git pull` brings GHA-committed results into the repo:
 1. Copies `./data/alignments/alignments-<lang>/exp/<edition>/<alignment_suffix>/*.json`
-   to `C:/git/Clear/alignments-<lang>/exp/<edition>/<alignment_suffix>/`
+   to `<clear_root>/alignments-<lang>/exp/<edition>/<alignment_suffix>/`
 2. Copies `./data/alignments/alignments-<lang>/viz/<edition>/` into the Clear viz dir
    (silently skipped if not present)
-3. Patches `alignments_root:` in `configs/<edition>.yaml` back to `C:/git/Clear`
+3. Patches `alignments_root:` in `configs/<edition>.yaml` back to `<clear_root>`
+4. Removes the edition-specific staged data from `./data/alignments/`:
+   `alignments-<lang>/data/targets/<edition>/`, `exp/<edition>/`, `viz/<edition>/`
 
 The `alignment_suffix` is read from the config YAML; defaults to `LLM-REFINED`.
 
 Both scripts accept `--config <NAME>` (required), `--clear-root <path>` (default
-`C:/git/Clear`), and `--dry-run`. Neither script invokes git or GHA.
+`~/git/Clear-Bible`), and `--dry-run`. Neither script invokes git or GHA.
 
 ```bash
 python scripts/copy-to-gha.py  --config JFA11

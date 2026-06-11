@@ -12,7 +12,11 @@ Copies:
   ./data/alignments/alignments-<lang>/viz/<edition>/   (if present)
     -> <clear_root>/alignments-<lang>/viz/<edition>/
 
-Then patches the config YAML so alignments_root points back to <clear_root>.
+Then patches the config YAML so alignments_root points back to <clear_root>,
+and removes the edition-specific staged data from ./data/alignments/:
+  alignments-<lang>/data/targets/<edition>/
+  alignments-<lang>/exp/<edition>/
+  alignments-<lang>/viz/<edition>/   (if present)
 
 The alignment_suffix is read from the config YAML; defaults to LLM-REFINED.
 
@@ -147,6 +151,23 @@ def main() -> None:
     config_path = CONFIGS_DIR / f"{args.config}.yaml"
     _patch_yaml(config_path, clear_root_str, args.dry_run)
 
+    # --- Cleanup staged data ---
+    staged_root = _REPO_ROOT / "data" / "alignments" / f"alignments-{lang}"
+    cleanup_dirs = [
+        staged_root / "data" / "targets" / edition,
+        staged_root / "exp" / edition,
+        staged_root / "viz" / edition,
+    ]
+    print()
+    print("  cleanup staged data:")
+    for d in cleanup_dirs:
+        if d.exists():
+            print(f"  {tag}rm -r  {d.relative_to(_REPO_ROOT)}")
+            if not args.dry_run:
+                shutil.rmtree(d)
+        else:
+            print(f"  (not present: {d.relative_to(_REPO_ROOT)})")
+
     print()
     if args.dry_run:
         print("Dry run complete -- no files written.")
@@ -162,8 +183,8 @@ def main() -> None:
         print( "  git push")
         print()
         print("Next steps (in text-align repo):")
-        print(f"  git add configs/{args.config}.yaml")
-        print(f"  git commit -m 'chore: restore alignments_root for {args.config}'")
+        print(f"  git add -A")
+        print(f"  git commit -m 'chore: restore alignments_root and remove staged data for {args.config}'")
 
 
 if __name__ == "__main__":

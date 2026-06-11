@@ -7,10 +7,6 @@ on:
         description: Edition config name (e.g. BSB)
         required: true
         type: string
-      lang:
-        description: Target language code (e.g. eng, por, spa)
-        required: true
-        type: string
       chapter:
         description: Single chapter to (re-)run, e.g. 40013. Leave blank for full NT.
         required: false
@@ -26,11 +22,11 @@ on:
       batch-mode:
         description: Batch mode
         required: false
-        default: async
+        default: sync
         type: choice
         options:
-          - async
           - sync
+          - async
       max-retry-passes:
         description: Max retry loop iterations per chapter
         required: false
@@ -42,6 +38,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.matrix }}
+      lang: ${{ steps.lang.outputs.lang }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -53,6 +50,14 @@ jobs:
         run: pipx install poetry
       - name: Install dependencies
         run: poetry install --no-interaction
+      - name: Extract target language from config
+        id: lang
+        run: |
+          LANG=$(poetry run python -c "
+          from text_align.config import load_config
+          print(load_config('${{ inputs.config }}').get('target_language', 'eng'))
+          ")
+          echo "lang=$LANG" >> "$GITHUB_OUTPUT"
       - name: Build chapter matrix
         id: matrix
         run: |
@@ -141,7 +146,7 @@ jobs:
             --config ${{ inputs.config }} \
             --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
             --skip-existing \
-            --batch-mode ${{ inputs.batch-mode || 'async' }} \
+            --batch-mode ${{ inputs.batch-mode || 'sync' }} \
             $EXTRA
       - name: Retry loop
         run: |
@@ -152,7 +157,7 @@ jobs:
               --config ${{ inputs.config }} \
               --corpus nt \
               --chapter-range ${{ matrix.start }} ${{ matrix.end }} \
-              --batch-mode ${{ inputs.batch-mode || 'async' }} || rc=$?
+              --batch-mode ${{ inputs.batch-mode || 'sync' }} || rc=$?
             [ "$rc" -eq 0 ] && break
             [ "$rc" -ne 2 ] && exit "$rc"
             echo "Pass $i: fallback model triggered, looping..."
@@ -162,11 +167,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: align-${{ matrix.id }}
-          path: data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/
+          path: data/alignments/alignments-${{ needs.plan.outputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/
           if-no-files-found: warn
 
   collect:
-    needs: refine-and-retry
+    needs: [plan, refine-and-retry]
     if: always()
     runs-on: ubuntu-latest
     permissions:
@@ -191,7 +196,7 @@ jobs:
           path: staging/
       - name: Copy artifacts into repo
         run: |
-          DEST="data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED"
+          DEST="data/alignments/alignments-${{ needs.plan.outputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED"
           mkdir -p "$DEST"
           if ls staging/*.json 1>/dev/null 2>&1; then
             cp -v staging/*.json "$DEST/"
@@ -204,7 +209,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/"
+          git add "data/alignments/alignments-${{ needs.plan.outputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/"
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

@@ -7,6 +7,10 @@ on:
         description: Edition config name (e.g. BSB)
         required: true
         type: string
+      lang:
+        description: Target language code (e.g. eng, por, spa)
+        required: true
+        type: string
       chapter:
         description: Single chapter to (re-)run, e.g. 40013. Leave blank for full NT.
         required: false
@@ -158,7 +162,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: align-${{ matrix.id }}
-          path: data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED/
+          path: data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/
           if-no-files-found: warn
 
   collect:
@@ -187,7 +191,7 @@ jobs:
           path: staging/
       - name: Copy artifacts into repo
         run: |
-          DEST="data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED"
+          DEST="data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED"
           mkdir -p "$DEST"
           if ls staging/*.json 1>/dev/null 2>&1; then
             cp -v staging/*.json "$DEST/"
@@ -200,7 +204,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add "data/alignments/alignments-eng/exp/${{ inputs.config }}/LLM-REFINED/"
+          git add "data/alignments/alignments-${{ inputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/"
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else

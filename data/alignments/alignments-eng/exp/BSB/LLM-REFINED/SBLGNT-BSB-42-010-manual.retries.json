@@ -1,0 +1,9 @@
+{
+  "edition": "BSB",
+  "chapter_id": "42010",
+  "passes": 1,
+  "retried_verses": [
+    "42010001",
+    "42010002"
+  ]
+}

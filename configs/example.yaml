@@ -6,7 +6,7 @@
 # CLI args always override values set here.
 # Keys use underscores to match argparse dest names (hyphens are also accepted
 # and normalized automatically, so from_scratch and from-scratch both work).
-# Path values are resolved as-is (use absolute paths or paths relative to CWD).
+# Path values support ~ (home dir) and $ENV_VAR expansion, absolute paths, or CWD-relative paths.
 
 # ---------------------------------------------------------------------------
 # Root path — enables automatic path derivation
@@ -25,7 +25,7 @@
 #   output_dir           → <root>/alignments-<trg_lang>/exp/<trg_ed>/<TOOL-SUFFIX>
 #                          (render-alignment uses <root>/alignments-<trg_lang>/viz)
 
-alignments_root: C:/git/alignments
+alignments_root: ~/git/alignments
 
 # ---------------------------------------------------------------------------
 # Identity — used by all four tools

@@ -44,8 +44,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--config", required=True, metavar="NAME",
                    help="Config name, e.g. JFA11 (reads configs/<NAME>.yaml)")
-    p.add_argument("--clear-root", default="C:/git/Clear", metavar="PATH",
-                   help="Root of the Clear alignments repos (default: C:/git/Clear)")
+    p.add_argument("--clear-root", default="~/git/Clear-Bible", metavar="PATH",
+                   help="Root of the Clear alignments repos (default: ~/git/Clear-Bible)")
     p.add_argument("--dry-run", action="store_true",
                    help="Print actions without copying files or patching YAML")
     return p.parse_args()
@@ -79,8 +79,8 @@ def main() -> None:
     if not lang or not edition:
         sys.exit(f"error: config {args.config} must define target_language and target_edition")
 
-    clear_root = Path(args.clear_root)
-    clear_root_fwd = str(clear_root).replace("\\", "/")
+    clear_root = Path(args.clear_root).expanduser()
+    clear_root_str = args.clear_root  # raw (unexpanded) form — written back to YAML
 
     src_json_dir = (
         _REPO_ROOT / "data" / "alignments"
@@ -145,7 +145,7 @@ def main() -> None:
 
     # --- YAML patch ---
     config_path = CONFIGS_DIR / f"{args.config}.yaml"
-    _patch_yaml(config_path, clear_root_fwd, args.dry_run)
+    _patch_yaml(config_path, clear_root_str, args.dry_run)
 
     print()
     if args.dry_run:

@@ -55,6 +55,7 @@ Explicit values in the YAML always override derived ones.
 """
 
 import argparse
+import os
 from pathlib import Path
 from typing import Any
 
@@ -92,7 +93,9 @@ def load_config(name: str) -> dict[str, Any]:
     # e.g. from-scratch: true → from_scratch: true (both forms accepted).
     return {
         k.replace("-", "_"): (
-            Path(v) if isinstance(v, str) and any(k.endswith(s) for s in _PATH_SUFFIXES) else v
+            Path(os.path.expandvars(v)).expanduser()
+            if isinstance(v, str) and any(k.endswith(s) for s in _PATH_SUFFIXES)
+            else v
         )
         for k, v in data.items()
     }

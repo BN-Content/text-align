@@ -36,8 +36,8 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--config", required=True, metavar="NAME",
                    help="Config name, e.g. JFA11 (reads configs/<NAME>.yaml)")
-    p.add_argument("--clear-root", default="C:/git/Clear", metavar="PATH",
-                   help="Root of the Clear alignments repos (default: C:/git/Clear)")
+    p.add_argument("--clear-root", default="~/git/Clear-Bible", metavar="PATH",
+                   help="Root of the Clear alignments repos (default: ~/git/Clear-Bible)")
     p.add_argument("--dry-run", action="store_true",
                    help="Print actions without copying files or patching YAML")
     return p.parse_args()
@@ -70,7 +70,7 @@ def main() -> None:
     if not lang or not edition:
         sys.exit(f"error: config {args.config} must define target_language and target_edition")
 
-    clear_root = Path(args.clear_root)
+    clear_root = Path(args.clear_root).expanduser()
     src_dir = clear_root / f"alignments-{lang}" / "data" / "targets" / edition
     dest_dir = (
         _REPO_ROOT / "data" / "alignments"

@@ -3,7 +3,7 @@
 #
 # Invoke any tool with:  --config JFA11
 
-alignments_root: c:/git/Clear
+alignments_root: ~/git/Clear-Bible
 
 # ---------------------------------------------------------------------------
 # Identity

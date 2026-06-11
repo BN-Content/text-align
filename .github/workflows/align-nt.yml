@@ -207,12 +207,14 @@ jobs:
             BRANCH="gha/align-${{ inputs.config }}-${{ github.run_id }}"
             git checkout -b "$BRANCH"
             git commit -m "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}"
-            git push origin "$BRANCH"
-            gh pr create \
-              --title "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}" \
-              --body "Automated alignment output from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
-              --base main \
-              --head "$BRANCH"
+            git push --force origin "$BRANCH"
+            if ! gh pr view "$BRANCH" --json number -q .number 2>/dev/null; then
+              gh pr create \
+                --title "chore: GHA alignment output — ${{ inputs.config }} NT run ${{ github.run_id }}" \
+                --body "Automated alignment output from workflow run [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})." \
+                --base main \
+                --head "$BRANCH"
+            fi
           fi
       - name: Summarise results
         run: |

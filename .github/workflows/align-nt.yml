@@ -162,12 +162,29 @@ jobs:
             [ "$rc" -ne 2 ] && exit "$rc"
             echo "Pass $i: fallback model triggered, looping..."
           done
+      - name: Collect new output files
+        if: always()
+        run: |
+          mkdir -p /tmp/job-output
+          LANG="${{ needs.plan.outputs.lang }}"
+          SRC="data/alignments/alignments-${LANG}/exp/${{ inputs.config }}/LLM-REFINED"
+          START=${{ matrix.start }}
+          END=${{ matrix.end }}
+          for f in "$SRC"/*.json; do
+            [[ -f "$f" ]] || continue
+            base=$(basename "$f")
+            book=$(echo "$base" | cut -d- -f3)
+            chap=$(echo "$base" | cut -d- -f4)
+            chap_id="${book}${chap}"
+            [[ "$chap_id" -ge "$START" && "$chap_id" -le "$END" ]] && cp "$f" /tmp/job-output/
+          done
+          echo "Collected $(ls /tmp/job-output | wc -l) file(s)"
       - name: Upload chapter artifacts
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: align-${{ matrix.id }}
-          path: data/alignments/alignments-${{ needs.plan.outputs.lang }}/exp/${{ inputs.config }}/LLM-REFINED/
+          path: /tmp/job-output/
           if-no-files-found: warn
 
   collect:
@@ -177,6 +194,7 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      workflows: write
     steps:
       - uses: actions/checkout@v5
         with:

@@ -194,7 +194,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      workflows: write
     steps:
       - uses: actions/checkout@v5
         with:

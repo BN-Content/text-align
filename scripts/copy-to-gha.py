@@ -5,8 +5,13 @@ Copies all TSV files for the target edition from the Clear alignments repo into
 ./data/alignments/alignments-<lang>/data/targets/<edition>/, then patches the
 config YAML so alignments_root points to ./data/alignments.
 
+If exp/<edition>/<alignment_suffix>/ exists in the Clear repo, its JSON files are
+also staged (enables incremental GHA runs). If viz/<edition>/ exists, it is staged too.
+
+The alignment_suffix is read from the config YAML; defaults to LLM-REFINED.
+
 After running this script:
-  1. git add data/alignments/alignments-<lang>/data/targets/<edition>/ configs/<edition>.yaml
+  1. git add data/alignments/alignments-<lang>/ configs/<edition>.yaml
   2. git commit && git push
   3. Trigger the GHA align-nt workflow with config=<edition> lang=<lang>
 
@@ -27,6 +32,8 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(_REPO_ROOT / "src"))
 
 from text_align.config import CONFIGS_DIR, load_config
+
+_DEFAULT_SUFFIX = "LLM-REFINED"
 
 
 def parse_args() -> argparse.Namespace:
@@ -67,38 +74,79 @@ def main() -> None:
 
     lang = config.get("target_language")
     edition = config.get("target_edition")
+    suffix = config.get("alignment_suffix") or _DEFAULT_SUFFIX
     if not lang or not edition:
         sys.exit(f"error: config {args.config} must define target_language and target_edition")
 
     clear_root = Path(args.clear_root).expanduser()
-    src_dir = clear_root / f"alignments-{lang}" / "data" / "targets" / edition
-    dest_dir = (
-        _REPO_ROOT / "data" / "alignments"
-        / f"alignments-{lang}" / "data" / "targets" / edition
-    )
+    staged_root = _REPO_ROOT / "data" / "alignments" / f"alignments-{lang}"
 
-    if not src_dir.exists():
-        sys.exit(f"error: source targets dir not found: {src_dir}")
+    src_tsv_dir = clear_root / f"alignments-{lang}" / "data" / "targets" / edition
+    dest_tsv_dir = staged_root / "data" / "targets" / edition
 
-    tsvs = sorted(src_dir.glob("*.tsv"))
+    src_exp_dir = clear_root / f"alignments-{lang}" / "exp" / edition / suffix
+    dest_exp_dir = staged_root / "exp" / edition / suffix
+
+    src_viz_dir = clear_root / f"alignments-{lang}" / "viz" / edition
+    dest_viz_dir = staged_root / "viz" / edition
+
+    if not src_tsv_dir.exists():
+        sys.exit(f"error: source targets dir not found: {src_tsv_dir}")
+
+    tsvs = sorted(src_tsv_dir.glob("*.tsv"))
     if not tsvs:
-        sys.exit(f"error: no TSV files found in {src_dir}")
+        sys.exit(f"error: no TSV files found in {src_tsv_dir}")
 
     tag = "[dry-run] " if args.dry_run else ""
-    print(f"copy-to-gha: {lang}/{edition}")
-    print(f"  source:  {src_dir}")
-    print(f"  dest:    {dest_dir}")
+    print(f"copy-to-gha: {lang}/{edition}  suffix={suffix}")
     print()
 
+    # --- TSV target files ---
+    print(f"  targets ({len(tsvs)} TSV files):")
+    print(f"    {src_tsv_dir}")
+    print(f"    -> {dest_tsv_dir}")
+
     if not args.dry_run:
-        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_tsv_dir.mkdir(parents=True, exist_ok=True)
 
     for tsv in tsvs:
         print(f"  {tag}copy  {tsv.name}")
         if not args.dry_run:
-            shutil.copy2(tsv, dest_dir / tsv.name)
+            shutil.copy2(tsv, dest_tsv_dir / tsv.name)
 
     print(f"\n  {len(tsvs)} file(s) copied")
+    print()
+
+    # --- Exp alignment JSONs (optional) ---
+    jsons = sorted(src_exp_dir.glob("*.json")) if src_exp_dir.exists() else []
+    if jsons:
+        print(f"  exp alignment JSON ({len(jsons)} files):")
+        print(f"    {src_exp_dir}")
+        print(f"    -> {dest_exp_dir}")
+        if not args.dry_run:
+            dest_exp_dir.mkdir(parents=True, exist_ok=True)
+        for f in jsons:
+            print(f"  {tag}copy  {f.name}")
+            if not args.dry_run:
+                shutil.copy2(f, dest_exp_dir / f.name)
+        print(f"\n  {len(jsons)} file(s) copied")
+    else:
+        print(f"  exp: {src_exp_dir} not found or empty -- skipping")
+    print()
+
+    # --- Viz (optional) ---
+    has_viz = src_viz_dir.exists() and any(src_viz_dir.iterdir())
+    if has_viz:
+        print(f"  viz:")
+        print(f"    {src_viz_dir}")
+        print(f"    -> {dest_viz_dir}")
+        if not args.dry_run:
+            shutil.copytree(src_viz_dir, dest_viz_dir, dirs_exist_ok=True)
+            print("  viz copied")
+        else:
+            print(f"  {tag}copytree viz")
+    else:
+        print(f"  viz: {src_viz_dir} not found or empty -- skipping")
     print()
 
     config_path = CONFIGS_DIR / f"{args.config}.yaml"
@@ -111,9 +159,9 @@ def main() -> None:
         print("Done.")
         print()
         print("Next steps:")
-        print(f"  git add data/alignments/alignments-{lang}/data/targets/{edition}/")
+        print(f"  git add data/alignments/alignments-{lang}/")
         print(f"  git add configs/{args.config}.yaml")
-        print(f"  git commit -m 'chore: stage {lang}/{edition} TSV for GHA alignment'")
+        print(f"  git commit -m 'chore: stage {lang}/{edition} data for GHA alignment'")
         print( "  git push")
         print(f"  # Trigger GHA align-nt workflow: config={args.config}  lang={lang}")
 

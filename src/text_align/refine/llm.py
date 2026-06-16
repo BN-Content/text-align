@@ -52,46 +52,36 @@ _NEUTRAL_TOOL_SCHEMA: dict = {
         "properties": {
             "verses": {
                 "type": "array",
-                "description": "One entry per verse in the batch.",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "verse_id": {
-                            "type": "string",
-                            "description": "8-digit BCV verse ID, e.g. '41004003'.",
-                        },
+                        "verse_id": {"type": "string"},
                         "records": {
                             "type": "array",
-                            "description": "Alignment records for this verse.",
                             "items": {
                                 "type": "object",
                                 "properties": {
                                     "source": {
                                         "type": "array",
                                         "items": {"type": "integer"},
-                                        "description": "Local source token numbers (1-based integers from the verse block).",
                                     },
                                     "target": {
                                         "type": "array",
                                         "items": {"type": "integer"},
-                                        "description": "Local target token numbers (1-based integers from the verse block).",
                                     },
                                     "meta": {
                                         "type": "object",
                                         "properties": {
                                             "secondary": {
                                                 "type": "object",
-                                                "description": "Grammatically implied tokens with no direct lexical/semantic link. Each list must be a strict subset of this same record's source/target arrays.",
                                                 "properties": {
                                                     "source": {
                                                         "type": "array",
                                                         "items": {"type": "integer"},
-                                                        "description": "Subset of this record's source integers — only numbers already in this record's 'source' array.",
                                                     },
                                                     "target": {
                                                         "type": "array",
                                                         "items": {"type": "integer"},
-                                                        "description": "Subset of this record's target integers — only numbers already in this record's 'target' array.",
                                                     },
                                                 },
                                             },
@@ -99,7 +89,6 @@ _NEUTRAL_TOOL_SCHEMA: dict = {
                                             "rel": {
                                                 "type": "string",
                                                 "enum": ["NEQ"],
-                                                "description": "NEQ = non-equivalent; internal use only.",
                                             },
                                         },
                                     },

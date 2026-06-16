@@ -200,27 +200,27 @@ def format_verse_block(
 
     lines.append("TARGET TOKENS:")
     for num, t in zip(range(1, len(target_tokens) + 1), target_tokens):
-        lines.append(f"  {num}  {t.text!r}")
+        lines.append(f"  {num}  {t.text}")
     lines.append("")
 
-    lines.append("ALIGNMENT CANDIDATES:")
     if not candidates:
-        lines.append("  (none)")
-    else:
-        for source_type, records in candidates.items():
-            lines.append(f"\n[{source_type}]")
-            for rec in records:
-                src_nums = [
-                    str(source_inv[sid])
-                    for sid in rec.get("source", [])
-                    if sid in source_inv
-                ]
-                tgt_nums = [
-                    str(target_inv[tid])
-                    for tid in rec.get("target", [])
-                    if tid in target_inv
-                ]
-                lines.append(f"  source: [{' '.join(src_nums)}]  target: [{' '.join(tgt_nums)}]")
+        return "\n".join(lines), source_map, target_map
+
+    lines.append("ALIGNMENT CANDIDATES:")
+    for source_type, records in candidates.items():
+        lines.append(f"\n[{source_type}]")
+        for rec in records:
+            src_nums = [
+                str(source_inv[sid])
+                for sid in rec.get("source", [])
+                if sid in source_inv
+            ]
+            tgt_nums = [
+                str(target_inv[tid])
+                for tid in rec.get("target", [])
+                if tid in target_inv
+            ]
+            lines.append(f"  source: [{' '.join(src_nums)}]  target: [{' '.join(tgt_nums)}]")
 
     return "\n".join(lines), source_map, target_map
 

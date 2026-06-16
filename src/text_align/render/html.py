@@ -146,12 +146,23 @@ def _source_index(src_id: str, target_id: str) -> str:
     tgt_bcv = BCVWPID(target_id)
     is_nt = int(src_bcv.book_ID) > 39
     same_verse = src_bcv.to_bcvid == tgt_bcv.to_bcvid
+    same_chapter = src_bcv.chapter_ID == tgt_bcv.chapter_ID
     if is_nt:
         w = int(src_bcv.word_ID)
-        return str(w) if same_verse else f"{int(src_bcv.verse_ID)}.{w}"
+        if same_verse:
+            return str(w)
+        elif same_chapter:
+            return f"{int(src_bcv.verse_ID)}.{w}"
+        else:
+            return f"{int(src_bcv.chapter_ID)}:{int(src_bcv.verse_ID)}.{w}"
     else:
         w, p = int(src_bcv.word_ID), int(src_bcv.part_ID)
-        return f"{w}.{p}" if same_verse else f"{int(src_bcv.verse_ID)}.{w}.{p}"
+        if same_verse:
+            return f"{w}.{p}"
+        elif same_chapter:
+            return f"{int(src_bcv.verse_ID)}.{w}.{p}"
+        else:
+            return f"{int(src_bcv.chapter_ID)}:{int(src_bcv.verse_ID)}.{w}.{p}"
 
 
 def _anchor(token: AlignmentToken, verse_tids: list[str], is_r2l: bool) -> str | None:
@@ -520,12 +531,23 @@ def write_verse(
         src_bcv = BCVWPID(unused_id)
         is_nt = int(src_bcv.book_ID) > 39
         same_verse = src_bcv.to_bcvid == tgt_verse_bcvid
+        same_chapter = src_bcv.chapter_ID == tgt_verse_bcvid[2:5]
         if is_nt:
-            idx_str = (str(int(src_bcv.word_ID)) if same_verse
-                       else f"{int(src_bcv.verse_ID)}.{int(src_bcv.word_ID)}")
+            w = int(src_bcv.word_ID)
+            if same_verse:
+                idx_str = str(w)
+            elif same_chapter:
+                idx_str = f"{int(src_bcv.verse_ID)}.{w}"
+            else:
+                idx_str = f"{int(src_bcv.chapter_ID)}:{int(src_bcv.verse_ID)}.{w}"
         else:
-            idx_str = (f"{int(src_bcv.word_ID)}.{int(src_bcv.part_ID)}" if same_verse
-                       else f"{int(src_bcv.verse_ID)}.{int(src_bcv.word_ID)}.{int(src_bcv.part_ID)}")
+            w, p = int(src_bcv.word_ID), int(src_bcv.part_ID)
+            if same_verse:
+                idx_str = f"{w}.{p}"
+            elif same_chapter:
+                idx_str = f"{int(src_bcv.verse_ID)}.{w}.{p}"
+            else:
+                idx_str = f"{int(src_bcv.chapter_ID)}:{int(src_bcv.verse_ID)}.{w}.{p}"
 
         is_neq = unused_id in neq_source
         marker = "≠" if is_neq else "•"

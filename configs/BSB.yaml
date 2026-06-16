@@ -21,7 +21,7 @@ alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # smaller chunks?
-batch-size: 4
+batch-size: 2
 
 # Anthropic
 #llm_provider: anthropic
@@ -55,10 +55,10 @@ batch-size: 4
 #llm_model: qwen/qwen3.6-35b-a3b:exacto
 # Gloo
 llm_provider: gloo
-reasoning_effort: high
+#reasoning_effort: high
 #llm_model: gloo-openai-gpt-oss-120b
 #llm_model: gloo-google-gemini-3.1-pro
-llm_model: gloo-google-gemini-3.5-flash # decent (better than not bad)
+#llm_model: gloo-google-gemini-3.5-flash # decent (better than not bad)
 #llm_model: gloo-google-gemini-3-flash # bad
 #llm_model: gloo-google-gemini-2.5-flash # awful
 #llm_model: gloo-google-gemma-4-31b
@@ -68,10 +68,10 @@ llm_model: gloo-google-gemini-3.5-flash # decent (better than not bad)
 #llm_model: gloo-qwen-3.6-flash # crash, sucketh mightily
 #llm_model: gloo-qwen-3.6-35b-a3b # sucketh mightily
 #llm_model: gloo-qwen-3.6-plus # crash, sucketh mightily
-# llm_model: gloo-qwen-3.7-plus # sucketh mightily
+#llm_model: gloo-qwen-3.7-plus # sucketh mightily
 #llm_model: gloo-openai-gpt-5-mini
 #llm_model: gloo-minimax-m3 # inaccessible
-#llm_model: gloo-deepseek-v4-pro
+llm_model: gloo-deepseek-v4-pro
 #llm_model: gloo-xiaomi-mimo-v2.5 # intermittent response, but not good
 #llm_model: gloo-kimi-k2-thinking # sucketh mightily
 #llm_model: gloo-mistral-large-3 # useless

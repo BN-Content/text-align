@@ -851,13 +851,11 @@ def main() -> None:
         sources_with_targets = get_sources_with_targets(mgr.bcv["records"])
 
         # ── build verse-mapping dicts for merged-verse support ──────────
-        # When a translation verse merges multiple source verses (e.g. BSB
-        # 3JN 1:14 = SBLGNT 3JN 1:14-15), alignment records whose first
-        # source token is from verse 15 are keyed under "63014015" in
-        # mgr.bcv["records"].  target_sourceverses["63014015"] is None
-        # (no BSB verse 15 exists), so without this mapping those records
-        # would be silently skipped and their source tokens would never
-        # appear in the unused-source display.
+        # _src_to_tgt_verse: source verse BCV → target verse BCV, derived
+        # from alignment records.  Needed for record processing (line below)
+        # and to augment _tgt_to_src_vids with cross-boundary source verses.
+        # Example: SBLGNT 3JN 1:15 records target BSB 1:14, so
+        # _src_to_tgt_verse["63014015"] = "63014014".
         _src_to_tgt_verse: dict[str, str] = {}
         for _rec_id, _rec_list in mgr.bcv["records"].items():
             for _alignment in _rec_list:
@@ -865,12 +863,26 @@ def main() -> None:
                     _src_to_tgt_verse[_rec_id] = BCVWPID(_alignment.target_selectors[0]).to_bcvid
                     break
 
+        # _tgt_to_src_vids: target verse BCV → ordered list of source verse BCVs.
+        # Step 1: derive from target token source_verse field (authoritative).
+        # This correctly handles OT versification mismatches: BSB 2:1 tokens
+        # carry source_verse="32002002" (Hebrew 2:2), so Hebrew 2:1 never bleeds
+        # into the chapter 2 rendering even when it is present in the source corpus.
         _tgt_to_src_vids: dict[str, list[str]] = {}
+        for _tgt in mgr.targetitems.values():
+            _src_bcv = _tgt.source_verse
+            _tgt_bcv = _tgt.bcv
+            _svids = _tgt_to_src_vids.setdefault(_tgt_bcv, [])
+            if _src_bcv not in _svids:
+                _svids.append(_src_bcv)
+        # Step 2: augment from alignment records for source verses that cross
+        # target verse boundaries (e.g. SBLGNT 3JN 1:15 merged into BSB 1:14).
+        # NT target tokens only carry their own verse as source_verse, so the
+        # extra source verse would otherwise be invisible.
         for _sv, _tv in _src_to_tgt_verse.items():
-            _tgt_to_src_vids.setdefault(_tv, []).append(_sv)
-        for _sv in mgr.bcv["sources"]:
-            if _sv not in _src_to_tgt_verse:
-                _tgt_to_src_vids.setdefault(_sv, []).append(_sv)
+            _svids = _tgt_to_src_vids.setdefault(_tv, [])
+            if _sv not in _svids:
+                _svids.append(_sv)
 
         _tgt_combined_sources: dict[str, list] = {
             _tv: sorted(

@@ -29,9 +29,9 @@ BCVWP ID. Common splits:
 - Conjunction waw (וְ/וַ/וּ) — pos=conjunction
 - Pronominal suffixes (וֹ, הוּ, ם, etc.) — pos=suffix
 
-When a morpheme has its own word-part token, treat it as an independent alignment unit
-and give it its own record. When no word-part token exists (the morpheme is merged into
-a single token), align all corresponding English words to that one token.
+**Word-part token present** → independent alignment unit; its English correspondent is
+**primary** to it. **No word-part token** (morpheme merged into the main token) → English
+correspondent is **primary** to the main token. This principle governs all sections below.
 
 ## ALIGNMENT PHILOSOPHY
 
@@ -76,9 +76,6 @@ Common secondary cases:
 - **Auxiliary verbs** for Hebrew participles ("was sitting", "is going") — main verb
   element primary; auxiliary secondary.
 
-When a word-part token IS present for a morpheme, its English correspondent is primary —
-it has its own source token. Do not make it secondary.
-
 **Structural constraints:**
 
 Every record must have at least one primary token on each populated side.
@@ -105,6 +102,11 @@ when a translator explicitly renders it with "as for," "namely," or similar.
 Hebrew verbless clauses require a copula in English that the translator supplies; no
 Hebrew token corresponds to it.
 
+Example: יְהוָה אֱלֹהֵינוּ (Deut 6:4) → "the LORD is our God"
+  source=[יְהוָה],    target=["LORD"] — primary
+  source=[אֱלֹהֵינוּ], target=["our", "God"] — "God" primary; "our" secondary (suffix)
+  "is" → NEQ target
+
 **Waw conjunction (וְ/וַ) + English asyndeton** — waw word-part token → NEQ source.
 **Translator-supplied English conjunction with no Hebrew conjunction token** → NEQ target.
 
@@ -113,27 +115,15 @@ Hebrew token corresponds to it.
 Morphological differences — tense, voice, number, aspect, verbal stem (binyan) — do not
 prevent alignment. The question is whether lexical and semantic correspondence exists.
 
-## CANDIDATES
-
-Alignment candidates are initial suggestions from automated tools. They contain no
-secondary classification, no idiom flags, and some will be wrong. Restructure, split,
-merge, or discard them freely.
-
 ## ARTICLES
 
-The Hebrew definite article is always a prefix. MACULA provides it as a separate
-word-part token (pos=particle, gloss="the").
-
-**Does this article word-part have a specific English word as its direct correspondent?**
-
-**YES → primary 1:1 record.**
-**NO  → secondary source token in the head noun's record. Never NEQ.**
+The Hebrew definite article (הַ/הָ/הֶ) appears as a separate word-part token (pos=particle,
+gloss="the"). Never NEQ.
 
 - **Article word-part → "the":** primary 1:1. Noun gets its own record.
 - **Article word-part, no English "the":** secondary to the noun in the noun's record.
 - **No article word-part, English "the" present:** "the" is secondary to the noun token.
-- **English "a"/"an", no Hebrew article:** Hebrew has no indefinite article; "a"/"an" is
-  secondary to the noun.
+- **English "a"/"an":** secondary to the noun (Hebrew has no indefinite article).
 
 ## CONSTRUCT CHAINS
 
@@ -160,30 +150,13 @@ possessive.
 
 ## INSEPARABLE PREPOSITIONS
 
-When a word-part token exists for an inseparable preposition (pos=preposition), align it
-to the English preposition as a **primary** record — it is an independent token.
-
-When no word-part token exists (preposition merged into one token), the English
-preposition is **primary** to the noun token (the preposition is an explicit morpheme,
-not a grammatically implied feature). English "the" from a merged article is still
-**secondary**.
+Align the English preposition **primary** to the preposition word-part when present, or
+to the noun token when merged. English "the" from a merged article is **secondary** to
+that same token.
 
 Example — single-token בַּמֶּלֶךְ "in the king":
   source=[bammelekId], target=["in", "the", "king"]
     primary: "in", "king";  secondary.target: ["the"]
-
-## VERBLESS CLAUSES
-
-Hebrew frequently omits the copula in nominal and adjectival sentences. English requires
-an explicit copula.
-
-**Supplied copula ("is", "are", "was", "were") with no corresponding Hebrew verb token
-→ NEQ target.** The copula reflects English grammar, not any Hebrew source token.
-
-Example: יְהוָה אֱלֹהֵינוּ (Deut 6:4) → "the LORD is our God"
-  source=[יְהוָה],    target=["LORD"] — primary
-  source=[אֱלֹהֵינוּ], target=["our", "God"] — "God" primary; "our" secondary (suffix)
-  "is" → NEQ target
 
 ## CONJUNCTIONS AND PARTICLES
 
@@ -194,10 +167,8 @@ The waw word-part token (pos=conjunction) is extremely common. Align it to its E
 rendering ("and", "but", "then", "so", "now") as primary. When the translation uses
 asyndeton, waw → NEQ source.
 
-כִּי is polyfunctional: causal ("because", "for"), content ("that"), conditional ("if"),
-temporal ("when"), emphatic ("indeed"), adversative ("but"). Match whichever English word
-carries כִּי's force in context. כִּי introducing direct speech with only punctuation →
-NEQ source.
+כִּי is polyfunctional. Match whichever English word carries כִּי's force in context.
+כִּי introducing direct speech with only punctuation → NEQ source.
 
 אֲשֶׁר/שֶׁ relative and subordinate particle → "who", "which", "that", "where", etc.
 When absorbed into clause structure without a correspondent → NEQ source.
@@ -240,10 +211,7 @@ Suffix → English pronoun governed by the preposition, primary 1:1.
 
 Example — אֵלָיו "to him" (word-parts: אֵל prep, יו 3ms suffix):
   source=[elPartId],  target=["to"]  — primary
-  source=[sufPartId], target=["him"] — primary
-
-When no word-part token exists for a suffix (merged into a single token), the English
-pronoun is still **primary** to that token — the suffix is an explicit morpheme.\
+  source=[sufPartId], target=["him"] — primary\
 """
 
 NEGATION_BLOCK = """\
@@ -251,18 +219,15 @@ NEGATION_BLOCK = """\
 
 ### Standard negation (לֹא, לוֹא)
 
-לֹא/לוֹא negates statements, prohibitions, and questions. Align to "not", "no", "never"
-as a **primary** 1:1 record.
+Align to "not", "no", "never" — **primary** 1:1.
 
 ### Jussive/imperative negation (אַל)
 
-אַל prohibits in jussive/imperative contexts. Align to "not", "do not", "let … not" —
-**primary** 1:1.
+Align to "not", "do not", "let … not" — **primary** 1:1.
 
 ### Existential negation (אֵין, אַיִן)
 
-אֵין/אַיִן express "there is no / are no / is not". Align to the English existential
-negative expression — **primary**, often 1:N.
+"there is no / are no / is not" — **primary**, often 1:N.
 
 Example — אֵין → "there is no":
   source=[einId], target=["there", "is", "no"] — all three primary to אֵין
@@ -287,20 +252,15 @@ Example — לֹא יֵדַע "he does not know":
 PARTICIPLE_BLOCK = """\
 ## PARTICIPIAL CONSTRUCTIONS
 
-Hebrew participles serve as adjectives, substantives (nouns), and predicative verbal
-forms. Identify the syntactic role, then apply the relevant rule.
-
 ### Adjectival participle
 
-The participle modifies a noun. Align to the English adjective or participial modifier —
-**primary**.
+Align to the English adjective or participial modifier — **primary**.
 
 ### Substantive (nominal) participle
 
-The participle functions as a noun. When a Hebrew article word-part (pos=particle,
-gloss="the") is present, align the article → English relativizer ("the one", "he who",
-"those who") per the ARTICLES rule. Relative pronouns ("who", "that") introduced in
-English are secondary to the participle.
+When a Hebrew article word-part (pos=particle, gloss="the") is present, align the
+article → English relativizer ("the one", "he who", "those who") per the ARTICLES rule.
+Relative pronouns ("who", "that") introduced in English are secondary to the participle.
 
 Example: הַשֹּׁמֵר "the one who keeps":
   source=[articlePartId], target=["the", "one"] — primary 1:1 (article → "the one")
@@ -311,11 +271,8 @@ Anarthrous substantive (no article token): all English nominalizing elements ("t
 
 ### Verbal (predicative) participle
 
-The participle expresses ongoing or continuous action. English renders it with a
-progressive auxiliary.
-
-- The main verbal element is **primary** to the Hebrew participle token.
-- English progressive auxiliaries ("is", "was", "are", "were") are **secondary**.
+English progressive auxiliaries ("is", "was", "are", "were") are **secondary**; the
+main verbal element is **primary**.
 
 Example: יֹשֵׁב "was sitting":
   source=[participleId], target=["was", "sitting"]
@@ -323,8 +280,8 @@ Example: יֹשֵׁב "was sitting":
 
 ### Periphrastic construction (participle + explicit הָיָה)
 
-When הָיָה is present as its own token, align it to the English auxiliary as a separate
-**primary** record. The participle → English main verbal element, primary.
+Align הָיָה → English auxiliary as a separate **primary** record. The participle →
+English main verbal element, primary.
 
   source=[hayahId],      target=["was"]     — primary 1:1
   source=[participleId], target=["sitting"] — primary 1:1\
@@ -335,14 +292,11 @@ INFINITIVE_BLOCK = """\
 
 ### Infinitive construct with לְ
 
-The infinitive construct (e.g., לִשְׁמֹר "to keep") typically carries the inseparable
-preposition לְ.
-
-When לְ is a **separate word-part token** (pos=preposition), align it to English "to" as
-a **primary** 1:1 record. The infinitive aligns to the English verb — primary.
+When לְ is a **separate word-part token** (pos=preposition), align it to English "to" —
+**primary** 1:1. The infinitive aligns to the English verb — primary.
 
 When לְ is **merged** (no separate token), English "to" is **primary** to the infinitive
-token (the לְ is an explicit morpheme, not a purely grammatical implication).
+token.
 
 ### Purpose and temporal constructions with בְּ/לְ + infinitive
 
@@ -350,16 +304,12 @@ When an inseparable preposition + infinitive expresses purpose or temporal relat
 - Preposition word-part → English connector ("to", "when", "while", "by", "as") —
   **primary** if it has its own token.
 - Infinitive → main English verbal element — **primary**.
-- No secondary tokens needed for the connector when the preposition has its own token.
 
 Example — בְּשָׁמְעוֹ "when he heard" (inseparable בְּ as word-part):
   source=[bePrepPartId], target=["when"]   — primary
   source=[verbPartId],   target=["heard"]  — primary (suffix → "he", see PRONOMINAL SUFFIXES)
 
 ### Infinitive absolute (cognate emphasis)
-
-The infinitive absolute precedes or follows a cognate finite verb to express certainty
-or intensity: מוֹת תָּמוּת "you shall surely die."
 
 Align the infinitive absolute to the English emphasis word ("surely", "certainly",
 "indeed") — **primary** 1:1. The finite verb aligns to the main English verb — primary.

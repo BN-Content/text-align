@@ -163,14 +163,21 @@ def retry_chapter_sync(
         system_msg = build_system_prompt(phenomena, target_language, testament=testament)
         user_msg, batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
 
-        results, errors, _san = llm_client.call_batch(
-            system_prompt=system_msg,
-            user_message=user_msg,
-            verse_source_ids=verse_source_ids,
-            verse_target_ids=verse_target_ids,
-            verse_token_maps=batch_maps,
-            max_retries=max_retries,
-        )
+        try:
+            results, errors, _san = llm_client.call_batch(
+                system_prompt=system_msg,
+                user_message=user_msg,
+                verse_source_ids=verse_source_ids,
+                verse_target_ids=verse_target_ids,
+                verse_token_maps=batch_maps,
+                max_retries=max_retries,
+            )
+        except RuntimeError as exc:
+            missed = ", ".join(batch_ids)
+            print(f"  Retry batch failed ({exc}) — missed verses: {missed}")
+            if len(batch_ids) > 1:
+                print("  Will retry individually ...")
+            results, errors = {}, []
 
         new_records_by_verse.update(results)
         all_errors.extend(errors)
@@ -196,14 +203,18 @@ def retry_chapter_sync(
             phenomena = detect_phenomena(all_src)
             system_msg = build_system_prompt(phenomena, target_language, testament=testament)
             user_msg, batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
-            r_results, r_errors, _san = llm_client.call_batch(
-                system_prompt=system_msg,
-                user_message=user_msg,
-                verse_source_ids={verse_id: {t.id for t in src_tokens}},
-                verse_target_ids={verse_id: {t.id for t in tgt_tokens}},
-                verse_token_maps=batch_maps,
-                max_retries=max_retries,
-            )
+            try:
+                r_results, r_errors, _san = llm_client.call_batch(
+                    system_prompt=system_msg,
+                    user_message=user_msg,
+                    verse_source_ids={verse_id: {t.id for t in src_tokens}},
+                    verse_target_ids={verse_id: {t.id for t in tgt_tokens}},
+                    verse_token_maps=batch_maps,
+                    max_retries=max_retries,
+                )
+            except RuntimeError as exc:
+                print(f"  Resubmit {verse_id}: all retries exhausted, skipping — {exc}")
+                continue
             n_r = sum(len(v) for v in r_results.values())
             status = f"{len(r_results)}/1 verses, {n_r} records"
             if r_errors:

@@ -126,16 +126,18 @@ def parse_args() -> argparse.Namespace:
     args = p.parse_args()
 
     # Save refine-phase model settings before retry overrides are applied.
-    args._refine_llm_provider   = args.llm_provider
-    args._refine_llm_model      = args.llm_model
+    args._refine_llm_provider    = args.llm_provider
+    args._refine_llm_model       = args.llm_model
     args._refine_reasoning_effort = args.reasoning_effort
+    args._refine_max_output_tokens = args.max_output_tokens
 
     # Retry-specific model keys fall back to the refine model keys when absent.
     # This allows a single config to use one model for both passes, or separate
     # configs to specify different models per pass.
-    args.llm_provider = getattr(args, "retry_llm_provider", None) or args.llm_provider
-    args.llm_model    = getattr(args, "retry_llm_model",    None) or args.llm_model
+    args.llm_provider     = getattr(args, "retry_llm_provider",     None) or args.llm_provider
+    args.llm_model        = getattr(args, "retry_llm_model",        None) or args.llm_model
     args.reasoning_effort = getattr(args, "retry_reasoning_effort", None) or args.reasoning_effort
+    args.max_output_tokens = getattr(args, "retry_max_output_tokens", None) or args.max_output_tokens
 
     require(args, "alignment_dir", "target_language", "target_edition", "target_tsv_dir", "corpus")
 
@@ -300,9 +302,10 @@ def main() -> None:
     )
     used_fallback = False
     if retry_differs and flagged_rate >= args.fallback_threshold:
-        args.llm_provider     = args._refine_llm_provider
-        args.llm_model        = args._refine_llm_model
-        args.reasoning_effort = args._refine_reasoning_effort
+        args.llm_provider      = args._refine_llm_provider
+        args.llm_model         = args._refine_llm_model
+        args.reasoning_effort  = args._refine_reasoning_effort
+        args.max_output_tokens = args._refine_max_output_tokens
         used_fallback = True
         print(
             f"\n  Flagged rate {flagged_rate:.1%} >= {args.fallback_threshold:.0%} — "

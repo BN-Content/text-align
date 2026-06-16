@@ -22,6 +22,7 @@ from-scratch: true
 
 # smaller chunks?
 batch-size: 2
+max-output-tokens: 4000
 
 # Anthropic
 #llm_provider: anthropic
@@ -105,6 +106,7 @@ fallback_threshold: 0.30
 retry_llm_provider: gloo
 #retry_llm_model: gloo-google-gemini-3.1-pro
 retry_llm_model: gloo-anthropic-claude-opus-4.7
+retry_max_output_tokens: 32000
 # Alignment quality scoring threshold for retry-alignment and score-alignment.
 # Verses with a composite penalty score above this value are flagged for retry.
 # Range 0–1; lower = more retries, higher = fewer. Default: 0.25.

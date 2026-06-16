@@ -427,14 +427,24 @@ def _process_corpus_sync(
                 f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
                 f"calling LLM ({len(batch_ids)} verses) ...", flush=True,
             )
-            results, errors, san_details = llm_client.call_batch(
-                system_prompt=system_msg,
-                user_message=user_msg,
-                verse_source_ids=verse_source_ids,
-                verse_target_ids=verse_target_ids,
-                verse_token_maps=batch_maps,
-                max_retries=max_retries,
-            )
+            try:
+                results, errors, san_details = llm_client.call_batch(
+                    system_prompt=system_msg,
+                    user_message=user_msg,
+                    verse_source_ids=verse_source_ids,
+                    verse_target_ids=verse_target_ids,
+                    verse_token_maps=batch_maps,
+                    max_retries=max_retries,
+                )
+            except RuntimeError as exc:
+                missed = ", ".join(batch_ids)
+                print(
+                    f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
+                    f"all retries exhausted ({exc}) — missed verses: {missed}"
+                )
+                if len(batch_ids) > 1:
+                    print(f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: will retry individually ...")
+                results, errors, san_details = {}, [], []
 
             n_records = sum(len(r) for r in results.values())
             status = f"{len(results)}/{len(batch_ids)} verses, {n_records} records"
@@ -474,14 +484,21 @@ def _process_corpus_sync(
                 phenomena = detect_phenomena(all_src)
                 system_msg = build_system_prompt(phenomena, target_language, testament=testament)
                 user_msg, batch_maps = build_batch_message(verse_batch, target_language, source_corpus=corpus_id)
-                r_results, r_errors, r_san = llm_client.call_batch(
-                    system_prompt=system_msg,
-                    user_message=user_msg,
-                    verse_source_ids={verse_id: {t.id for t in src_tokens}},
-                    verse_target_ids={verse_id: {t.id for t in tgt_tokens}},
-                    verse_token_maps=batch_maps,
-                    max_retries=max_retries,
-                )
+                try:
+                    r_results, r_errors, r_san = llm_client.call_batch(
+                        system_prompt=system_msg,
+                        user_message=user_msg,
+                        verse_source_ids={verse_id: {t.id for t in src_tokens}},
+                        verse_target_ids={verse_id: {t.id for t in tgt_tokens}},
+                        verse_token_maps=batch_maps,
+                        max_retries=max_retries,
+                    )
+                except RuntimeError as exc:
+                    print(
+                        f"  Chapter {chapter_id} resubmit {verse_id}: "
+                        f"all retries exhausted, skipping — {exc}"
+                    )
+                    continue
                 n_r = sum(len(v) for v in r_results.values())
                 status = f"{len(r_results)}/1 verses, {n_r} records"
                 if r_errors:
@@ -662,7 +679,7 @@ def parse_args() -> argparse.Namespace:
                    choices=ALIGNMENT_SOURCE_TYPES,
                    help=f"Candidate types to load (default: all — "
                         f"{', '.join(ALIGNMENT_SOURCE_TYPES)})")
-    p.add_argument("--corpora", default=["ot", "nt"], nargs="+", choices=["ot", "nt"],
+    p.add_argument("--corpora", "--corpus", default=["ot", "nt"], nargs="+", choices=["ot", "nt"],
                    help="Corpora to process (default: ot nt)")
     p.add_argument("--llm-provider", default="openai",
                    choices=["openai", "anthropic", "google", "openrouter", "gloo"],

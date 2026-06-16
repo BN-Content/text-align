@@ -191,7 +191,7 @@ class _GlooAuth:
             self._fetch_token()
         return self._access_token  # type: ignore[return-value]
 
-    def post(self, payload: dict, timeout: int = 240) -> dict:
+    def post(self, payload: dict, timeout: int = 240, stream: bool = False):
         import requests
         resp = requests.post(
             _GLOO_COMPLETIONS_URL,
@@ -200,7 +200,8 @@ class _GlooAuth:
                 "Authorization": f"Bearer {self._token()}",
             },
             json=payload,
-            timeout=timeout,
+            timeout=(30, None) if stream else timeout,
+            stream=stream,
         )
         try:
             resp.raise_for_status()
@@ -212,6 +213,8 @@ class _GlooAuth:
             raise requests.exceptions.HTTPError(
                 f"{exc} — {detail}", response=resp
             ) from exc
+        if stream:
+            return resp
         return resp.json()
 
 
@@ -430,7 +433,12 @@ def _iter_verse_entries(
 _RETRIABLE_STATUS_CODES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504, 520, 522, 524})
 
 # Transient network/decode errors that warrant a retry regardless of HTTP status.
-_RETRIABLE_EXC_TYPES: tuple[type, ...] = (json.JSONDecodeError, requests.exceptions.Timeout)
+_RETRIABLE_EXC_TYPES: tuple[type, ...] = (
+    json.JSONDecodeError,
+    requests.exceptions.Timeout,
+    requests.exceptions.ChunkedEncodingError,
+    requests.exceptions.ConnectionError,
+)
 
 
 def _status_code(exc: Exception) -> int | None:
@@ -1148,6 +1156,63 @@ class LLMClient:
     # Gloo AI
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _accumulate_gloo_stream(resp) -> dict:
+        """Consume an OpenAI-compatible SSE stream and return a response dict.
+
+        Assembles the same shape as a non-streaming Gloo response so the
+        existing tool-call parsing logic needs no changes.
+        """
+        tool_call_id = ""
+        tool_call_name = ""
+        accumulated_args = ""
+        finish_reason: str | None = None
+        response_id = ""
+
+        for line in resp.iter_lines():
+            if not line:
+                continue
+            if isinstance(line, bytes):
+                line = line.decode("utf-8")
+            if line == "data: [DONE]":
+                break
+            if not line.startswith("data: "):
+                continue
+            try:
+                chunk = json.loads(line[6:])
+            except json.JSONDecodeError:
+                continue
+
+            if not response_id:
+                response_id = chunk.get("id", "")
+            choices = chunk.get("choices", [])
+            if not choices:
+                continue
+            choice = choices[0]
+            if choice.get("finish_reason"):
+                finish_reason = choice["finish_reason"]
+            delta = choice.get("delta", {})
+            for tc in delta.get("tool_calls") or []:
+                if not tool_call_id and tc.get("id"):
+                    tool_call_id = tc["id"]
+                fn = tc.get("function", {})
+                if not tool_call_name and fn.get("name"):
+                    tool_call_name = fn["name"]
+                accumulated_args += fn.get("arguments", "")
+
+        tool_calls = (
+            [{"id": tool_call_id, "type": "function",
+              "function": {"name": tool_call_name, "arguments": accumulated_args}}]
+            if accumulated_args else []
+        )
+        return {
+            "id": response_id,
+            "choices": [{
+                "finish_reason": finish_reason,
+                "message": {"role": "assistant", "content": None, "tool_calls": tool_calls},
+            }],
+        }
+
     def _call_gloo(
         self,
         system_prompt: str,
@@ -1175,6 +1240,7 @@ class LLMClient:
                 "model": self.model,
                 "messages": messages,
                 "tools": tool_schema,
+                "stream": True,
             }
             if not _tool_choice_dropped:
                 payload["tool_choice"] = tool_choice
@@ -1185,7 +1251,9 @@ class LLMClient:
 
             try:
                 response = _api_call_with_backoff(
-                    lambda: self._client.post(payload),
+                    lambda: self._accumulate_gloo_stream(
+                        self._client.post(payload, stream=True)
+                    ),
                     self.max_api_retries,
                     "Gloo",
                 )

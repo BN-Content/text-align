@@ -138,8 +138,16 @@ def reverse_map_records(
 # ---------------------------------------------------------------------------
 
 def _format_source_token(num: int, token: Source) -> str:
-    morph = token.morph or ""
-    return f"  {num}  {token.text}  {morph}"
+    if token.morph:
+        return f"  {num}  {token.text}  {token.morph}"
+    # morph absent (OT/WLCM): use pos as tag proxy, gloss for meaning context
+    tag = token.pos or ""
+    gloss = token.gloss or ""
+    if tag and gloss:
+        return f"  {num}  {token.text}  {tag}  {gloss}"
+    if tag or gloss:
+        return f"  {num}  {token.text}  {tag or gloss}"
+    return f"  {num}  {token.text}"
 
 
 def format_verse_block(

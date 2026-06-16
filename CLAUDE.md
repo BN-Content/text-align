@@ -42,17 +42,21 @@ src/text_align/
 ## Multi-language prompt system (`refine/prompt/`)
 
 Prompts are assembled from a `LanguagePromptConfig` registered per ISO 639-3 code.
+The directory has two testament subdirectories (`nt/`, `ot/`) plus shared infrastructure:
 
-- `core.py` — `LanguagePromptConfig` dataclass, registry (`register_language` /
-  `get_language_config`), Greek NT phenomenon detection (`detect_phenomena`), and
-  all prompt assembly / verse formatting functions.
-- `eng.py` — English block strings + `ENG_CONFIG`; calls `register_language` on import.
-- `por.py` — Portuguese. Pro-drop, contracted preposition+article forms (do/da/no/na/
+- `common.py` — `LanguagePromptConfig` dataclass, shared prompt assembly and verse
+  formatting functions (including `_format_source_token`). No registry lives here.
+- `nt/core.py` — NT registry (`register_language` / `get_language_config`), Greek NT
+  phenomenon detection (`detect_phenomena`), and NT-specific prompt assembly.
+- `ot/core.py` — OT registry and `detect_phenomena` for Hebrew OT phenomena.
+- `nt/eng.py` — English block strings + `ENG_CONFIG`; calls `register_language` on import.
+- `nt/por.py` — Portuguese. Pro-drop, contracted preposition+article forms (do/da/no/na/
   ao/à/pelo/pela), conditional proper-name articles (BP retains them), reflexive passive,
   personal infinitive. Unchanged blocks imported from `eng.py`.
-- `spa.py` — Latin American Spanish. Same pro-drop rules; contracted forms limited to
+- `nt/spa.py` — Latin American Spanish. Same pro-drop rules; contracted forms limited to
   `del` and `al` only; proper-name articles always Branch B (LA translations omit them);
   vos/tú regional note; ustedes for 2nd plural; no personal infinitive.
+- `ot/eng.py` — OT English config.
 - `__init__.py` — re-exports the public API and imports all language modules to trigger
   registration.
 
@@ -537,6 +541,46 @@ python scripts/copy-to-gha.py  --config JFA11
 # ... git pull after GHA completes ...
 python scripts/copy-from-gha.py --config JFA11
 ```
+
+## OT versification handling (`refine/refine.py`, `refine/retry.py`)
+
+Hebrew OT and English translation Bibles often differ in verse numbering (e.g. Jonah:
+Hebrew 2:1 = English 1:17). WLCM source tokens are keyed by Hebrew verse IDs; BSB
+target tokens are keyed by English verse IDs. Intersecting the two sets directly
+produces mismatched source/target pairings and all-NEQ output.
+
+**Fix**: `verse_ids` is determined by iterating BSB `target_verses` keys. For each
+BSB verse, the source verse is resolved via `MigrateTarget.source_verse` — a field
+stored in the target TSV that carries the WLCM verse ID for each BSB token.
+Multi-source-verse cases (one BSB verse spanning multiple WLCM verses) use
+`MigrateVerse.source_verse_range_end`. Output chapter files are keyed by BSB
+(translation) verse IDs throughout.
+
+This pattern is applied at 7 sites: `verse_ids` determination and two src_tokens
+lookups each in `_process_corpus_sync` and `_process_corpus_async` in `refine.py`,
+and three lookups in `retry.py` (`retry_chapter_sync` main loop, missing-verse
+resubmit, `build_retry_chapter_batches`).
+
+Source token lookup pattern:
+```python
+if tgt_verse and tgt_verse.words:
+    src_start = next(iter(tgt_verse.words.values())).source_verse
+    src_end = tgt_verse.source_verse_range_end
+    if src_end and src_end > src_start:
+        src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+    else:
+        src_tokens = source_verses.get(src_start, [])
+else:
+    src_tokens = []
+```
+
+## OT source token display (`refine/prompt/common.py`)
+
+WLCM source tokens have no `morph` field (always empty). `_format_source_token` falls
+back to `pos` + `gloss` when `morph` is absent, giving the LLM part-of-speech context
+and an English gloss for each Hebrew token. When proper WLCM morph data becomes
+available, the `if token.morph:` branch takes priority automatically — no code change
+needed.
 
 ## Testing
 

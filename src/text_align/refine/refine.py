@@ -291,7 +291,13 @@ def process_corpus(
             candidate_ids.update(recs.keys())
         verse_ids = sorted(candidate_ids & set(source_verses.keys()))
     else:
-        verse_ids = sorted(set(source_verses.keys()) & set(target_verses.keys()))
+        # Key by target (BSB) verse ID; resolve each to its source verse via the
+        # source_verse field in the target tokens, which handles versification
+        # differences (e.g. Jonah: Hebrew 2:1 = English 1:17).
+        verse_ids = sorted(
+            vid for vid, tv in target_verses.items()
+            if tv.words and next(iter(tv.words.values())).source_verse in source_verses
+        )
 
     # Apply range filter
     if args is not None:
@@ -392,11 +398,15 @@ def _process_corpus_sync(
             for verse_id in batch_ids:
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-                if src_end and src_end > verse_id:
-                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                if tgt_verse and tgt_verse.words:
+                    src_start = next(iter(tgt_verse.words.values())).source_verse
+                    src_end = tgt_verse.source_verse_range_end
+                    if src_end and src_end > src_start:
+                        src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                    else:
+                        src_tokens = source_verses.get(src_start, [])
                 else:
-                    src_tokens = source_verses.get(verse_id, [])
+                    src_tokens = []
 
                 cands = {
                     src_type: recs[verse_id]
@@ -444,11 +454,15 @@ def _process_corpus_sync(
             for verse_id in missing:
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-                if src_end and src_end > verse_id:
-                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                if tgt_verse and tgt_verse.words:
+                    src_start = next(iter(tgt_verse.words.values())).source_verse
+                    src_end = tgt_verse.source_verse_range_end
+                    if src_end and src_end > src_start:
+                        src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                    else:
+                        src_tokens = source_verses.get(src_start, [])
                 else:
-                    src_tokens = source_verses.get(verse_id, [])
+                    src_tokens = []
                 cands = {
                     src_type: recs[verse_id]
                     for src_type, recs in candidates_by_type.items()
@@ -550,11 +564,15 @@ def _process_corpus_async(
             for verse_id in batch_ids:
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-                if src_end and src_end > verse_id:
-                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                if tgt_verse and tgt_verse.words:
+                    src_start = next(iter(tgt_verse.words.values())).source_verse
+                    src_end = tgt_verse.source_verse_range_end
+                    if src_end and src_end > src_start:
+                        src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                    else:
+                        src_tokens = source_verses.get(src_start, [])
                 else:
-                    src_tokens = source_verses.get(verse_id, [])
+                    src_tokens = []
                 cands = {
                     src_type: recs[verse_id]
                     for src_type, recs in candidates_by_type.items()

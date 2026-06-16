@@ -1181,11 +1181,19 @@ class LLMClient:
             if self.max_output_tokens is not None:
                 payload["max_tokens"] = self.max_output_tokens
 
-            response = _api_call_with_backoff(
-                lambda: self._client.post(payload),
-                self.max_api_retries,
-                "Gloo",
-            )
+            try:
+                response = _api_call_with_backoff(
+                    lambda: self._client.post(payload),
+                    self.max_api_retries,
+                    "Gloo",
+                )
+            except RuntimeError as exc:
+                msg = str(exc)
+                if not _tool_choice_dropped and "tool_choice" in msg:
+                    print("  NOTE: model/provider rejected tool_choice — retrying without it")
+                    _tool_choice_dropped = True
+                    continue
+                raise
 
             choice = response["choices"][0]
             if choice.get("finish_reason") == "length":

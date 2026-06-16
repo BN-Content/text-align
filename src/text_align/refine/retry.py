@@ -137,11 +137,15 @@ def retry_chapter_sync(
         for verse_id in batch_ids:
             tgt_verse = target_verses.get(verse_id)
             tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-            src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-            if src_end and src_end > verse_id:
-                src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+            if tgt_verse and tgt_verse.words:
+                src_start = next(iter(tgt_verse.words.values())).source_verse
+                src_end = tgt_verse.source_verse_range_end
+                if src_end and src_end > src_start:
+                    src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                else:
+                    src_tokens = source_verses.get(src_start, [])
             else:
-                src_tokens = source_verses.get(verse_id, [])
+                src_tokens = []
             verse_source_ids[verse_id] = {t.id for t in src_tokens}
             verse_target_ids[verse_id] = {t.id for t in tgt_tokens}
             verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))  # blank-slate cands
@@ -170,11 +174,15 @@ def retry_chapter_sync(
         for verse_id in missing:
             tgt_verse = target_verses.get(verse_id)
             tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-            src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-            if src_end and src_end > verse_id:
-                src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+            if tgt_verse and tgt_verse.words:
+                src_start = next(iter(tgt_verse.words.values())).source_verse
+                src_end = tgt_verse.source_verse_range_end
+                if src_end and src_end > src_start:
+                    src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                else:
+                    src_tokens = source_verses.get(src_start, [])
             else:
-                src_tokens = source_verses.get(verse_id, [])
+                src_tokens = []
             verse_batch = [(verse_id, src_tokens, tgt_tokens, {})]
             all_src = [t for _, src, _, _ in verse_batch for t in src]
             testament = infer_testament(all_src)
@@ -228,11 +236,15 @@ def build_retry_chapter_batches(
             for verse_id in batch_ids:
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
-                src_end = tgt_verse.source_verse_range_end if tgt_verse else ""
-                if src_end and src_end > verse_id:
-                    src_tokens = collect_source_verse_range(source_verses, verse_id, src_end)
+                if tgt_verse and tgt_verse.words:
+                    src_start = next(iter(tgt_verse.words.values())).source_verse
+                    src_end = tgt_verse.source_verse_range_end
+                    if src_end and src_end > src_start:
+                        src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                    else:
+                        src_tokens = source_verses.get(src_start, [])
                 else:
-                    src_tokens = source_verses.get(verse_id, [])
+                    src_tokens = []
                 verse_batch.append((verse_id, src_tokens, tgt_tokens, {}))
 
             all_src = [t for _, src, _, _ in verse_batch for t in src]

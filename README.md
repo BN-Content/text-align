@@ -4,6 +4,76 @@ Tools to create and improve word-level textual alignments of Bible translations.
 
 Alignments map tokens in a translation to tokens in the source text (Greek NT or Hebrew OT). The direction is always **translation → source**. The format is [Scripture Burrito alignment spec v0.4](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) with project-specific extensions documented in [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek) and [docs/alignment-principles-ot.md](docs/alignment-principles-ot.md) (OT/Hebrew).
 
+## The alignment workflow in a nutshell
+
+Here is the end-to-end picture for aligning a new translation. Each step is described in detail further below.
+
+### Step 1 — Prepare your translation TSV
+
+The alignment tools work from word-level TSV files, not USFM directly. Use [kathairo](https://pypi.org/project/kathairo/) to convert your translation's USFM into two TSV files — one for OT, one for NT — and place them under `data/targets/<edition>/`:
+
+```
+data/targets/MYBIBLE/
+    ot_MYBIBLE.tsv
+    nt_MYBIBLE.tsv
+```
+
+### Step 2 — Create a config file
+
+Copy `configs/example.yaml` to `configs/MYBIBLE.yaml` and fill in your edition ID, paths, and model choices. Almost every CLI flag can be set in this file so you don't have to repeat it on every command. At minimum you need:
+
+```yaml
+target_language: eng          # ISO 639-3 code
+target_edition: MYBIBLE
+alignments_root: /path/to/alignments-repo   # parent of alignments-eng/, alignments-spa/, etc.
+from_scratch: true            # align without pre-existing candidates
+llm_provider: gloo            # or openai / anthropic / google / openrouter
+llm_model: gloo-anthropic-claude-sonnet-4.5
+```
+
+Put your API credentials in a `.env` file in the project root (copy `.env.example` as a starting point). Keys needed depend on which provider you use.
+
+### Step 3 — First pass: refine-alignment
+
+Run `refine-alignment` to align each chapter using an LLM. For cost reasons the first pass typically uses a fast, cheap model. Output is one JSON file per chapter in `exp/<edition>/LLM-REFINED/`.
+
+```bash
+refine-alignment --config MYBIBLE --corpus nt   # New Testament
+refine-alignment --config MYBIBLE --corpus ot   # Old Testament
+```
+
+You can limit scope during testing with `--chapter 41003` (Mark 3) or `--book 41` (all of Mark).
+
+**Choosing a model for the first pass:** Any provider works. A cheap reasoning-capable model (e.g. DeepSeek V4 Pro via OpenRouter or Gloo, or Gemini 2.5 Flash via Google) gives good coverage at low cost. Frontier models (Claude Opus, GPT-4.1) are better saved for the retry pass.
+
+### Step 4 — Score and retry
+
+Run `score-alignment` to audit quality without making any LLM calls. It produces a TSV report showing which verses scored poorly. Then run `retry-alignment` to re-align only the flagged verses from scratch using a higher-quality model.
+
+```bash
+# Inspect quality (no LLM cost)
+score-alignment --config MYBIBLE --corpus nt --flagged-only --output scores.tsv
+
+# Re-align flagged verses with a better model
+retry-alignment --config MYBIBLE --corpus nt
+```
+
+`retry-alignment` reads `retry_llm_provider` / `retry_llm_model` from the config (if set) so the retry pass can use a different, higher-quality model than the first pass. Use `--dry-run` to preview which verses would be retried before spending any API budget.
+
+You can loop: score → retry → score → retry until quality is satisfactory, or accept first-pass results for low-priority sections.
+
+### Step 5 — Visualize
+
+`render-alignment` generates per-chapter HTML files showing the alignment in a Text Alignment layout so you can browse and review the results:
+
+```bash
+render-alignment --config MYBIBLE
+```
+
+Open the generated HTML files in any browser. Each verse is a row of cells showing translation tokens above their aligned source tokens.
+
+---
+
 ## Source texts
 
 | Canon | Corpus | File |
@@ -142,7 +212,9 @@ retry-alignment --config OENGB --corpus nt \
   --llm-provider anthropic --llm-model claude-sonnet-4-6 --reasoning-effort high
 ```
 
-The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
+The YAML config supports separate model keys for the retry pass (`retry_llm_provider`, `retry_llm_model`, `retry_reasoning_effort`, `retry_max_output_tokens`) that override the refine-phase keys in `retry-alignment`. See `configs/example.yaml`.
+
+`retry_max_output_tokens` is particularly important when the retry pass uses an Anthropic model with extended thinking: Anthropic's `max_tokens` budget covers both thinking tokens and output tokens together, so the retry pass needs a larger budget (e.g. 16000–32000) even if the first pass uses a lean value (e.g. 4000) for cost control.
 
 `clean-alignments` can also be run standalone at any point to inspect what the cleaner finds and fixes without triggering any LLM spend.
 
@@ -182,7 +254,7 @@ refine-alignment \
   --output-dir      path/to/alignments-eng/exp/OENGB/LLM-REFINED \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
   [--from-scratch]               # align without candidates
-  [--corpora ot nt] \
+  [--corpora ot nt] \            # --corpus is accepted as an alias
   [--llm-provider openai]        # openai | anthropic | google | openrouter | gloo
   [--llm-model gpt-5.4-mini] \  #   openrouter: any model slug, e.g. qwen/qwen3-235b-a22b
                                  #   gloo: model ID, e.g. gloo-anthropic-claude-sonnet-4.5
@@ -192,12 +264,14 @@ refine-alignment \
                                  #   ignored for openrouter and gloo (always uses chat completions)
   [--batch-size 5] \
   [--max-retries 2] \
-  [--max-api-retries 4]          # retries on 429/503 with exponential backoff
+  [--max-api-retries 4]          # retries on 429/503/ChunkedEncodingError with exponential backoff
   [--temperature 1]              # sampling temperature (default: 1); explicit value
                                  #   ensures sync and async batch calls are identical
                                  #   not applied to OpenAI reasoning models
-  [--max-output-tokens 32000]    # token budget (default: 32000); matches Anthropic's
-                                 #   hardcoded budget and gives thinking models headroom
+  [--max-output-tokens 4000]     # token budget per call (default: 4000); sufficient for
+                                 #   alignment output on any single verse or small batch;
+                                 #   for Anthropic thinking models use retry_max_output_tokens
+                                 #   to set a higher budget on the retry pass (e.g. 32000)
   [--batch-mode sync]            # sync (default) | async (google/openai/anthropic only)
   [--jobs-dir jobs/]             # where async job metadata is stored
 ```
@@ -249,7 +323,13 @@ refine-alignment --config OENGB --chapter 41003 \
 
 [Gloo AI Studio](https://studio.ai.gloo.com) is a faith-oriented AI platform that routes to Anthropic, OpenAI, and Google models through a single API. Authentication uses OAuth2 client credentials (1-hour token, auto-refreshed). Set `GLOO_CLIENT_ID` and `GLOO_CLIENT_SECRET` and pass `--llm-provider gloo` with a full Gloo model ID.
 
+Gloo routes through Cloudflare, which enforces a ~100 s timeout on the first response byte. To avoid 504 gateway errors on longer generations, the Gloo provider uses **SSE streaming** — responses are received as a stream of chunks rather than a single response, so the connection stays alive throughout generation. `ChunkedEncodingError` (server drops stream mid-generation) is retried automatically with exponential backoff. If a multi-verse batch exhausts all retries, the tool falls back to submitting each verse individually rather than aborting the chapter.
+
 ```bash
+# DeepSeek V4 Pro via Gloo (good cheap first-pass model)
+refine-alignment --config OENGB --chapter 41003 \
+  --llm-provider gloo --llm-model gloo-deepseek-v4-pro
+
 # Claude Sonnet via Gloo
 refine-alignment --config OENGB --chapter 41003 \
   --llm-provider gloo --llm-model gloo-anthropic-claude-sonnet-4.5
@@ -402,12 +482,21 @@ retry-alignment \
   [--max-retries 2] \
   [--max-api-retries 4] \
   [--temperature 1] \
-  [--max-output-tokens 32000] \
+  [--max-output-tokens 4000] \        # overridden by retry_max_output_tokens if set in config
   [--batch-mode sync]                 # sync (default) | async
   [--jobs-dir jobs/] \
   [--dry-run]                         # report flagged verses without calling the LLM
   [--config OENGB]
 ```
+
+The YAML config supports a separate `retry_max_output_tokens` key for the retry pass (mirrors `retry_llm_provider` / `retry_llm_model`). Use this when the retry model is an Anthropic thinking model that needs a larger token budget than the first-pass model:
+
+```yaml
+max_output_tokens: 4000          # lean budget for cheap first-pass model (e.g. Gloo/DeepSeek)
+retry_max_output_tokens: 32000   # full budget for Anthropic extended thinking retry pass
+```
+
+If the fallback threshold triggers and `retry-alignment` reverts to the refine-phase model, `max_output_tokens` is also restored to the refine-phase value.
 
 `--fallback-threshold`: if the fraction of flagged verses across the run meets or exceeds this value (default 0.25), `retry-alignment` uses the refine-phase model instead of the configured retry model. Rationale: a high flagged rate suggests systemic quality issues better addressed by a fresh cheap pass than targeted expensive retries. Only takes effect when a separate retry model is configured (via `retry_llm_model` in the YAML or `--llm-model` after retry override). The model actually used is always printed before the verse list.
 

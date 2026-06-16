@@ -702,7 +702,7 @@ def parse_args() -> argparse.Namespace:
                         "(default: 1).  Fixing this value ensures sync and async "
                         "batch runs use identical generation parameters.  "
                         "Not applied to OpenAI reasoning models.")
-    p.add_argument("--max-output-tokens", type=int, default=32000,
+    p.add_argument("--max-output-tokens", type=int, default=4000,
                    help="Hard cap on response tokens (default: 32000).  Matches "
                         "the Anthropic budget and gives thinking models headroom "
                         "before the tool call output.  Explicit matching prevents "

@@ -24,7 +24,7 @@ src/text_align/
 ├── align/         # acai-align CLI
 ├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignment + clean-alignments CLIs
 │   ├── prompt/          # language-aware prompt system (see below)
-│   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter (sync)
+│   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter / Gloo (sync)
 │   ├── async_batch.py   # provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # legacy per-verse source-token coverage evaluation
 │   ├── scoring.py       # composite alignment quality scorer (five signals)
@@ -79,7 +79,7 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 | `anthropic` | `ANTHROPIC_API_KEY` | Extended thinking via `thinking` block |
 | `google` | `GEMINI_API_KEY` | Gemini 3+ `thinkingLevel` via `ThinkingConfig` |
 | `openrouter` | `OPENROUTER_API_KEY` | OpenAI-compatible proxy to 200+ models (Qwen, Kimi, GLM, …); sync-only; per-call cost tracked in `LLMClient.session_cost` |
-| `gloo` | `GLOO_CLIENT_ID`, `GLOO_CLIENT_SECRET` | Gloo AI Studio; OAuth2 bearer token (1-hr TTL, auto-refreshed); OpenAI-compatible format; routes to Anthropic/OpenAI/Google; sync-only; no reasoning_effort; model IDs like `gloo-anthropic-claude-sonnet-4.5` |
+| `gloo` | `GLOO_CLIENT_ID`, `GLOO_CLIENT_SECRET` | Gloo AI Studio; OAuth2 bearer token (1-hr TTL, auto-refreshed); SSE streaming via `requests`; routes to Anthropic/OpenAI/Google; sync-only; no reasoning_effort; model IDs like `gloo-anthropic-claude-sonnet-4.5` |
 
 `reasoning_effort` (none/minimal/low/medium/high) maps to `reasoning_effort` for OpenAI
 and `thinkingLevel` for Google. Omitting it sends no thinking config. Ignored for
@@ -110,12 +110,22 @@ call, as those suffixes conflict with explicit provider ordering.
 never hit an expired-token error.  Credentials are read from `GLOO_CLIENT_ID` /
 `GLOO_CLIENT_SECRET`.
 
-`_call_gloo` uses the OpenAI-compatible chat completions format (same tool schema,
-same response shape) but calls `_GlooAuth.post(payload)` directly with `requests`
-instead of an SDK client, receiving a plain `dict` response.  The retry/validation
-loop is identical to the non-reasoning `_call_openai` path.  `reasoning_effort` is
-ignored (Gloo routes to the underlying provider; no pass-through for thinking config).
-Async batch mode is not supported for Gloo.
+`_call_gloo` uses the OpenAI-compatible chat completions format with SSE streaming
+(`"stream": True`).  `_GlooAuth.post(payload, stream=True)` returns a raw
+`requests.Response`; `_accumulate_gloo_stream(response)` consumes the SSE events and
+concatenates `choices[0].delta.tool_calls[0].function.arguments` fragments into a
+complete JSON string, then returns a dict matching the non-streaming response shape.
+The entire accumulate call is wrapped in `_api_call_with_backoff` so
+`ChunkedEncodingError` (server drops stream mid-generation) and `ConnectionError` are
+retried with exponential backoff.  `reasoning_effort` is ignored (Gloo routes to the
+underlying provider; no pass-through for thinking config).  Async batch mode is not
+supported for Gloo.
+
+Streaming is used because Gloo routes through Cloudflare, which enforces a ~100 s
+timeout on the first response byte.  Non-streaming calls to slow models time out with
+a 504 before generation begins; streaming bypasses this by delivering the first SSE
+chunk as soon as the model starts.  `timeout=(30, None)` on the `requests` call sets
+a 30 s connect timeout with no read timeout so long generations are not killed.
 
 Gloo model IDs follow the pattern `gloo-{family}-{model}`, e.g.:
 - `gloo-anthropic-claude-sonnet-4.5`
@@ -266,12 +276,51 @@ Batch API infrastructure may apply different defaults than the sync path
 degradation on the async path. Fix: `LLMClient` now always sends `temperature`
 and `max_output_tokens` explicitly on every call — both sync and async.
 
-Defaults: `temperature=1`, `max_output_tokens=32000`. The 32 000 token budget
-matches the Anthropic hardcoded value (`ANTHROPIC_MAX_TOKENS`) and gives
-thinking models (OpenAI reasoning, Gemini with `thinkingLevel`) enough headroom
-before the tool call output. Temperature is not sent for OpenAI reasoning
-models (it is fixed by the API). Overridable via `--temperature` and
+Defaults: `temperature=1`, `max_output_tokens=4000`. The 4 000 token default is
+sufficient for alignment records on any single verse or small batch (even large OT
+narrative verses rarely exceed 3 000 output tokens). Temperature is not sent for
+OpenAI reasoning models (it is fixed by the API). Overridable via `--temperature` and
 `--max-output-tokens` CLI flags (also settable in YAML config files).
+
+**`max_output_tokens` and Anthropic extended thinking:** For Anthropic, thinking tokens
+come *out of* the `max_tokens` budget (unlike OpenAI/Google where reasoning tokens are
+separate). Setting `max_output_tokens` too low truncates thinking + output together.
+Use `retry_max_output_tokens` (see below) to set a higher budget for the Anthropic
+retry pass while keeping the default 4 000 for the Gloo/DeepSeek first pass.
+
+## Split-batch fallback (`refine/refine.py`, `refine/retry.py`)
+
+In `_process_corpus_sync` (refine) and `retry_chapter_sync` (retry), `call_batch` is
+wrapped in `try/except RuntimeError`.  When a batch exhausts all API retries
+(exponential backoff × `max_api_retries`), the exception is caught, the missed verse
+IDs are logged, and `results={}` is returned rather than crashing.  Multi-verse
+batches then fall through to the existing "missing verses" resubmit loop, which
+resubmits each verse individually (shorter output → less chance of a mid-stream drop).
+If even an individual verse call raises `RuntimeError`, it is logged and skipped; the
+verse gets no records and scores 100% uncovered (signal_1 = 1.0), guaranteeing it is
+flagged for the retry pass.
+
+This is the primary resilience mechanism for Gloo streaming: the Cloudflare proxy can
+drop a long SSE stream mid-generation; streaming retries handle transient drops, and
+the split-batch fallback ensures a persistent drop on one batch does not abort the
+entire chapter.
+
+## `retry_max_output_tokens` (`refine/retry_cli.py`)
+
+Separate `max_output_tokens` budget for the retry pass.  Follows the same save/apply/
+restore pattern as `retry_llm_provider` / `retry_llm_model` / `retry_reasoning_effort`:
+
+- Saved as `args._refine_max_output_tokens` before retry overrides are applied.
+- `retry_max_output_tokens` (YAML) or `--retry-max-output-tokens` (CLI) overrides
+  `args.max_output_tokens` for the retry pass.
+- If the fallback threshold triggers and `retry-alignment` reverts to the refine model,
+  `args.max_output_tokens` is also restored to `args._refine_max_output_tokens`.
+
+Typical config:
+```yaml
+max_output_tokens: 4000          # lean budget for Gloo/DeepSeek first pass
+retry_max_output_tokens: 32000   # full budget for Anthropic thinking retry pass
+```
 
 ## render-alignment chapter-file detection (`render/html.py`)
 

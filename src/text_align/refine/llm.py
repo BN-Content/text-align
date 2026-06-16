@@ -592,7 +592,7 @@ class LLMClient:
         reasoning_effort: str | None = None,
         max_api_retries: int = 4,
         temperature: float = 1,
-        max_output_tokens: int = 32000,
+        max_output_tokens: int = 4000,
     ) -> None:
         if provider not in ("openai", "anthropic", "google", "openrouter", "gloo"):
             raise ValueError(

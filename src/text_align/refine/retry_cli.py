@@ -76,8 +76,8 @@ def parse_args() -> argparse.Namespace:
                    help="Retry attempts on transient API errors with exponential backoff (default: 4)")
     p.add_argument("--temperature", type=float, default=1,
                    help="Sampling temperature (default: 1)")
-    p.add_argument("--max-output-tokens", type=int, default=32000,
-                   help="Hard cap on response tokens (default: 32000)")
+    p.add_argument("--max-output-tokens", type=int, default=4000,
+                   help="Hard cap on response tokens (default: 4000)")
     p.add_argument("--creator", default="text-align",
                    help="Creator string for alignment meta (default: text-align)")
     p.add_argument("--score-retry-threshold", type=float, default=0.25,

@@ -412,9 +412,18 @@ def _iter_verse_entries(
     """Return (verse_id, records) pairs from a tool-call data dict.
 
     Skips and logs any entry that is not a dict (malformed model output).
+    Recovers from double-encoding where the model returns verses as a
+    JSON-encoded string instead of a parsed array.
     """
+    verses = data.get("verses", [])
+    if isinstance(verses, str):
+        try:
+            verses = json.loads(verses)
+        except json.JSONDecodeError as exc:
+            errors.append(f"verses field is a JSON-encoded string that could not be decoded: {exc}")
+            return []
     out: list[tuple[str, list[dict]]] = []
-    for entry in data.get("verses", []):
+    for entry in verses:
         if not isinstance(entry, dict):
             errors.append(
                 f"Malformed entry in verses array (expected object, got "
@@ -454,6 +463,10 @@ def _status_code(exc: Exception) -> int | None:
     for code in _RETRIABLE_STATUS_CODES:
         if s.startswith(str(code)):
             return code
+    # SDK-level timeout exceptions (e.g. openai.APITimeoutError) don't carry an
+    # HTTP status code but are always transient — treat them as 408.
+    if type(exc).__name__ in ("APITimeoutError", "ReadTimeout", "ConnectTimeout"):
+        return 408
     return None
 
 

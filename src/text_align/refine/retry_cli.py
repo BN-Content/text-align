@@ -268,7 +268,8 @@ def main() -> None:
         total_verse_count += len(verse_scores)
         coverage_flagged = {
             spec.verse_id
-            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
+            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src,
+                                                  target_verses=target_verses)
         }
         specs = [
             VerseRetrySpec(

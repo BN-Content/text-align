@@ -176,13 +176,6 @@ class TestSignal3:
         vs = score_verse(VID, [], neq, set(), src, set(), None, "eng", CONFIG)
         assert vs.signal_3 > 0.0
 
-    def test_neq_from_other_verse_not_counted(self):
-        # NEQ token from verse 40001002 should not affect verse 40001001
-        src = [_src("40001001001", "noun")]
-        other_verse_neq = {"40001002001"}  # different verse
-        vs = score_verse(VID, [], other_verse_neq, set(), src, set(), None, "eng", CONFIG)
-        assert vs.signal_3 == 0.0
-
 
 # ---------------------------------------------------------------------------
 # Signal 4 — token smearing

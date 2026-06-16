@@ -22,6 +22,7 @@ from text_align.burrito.source import Source
 from text_align.migrate.alignment_io import load_alignment_json
 
 from .scoring_stopwords import stopwords_for_lang
+from .source import collect_source_verse_range
 from .util import _chapter_id_from_path
 
 
@@ -119,8 +120,8 @@ class VerseScore:
 def score_verse(
     verse_id: str,
     records: list[dict],
-    neq_source: set[str],
-    neq_target: set[str],
+    verse_neq_src: set[str],
+    verse_neq_tgt: set[str],
     src_tokens: list[Source],
     tgt_token_ids: set[str],
     tgt_text_by_id: dict[str, str] | None,
@@ -133,10 +134,10 @@ def score_verse(
     by score_chapter() in the second pass.
 
     Args:
-        verse_id:      8-char BCVWP verse ID (BBCCCVVV).
+        verse_id:      8-char verse ID (BSB for OT, SBLGNT/BSB for NT).
         records:       Alignment records belonging to this verse.
-        neq_source:    Chapter-level NEQ source token IDs (all verses).
-        neq_target:    Chapter-level NEQ target token IDs (all verses).
+        verse_neq_src: NEQ source token IDs for this verse (pre-filtered by caller).
+        verse_neq_tgt: NEQ target token IDs for this verse (pre-filtered by caller).
         src_tokens:    Source tokens for this verse (from source TSV).
         tgt_token_ids: Target token IDs in this verse (from target TSV).
         tgt_text_by_id: token_id → lowercase word text; None skips signal 2.
@@ -144,10 +145,6 @@ def score_verse(
         config:        Scoring weights and thresholds.
     """
     vs = VerseScore(verse_id=verse_id)
-
-    # Filter chapter-level NEQ sets to this verse
-    verse_neq_src = {sid for sid in neq_source if sid[:8] == verse_id}
-    verse_neq_tgt = {tid for tid in neq_target if tid[:8] == verse_id}
 
     # Definite articles in NEQ are always a mistake: articles must be primary
     # to "the"/pronoun/reinstated proper noun, or secondary to their head.
@@ -305,12 +302,17 @@ def score_chapter_file(
     neq_source: set[str] = set(neq_meta.get("source", []))
     neq_target: set[str] = set(neq_meta.get("target", []))
 
-    # Group records by verse (using first source token ID prefix)
+    # Group records by verse.  When target_verses is available (handles OT
+    # versification shifts), index by target token prefix (BSB verse ID) so the
+    # keys match what the rest of the retry pipeline uses.  Fall back to source
+    # token prefix (WLCM / SBLGNT) only when no target TSV is provided.
     records_by_verse: dict[str, list[dict]] = {}
     for rec in records:
         src_ids = rec.get("source") or []
         tgt_ids = rec.get("target") or []
-        if src_ids:
+        if target_verses is not None and tgt_ids:
+            vid = tgt_ids[0][:8]
+        elif src_ids:
             vid = src_ids[0][:8]
         elif tgt_ids:
             vid = tgt_ids[0][:8]
@@ -322,27 +324,52 @@ def score_chapter_file(
     verse_scores: list[VerseScore] = []
     chapter_tgt_text: dict[str, str] = {}
 
-    for verse_id in sorted(v for v in source_verses if v[:5] == chapter_id):
-        src_tokens = source_verses.get(verse_id, [])
-        verse_records = records_by_verse.get(verse_id, [])
+    # When target_verses is available, iterate BSB verse IDs so OT versification
+    # shifts (e.g. Jonah 2: WLCM 32002001 = BSB 1:17) don't bleed across chapters.
+    if target_verses is not None:
+        chapter_verse_ids = sorted(v for v in target_verses if v[:5] == chapter_id)
+    else:
+        chapter_verse_ids = sorted(v for v in source_verses if v[:5] == chapter_id)
 
+    for verse_id in chapter_verse_ids:
         tgt_token_ids: set[str] = set()
         tgt_text_by_id: dict[str, str] | None = None
+        verse_neq_src: set[str]
+        verse_neq_tgt: set[str]
+
         if target_verses is not None:
             tgt_verse = target_verses.get(verse_id)
-            if tgt_verse:
+            if tgt_verse and tgt_verse.words:
                 tgt_token_ids = set(tgt_verse.words.keys())
                 tgt_text_by_id = {
                     tok_id: tok.text.lower()
                     for tok_id, tok in tgt_verse.words.items()
                 }
                 chapter_tgt_text.update(tgt_text_by_id)
+                src_start = next(iter(tgt_verse.words.values())).source_verse
+                src_end = tgt_verse.source_verse_range_end
+                if src_end and src_end > src_start:
+                    src_tokens = collect_source_verse_range(source_verses, src_start, src_end)
+                    verse_neq_src = {sid for sid in neq_source if src_start <= sid[:8] <= src_end}
+                else:
+                    src_tokens = source_verses.get(src_start, [])
+                    verse_neq_src = {sid for sid in neq_source if sid[:8] == src_start}
+            else:
+                src_tokens = source_verses.get(verse_id, [])
+                verse_neq_src = {sid for sid in neq_source if sid[:8] == verse_id}
+            verse_neq_tgt = {tid for tid in neq_target if tid[:8] == verse_id}
+        else:
+            src_tokens = source_verses.get(verse_id, [])
+            verse_neq_src = {sid for sid in neq_source if sid[:8] == verse_id}
+            verse_neq_tgt = {tid for tid in neq_target if tid[:8] == verse_id}
+
+        verse_records = records_by_verse.get(verse_id, [])
 
         vs = score_verse(
             verse_id=verse_id,
             records=verse_records,
-            neq_source=neq_source,
-            neq_target=neq_target,
+            verse_neq_src=verse_neq_src,
+            verse_neq_tgt=verse_neq_tgt,
             src_tokens=src_tokens,
             tgt_token_ids=tgt_token_ids,
             tgt_text_by_id=tgt_text_by_id,

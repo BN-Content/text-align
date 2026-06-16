@@ -59,24 +59,31 @@ def merge_verse_results(
 
     replaced_verse_ids = set(new_records_by_verse.keys())
 
-    # For merged-verse cases (e.g. BSB 3JN 1:14 = SBLGNT 3JN 1:14-15) the new
-    # records reference source tokens from secondary source verses.  We must
-    # purge old records for those source verses too, or stale empty-target stubs
-    # from a previous (pre-prompt-fix) run survive the merge.
-    replaced_source_verses: set[str] = set(replaced_verse_ids)
+    # Build the set of source verse IDs (WLCM/SBLGNT) covered by new records.
+    # Do NOT seed with replaced_verse_ids — for OT, those are BSB IDs that
+    # collide with WLCM source-verse prefixes of adjacent verses (e.g. BSB
+    # "32002006" == WLCM source prefix of BSB 32002005's records) and cause
+    # adjacent-verse records to be silently dropped.
+    replaced_source_verses: set[str] = set()
     for recs in new_records_by_verse.values():
         for rec in recs:
             for sid in rec.get("source") or []:
                 if len(sid) >= 8:
                     replaced_source_verses.add(sid[:8])
 
-    # Keep regular records for non-replaced verses
+    # Keep regular records for non-replaced verses.
+    # Drop if source token prefix (WLCM/SBLGNT) matches a replaced source verse,
+    # OR if target token prefix (BSB) is in replaced_verse_ids — the latter handles
+    # target-only records and merged-verse stubs (e.g. BSB 3JN 1:14 = SBLGNT 1:14-15).
     kept: list[dict] = []
     for rec in old_records:
         src_ids = rec.get("source") or []
-        vid = src_ids[0][:8] if src_ids else None
-        if vid not in replaced_source_verses:
-            kept.append(rec)
+        tgt_ids = rec.get("target") or []
+        src_vid = src_ids[0][:8] if src_ids else None
+        tgt_vid = tgt_ids[0][:8] if tgt_ids else None
+        if src_vid in replaced_source_verses or tgt_vid in replaced_verse_ids:
+            continue
+        kept.append(rec)
 
     # Re-inflate NEQ entries for non-replaced verses so build_output_alignment
     # can reprocess them uniformly (it separates NEQ from regular records).

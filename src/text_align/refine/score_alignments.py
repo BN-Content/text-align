@@ -158,7 +158,8 @@ def main() -> None:
         all_scores.extend(verse_scores)
         all_coverage_flagged.update(
             spec.verse_id
-            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src)
+            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src,
+                                                  target_verses=target_verses)
         )
 
     if args.flagged_only:

@@ -191,14 +191,23 @@ class _GlooAuth:
             self._fetch_token()
         return self._access_token  # type: ignore[return-value]
 
-    def post(self, payload: dict, timeout: int = 240, stream: bool = False):
+    def post(
+        self,
+        payload: dict,
+        timeout: int = 240,
+        stream: bool = False,
+        extra_headers: dict | None = None,
+    ):
         import requests
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self._token()}",
+        }
+        if extra_headers:
+            headers.update(extra_headers)
         resp = requests.post(
             _GLOO_COMPLETIONS_URL,
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {self._token()}",
-            },
+            headers=headers,
             json=payload,
             timeout=(30, None) if stream else timeout,
             stream=stream,
@@ -1234,6 +1243,11 @@ class LLMClient:
         all_errors: list[str] = []
         all_san_details: list[str] = []
         _tool_choice_dropped = self.model in _TOOL_CHOICE_INCOMPATIBLE
+        # Anthropic routes via Gloo require an explicit header to enable prompt caching;
+        # Gloo then places the cache_control breakpoint on the system message automatically.
+        _gloo_extra_headers = (
+            {"X-Cache-TTL": "1h"} if self.model.startswith("gloo-anthropic-") else None
+        )
 
         for attempt in range(max_retries + 1):
             payload: dict = {
@@ -1252,7 +1266,7 @@ class LLMClient:
             try:
                 response = _api_call_with_backoff(
                     lambda: self._accumulate_gloo_stream(
-                        self._client.post(payload, stream=True)
+                        self._client.post(payload, stream=True, extra_headers=_gloo_extra_headers)
                     ),
                     self.max_api_retries,
                     "Gloo",

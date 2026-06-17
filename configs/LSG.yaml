@@ -1,6 +1,6 @@
-# OENGB.yaml — config for Open English Bible (New Testament)
+# LSG.yaml — config for Louis Segond 1910 (LSG)
 #
-# Invoke any tool with:  --config OENGB
+# Invoke any tool with:  --config LSG
 
 alignments_root: ~/git/Clear-Bible
 
@@ -8,25 +8,25 @@ alignments_root: ~/git/Clear-Bible
 # Identity
 # ---------------------------------------------------------------------------
 
-target_language: eng
-target_edition: OENGB
-target_edition_name: Open English Bible (New Testament)
+target_language: fra
+target_edition: LSG
+target_edition_name: Louis Segond 1910
 
-source_edition: LEB
-source_language: eng
+#source_edition: RV1909
+#source_language: spa
 
-alignment_sources: [SIM-MIGRATED, DIFF-MIGRATED]
+alignment_sources: []
 alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # smaller chunks?
 batch-size: 2
-max_output_tokens: 4000
+max-output-tokens: 4000
 
 # Gloo
 llm_provider: gloo
 reasoning_effort: high
-llm_model: gloo-deepseek-v4-pro # decent (better than not bad)
+llm_model: gloo-deepseek-v4-pro # decent
 
 # ---------------------------------------------------------------------------
 # retry-alignment settings

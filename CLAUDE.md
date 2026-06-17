@@ -56,6 +56,11 @@ The directory has two testament subdirectories (`nt/`, `ot/`) plus shared infras
 - `nt/spa.py` — Latin American Spanish. Same pro-drop rules; contracted forms limited to
   `del` and `al` only; proper-name articles always Branch B (LA translations omit them);
   vos/tú regional note; ustedes for 2nd plural; no personal infinitive.
+- `nt/fra.py` — French. NOT pro-drop (subject pronouns required; secondary when no Greek
+  pronoun — inverse of Spanish/Portuguese). Contracted forms du/des/au/aux (non-contracting
+  stay two words). Double-article attributive handled (first → Branch A, second → Branch B).
+  Partitive du/de la/des secondary for anarthrous mass nouns. Reflexive passive (se + verb)
+  and impersonal "on" as passive equivalent. Discontinuous ne…X negation; restrictive ne…que.
 - `ot/eng.py` — OT English config.
 - `__init__.py` — re-exports the public API and imports all language modules to trigger
   registration.
@@ -65,8 +70,21 @@ with the appropriate block content, and call `register_language()`. Then add the
 to `__init__.py`. Import unchanged blocks from `eng.py` rather than duplicating them.
 Unknown language codes fall back to English automatically.
 
-Current languages: eng, por, spa.
-Planned: fra — then Arabic, Chinese Simplified, Chinese Traditional, Hindi, Gujarati,
+**Prompt style:** all prompt blocks are compressed (rules + examples; no motivating prose
+or meta-commentary). Prose reference copies are preserved as `*.prose.py` siblings (not
+imported, `register_*_language` call commented out) for each language file that has been
+compressed. Approximate token budget (all blocks assembled):
+
+| Config | ~tokens |
+|--------|---------|
+| NT eng | 2,993 |
+| NT por | 3,333 |
+| NT spa | 3,318 |
+| NT fra | 4,116 |
+| OT eng | 2,236 |
+
+Current languages: eng, por, spa, fra.
+Planned: Arabic, Chinese Simplified, Chinese Traditional, Hindi, Gujarati,
 Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 
 ## LLM providers (`refine/llm.py`)

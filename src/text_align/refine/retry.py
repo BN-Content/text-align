@@ -133,6 +133,7 @@ def retry_chapter_sync(
     verse_ids = [spec.verse_id for spec in retry_specs]
     new_records_by_verse: dict[str, list[dict]] = {}
     all_errors: list[str] = []
+    missed: dict[str, list[str]] = {}
 
     for batch_start in range(0, len(verse_ids), batch_size):
         batch_ids = verse_ids[batch_start:batch_start + batch_size]
@@ -173,19 +174,26 @@ def retry_chapter_sync(
                 max_retries=max_retries,
             )
         except RuntimeError as exc:
-            missed = ", ".join(batch_ids)
-            print(f"  Retry batch failed ({exc}) — missed verses: {missed}")
-            if len(batch_ids) > 1:
-                print("  Will retry individually ...")
+            verse_list = ", ".join(batch_ids)
+            print(f"  Retry batch failed ({exc}) — missed: {verse_list}")
             results, errors = {}, []
+            for vid in batch_ids:
+                missed.setdefault(vid, []).append(f"API error: {exc}")
+
+        for vid in batch_ids:
+            if vid not in results and vid not in missed:
+                reason = next(
+                    (e for e in errors if "no tool call" in e or "no records" in e),
+                    errors[0] if errors else "no records returned",
+                )
+                missed.setdefault(vid, []).append(reason)
 
         new_records_by_verse.update(results)
         all_errors.extend(errors)
 
-    missing = [vid for vid in verse_ids if vid not in new_records_by_verse]
-    if missing:
-        print(f"  Resubmitting {len(missing)} verse(s) with no results ...")
-        for verse_id in missing:
+    if missed:
+        print(f"  Resubmitting {len(missed)} verse(s) individually ...")
+        for verse_id in list(missed.keys()):
             tgt_verse = target_verses.get(verse_id)
             tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
             if tgt_verse and tgt_verse.words:
@@ -213,8 +221,23 @@ def retry_chapter_sync(
                     max_retries=max_retries,
                 )
             except RuntimeError as exc:
-                print(f"  Resubmit {verse_id}: all retries exhausted, skipping — {exc}")
+                missed[verse_id].append(f"individual retry: API error: {exc}")
+                print(f"  Resubmit {verse_id}: all retries exhausted — {exc}")
                 continue
+            if verse_id not in r_results:
+                reason = next(
+                    (e for e in r_errors if "no tool call" in e or "no records" in e),
+                    r_errors[0] if r_errors else "no records returned",
+                )
+                missed[verse_id].append(f"individual retry: {reason}")
+                n_r = 0
+                status = "0/1 verses, 0 records"
+                if r_errors:
+                    status += f", {len(r_errors)} error(s)"
+                print(f"  Resubmit {verse_id}: {status}")
+                all_errors.extend(r_errors)
+                continue
+            del missed[verse_id]
             n_r = sum(len(v) for v in r_results.values())
             status = f"{len(r_results)}/1 verses, {n_r} records"
             if r_errors:
@@ -222,6 +245,10 @@ def retry_chapter_sync(
             print(f"  Resubmit {verse_id}: {status}")
             new_records_by_verse.update(r_results)
             all_errors.extend(r_errors)
+        if missed:
+            print(f"  {len(missed)} verse(s) permanently unresolved:")
+            for vid, reasons in missed.items():
+                print(f"    {vid}: {' → '.join(reasons)}")
 
     if not new_records_by_verse:
         return 0, all_errors

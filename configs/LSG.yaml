@@ -20,13 +20,14 @@ alignment_suffix: LLM-REFINED
 from-scratch: true
 
 # smaller chunks?
-batch-size: 2
-max-output-tokens: 4000
+batch-size: 4
 
 # Gloo
 llm_provider: gloo
 reasoning_effort: high
-llm_model: gloo-deepseek-v4-pro # decent
+#llm_model: gloo-deepseek-v4-pro # decent
+llm_model: gloo-openai-gpt-5-mini
+max-output-tokens: 32000
 
 # ---------------------------------------------------------------------------
 # retry-alignment settings

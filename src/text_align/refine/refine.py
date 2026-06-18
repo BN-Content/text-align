@@ -386,7 +386,7 @@ def _process_corpus_sync(
         chapter_san: list[str] = []
 
         total_batches = (len(chapter_verse_ids) + batch_size - 1) // batch_size
-        covered: set[str] = set()
+        missed: dict[str, list[str]] = {}
 
         for batch_num, batch_start in enumerate(range(0, len(chapter_verse_ids), batch_size), 1):
             batch_ids = chapter_verse_ids[batch_start:batch_start + batch_size]
@@ -437,14 +437,22 @@ def _process_corpus_sync(
                     max_retries=max_retries,
                 )
             except RuntimeError as exc:
-                missed = ", ".join(batch_ids)
+                verse_list = ", ".join(batch_ids)
                 print(
                     f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: "
-                    f"all retries exhausted ({exc}) — missed verses: {missed}"
+                    f"all retries exhausted ({exc}) — missed: {verse_list}"
                 )
-                if len(batch_ids) > 1:
-                    print(f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: will retry individually ...")
                 results, errors, san_details = {}, [], []
+                for vid in batch_ids:
+                    missed.setdefault(vid, []).append(f"API error: {exc}")
+
+            for vid in batch_ids:
+                if vid not in results and vid not in missed:
+                    reason = next(
+                        (e for e in errors if "no tool call" in e or "no records" in e),
+                        errors[0] if errors else "no records returned",
+                    )
+                    missed.setdefault(vid, []).append(reason)
 
             n_records = sum(len(r) for r in results.values())
             status = f"{len(results)}/{len(batch_ids)} verses, {n_records} records"
@@ -452,16 +460,14 @@ def _process_corpus_sync(
                 status += f", {len(errors)} error(s)"
             print(f"  Chapter {chapter_id} batch {batch_num}/{total_batches}: {status}")
 
-            covered.update(results.keys())
             for recs in results.values():
                 chapter_records.extend(recs)
             chapter_errors.extend(errors)
             chapter_san.extend(san_details)
 
-        missing = [vid for vid in chapter_verse_ids if vid not in covered]
-        if missing:
-            print(f"  Chapter {chapter_id}: resubmitting {len(missing)} verse(s) with no results ...")
-            for verse_id in missing:
+        if missed:
+            print(f"  Chapter {chapter_id}: resubmitting {len(missed)} verse(s) individually ...")
+            for verse_id in list(missed.keys()):
                 tgt_verse = target_verses.get(verse_id)
                 tgt_tokens = list(tgt_verse.words.values()) if tgt_verse else []
                 if tgt_verse and tgt_verse.words:
@@ -494,11 +500,26 @@ def _process_corpus_sync(
                         max_retries=max_retries,
                     )
                 except RuntimeError as exc:
+                    missed[verse_id].append(f"individual retry: API error: {exc}")
                     print(
                         f"  Chapter {chapter_id} resubmit {verse_id}: "
-                        f"all retries exhausted, skipping — {exc}"
+                        f"all retries exhausted — {exc}"
                     )
                     continue
+                if verse_id not in r_results:
+                    reason = next(
+                        (e for e in r_errors if "no tool call" in e or "no records" in e),
+                        r_errors[0] if r_errors else "no records returned",
+                    )
+                    missed[verse_id].append(f"individual retry: {reason}")
+                    n_r = 0
+                    status = "0/1 verses, 0 records"
+                    if r_errors:
+                        status += f", {len(r_errors)} error(s)"
+                    print(f"  Chapter {chapter_id} resubmit {verse_id}: {status}")
+                    chapter_errors.extend(r_errors)
+                    continue
+                del missed[verse_id]
                 n_r = sum(len(v) for v in r_results.values())
                 status = f"{len(r_results)}/1 verses, {n_r} records"
                 if r_errors:
@@ -508,6 +529,10 @@ def _process_corpus_sync(
                     chapter_records.extend(recs)
                 chapter_errors.extend(r_errors)
                 chapter_san.extend(r_san)
+            if missed:
+                print(f"  Chapter {chapter_id}: {len(missed)} verse(s) permanently unresolved:")
+                for vid, reasons in missed.items():
+                    print(f"    {vid}: {' → '.join(reasons)}")
 
         out_path = _write_chapter_file(
             chapter_id, chapter_records, corpus_id, target_edition, output_dir,

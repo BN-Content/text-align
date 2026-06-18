@@ -43,6 +43,8 @@ Alignments map translation → source: each record asks what Greek word(s) are b
 
 ## ALIGNMENT PHILOSOPHY
 Alignments are generous: include case-implied prepositions, morphologically-implied pronouns, and context-implied articles. Do not restrict to strict lexical equivalents.
+Prefer one record per source token — split rather than group. Create separate records whenever source tokens can each independently map to distinct target tokens. Combine into N:M records only when tokens form an inseparable semantic unit (idiom) or target words cannot be individually assigned to separate source tokens. When in doubt, split.
+Grammar-required translation words (implied pronoun, case preposition, modal helpers for verbal morphology ["could," "might," "would"], reinstated article) are secondary to the source token whose grammar requires them — not NEQ. NEQ is for words with no source-language grammatical anchor.
 
 ## TOKEN ROLES
 

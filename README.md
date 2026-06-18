@@ -170,10 +170,16 @@ src/text_align/
 ├── refine/              # LLM-assisted alignment refinement
 │   ├── source.py        # Source token loader
 │   ├── prompt/          # Language-aware prompt assembly
-│   │   ├── core.py      #   LanguagePromptConfig, registry, detection, assembly
-│   │   ├── eng.py       #   English prompt blocks and config (auto-registered)
-│   │   ├── por.py       #   Portuguese (auto-registered)
-│   │   ├── spa.py       #   Latin American Spanish (auto-registered)
+│   │   ├── common.py    #   LanguagePromptConfig dataclass, shared assembly functions
+│   │   ├── nt/          #   NT (Greek) language configs
+│   │   │   ├── core.py  #     Registry, phenomenon detection, NT prompt assembly
+│   │   │   ├── eng.py   #     English (auto-registered)
+│   │   │   ├── por.py   #     Portuguese (auto-registered)
+│   │   │   ├── spa.py   #     Latin American Spanish (auto-registered)
+│   │   │   └── fra.py   #     French (auto-registered)
+│   │   ├── ot/          #   OT (Hebrew) language configs
+│   │   │   ├── core.py  #     Registry, phenomenon detection, OT prompt assembly
+│   │   │   └── eng.py   #     English (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
 │   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter / Gloo)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
@@ -268,10 +274,10 @@ refine-alignment \
   [--temperature 1]              # sampling temperature (default: 1); explicit value
                                  #   ensures sync and async batch calls are identical
                                  #   not applied to OpenAI reasoning models
-  [--max-output-tokens 4000]     # token budget per call (default: 4000); sufficient for
-                                 #   alignment output on any single verse or small batch;
-                                 #   for Anthropic thinking models use retry_max_output_tokens
-                                 #   to set a higher budget on the retry pass (e.g. 32000)
+  [--max-output-tokens 4000]     # token budget per call (default: 4000; sufficient for NT);
+                                 #   use 8000 for OT with Gloo/DeepSeek (larger verses);
+                                 #   use 32000 for Anthropic/OpenAI reasoning retry pass
+                                 #   (both combine reasoning + output in one shared budget)
   [--batch-mode sync]            # sync (default) | async (google/openai/anthropic only)
   [--jobs-dir jobs/]             # where async job metadata is stored
 ```
@@ -492,8 +498,13 @@ retry-alignment \
 The YAML config supports a separate `retry_max_output_tokens` key for the retry pass (mirrors `retry_llm_provider` / `retry_llm_model`). Use this when the retry model is an Anthropic thinking model that needs a larger token budget than the first-pass model:
 
 ```yaml
-max_output_tokens: 4000          # lean budget for cheap first-pass model (e.g. Gloo/DeepSeek)
-retry_max_output_tokens: 32000   # full budget for Anthropic extended thinking retry pass
+# NT config
+max_output_tokens: 4000          # sufficient for NT verses
+retry_max_output_tokens: 32000   # full budget for Anthropic/OpenAI reasoning retry pass
+
+# OT config
+max_output_tokens: 8000          # OT verses are larger; 4000 risks truncation with Gloo/DeepSeek
+retry_max_output_tokens: 32000   # full budget for Anthropic/OpenAI reasoning retry pass
 ```
 
 If the fallback threshold triggers and `retry-alignment` reverts to the refine-phase model, `max_output_tokens` is also restored to the refine-phase value.

@@ -64,6 +64,10 @@ English conjunction with no Hebrew conjunction token → NEQ target.
 ## SURFACE FORM DIFFERENCES
 Tense, voice, number, aspect, and verbal stem (binyan) differences do not prevent alignment. Align on lexical/semantic correspondence.
 
+## GRANULARITY
+Prefer one record per source token — split rather than group. Create separate records whenever source tokens (or word-parts) can each independently map to distinct target tokens. Combine into N:M records only when tokens form an inseparable semantic unit (idiom) or target words cannot be individually assigned to separate source tokens. When in doubt, split.
+Grammar-required translation words (pronominal suffix, construct-chain particle ["of"], modal helpers for verbal morphology ["could," "might," "would"], implied article) are secondary to the source token or word-part whose grammar requires them — not NEQ. NEQ is for words with no source-language grammatical anchor.
+
 ## ARTICLES
 Hebrew article (הַ/הָ/הֶ) appears as a separate word-part token (pos=particle). Never NEQ.
 - Article word-part → "the": primary 1:1; noun gets its own record.

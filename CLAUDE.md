@@ -294,17 +294,27 @@ Batch API infrastructure may apply different defaults than the sync path
 degradation on the async path. Fix: `LLMClient` now always sends `temperature`
 and `max_output_tokens` explicitly on every call — both sync and async.
 
-Defaults: `temperature=1`, `max_output_tokens=4000`. The 4 000 token default is
-sufficient for alignment records on any single verse or small batch (even large OT
-narrative verses rarely exceed 3 000 output tokens). Temperature is not sent for
+Defaults: `temperature=1`, `max_output_tokens=4000`. Temperature is not sent for
 OpenAI reasoning models (it is fixed by the API). Overridable via `--temperature` and
 `--max-output-tokens` CLI flags (also settable in YAML config files).
 
-**`max_output_tokens` and Anthropic extended thinking:** For Anthropic, thinking tokens
-come *out of* the `max_tokens` budget (unlike OpenAI/Google where reasoning tokens are
-separate). Setting `max_output_tokens` too low truncates thinking + output together.
-Use `retry_max_output_tokens` (see below) to set a higher budget for the Anthropic
-retry pass while keeping the default 4 000 for the Gloo/DeepSeek first pass.
+**`max_output_tokens` guidance by corpus and provider:**
+
+| Scenario | Recommended `max_output_tokens` |
+|----------|--------------------------------|
+| NT, any provider | 4 000 (default) |
+| OT, Gloo/DeepSeek (thinking disabled) | 8 000 — OT verses are larger; 4 000 risks `finish_reason=length` truncation on complex verses |
+| OT or NT, Anthropic thinking retry | 32 000 — thinking tokens come *out of* `max_tokens`; too low truncates thinking + output together |
+| OT or NT, OpenAI o-series reasoning | 32 000 — `max_completion_tokens` covers reasoning + output combined (same behaviour as Anthropic) |
+
+The claim that "OpenAI/Google reasoning tokens are separate from the output budget" is
+**incorrect for OpenAI o-series models** (`o1`, `o3`, `o4-mini`, etc.): their
+`max_completion_tokens` is a combined budget, just like Anthropic `max_tokens`. Google
+Gemini thinking tokens are genuinely separate. Empirically, 8 000 is insufficient for
+OpenAI reasoning models on OT alignment; 32 000 resolves it.
+
+Use `retry_max_output_tokens` (see below) to set a higher budget for the retry pass
+while keeping a leaner budget for the first pass.
 
 ## Split-batch fallback (`refine/refine.py`, `refine/retry.py`)
 
@@ -336,8 +346,13 @@ restore pattern as `retry_llm_provider` / `retry_llm_model` / `retry_reasoning_e
 
 Typical config:
 ```yaml
-max_output_tokens: 4000          # lean budget for Gloo/DeepSeek first pass
-retry_max_output_tokens: 32000   # full budget for Anthropic thinking retry pass
+# NT config
+max_output_tokens: 4000          # sufficient for NT verses
+retry_max_output_tokens: 32000   # full budget for Anthropic/OpenAI reasoning retry pass
+
+# OT config
+max_output_tokens: 8000          # OT verses are larger; 4000 risks truncation with Gloo/DeepSeek
+retry_max_output_tokens: 32000   # full budget for Anthropic/OpenAI reasoning retry pass
 ```
 
 ## render-alignment chapter-file detection (`render/html.py`)

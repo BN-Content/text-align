@@ -16,6 +16,7 @@ Environment variables:
 import base64
 import json
 import os
+import random
 import time
 
 import requests
@@ -166,13 +167,13 @@ class _GlooAuth:
         self._client_secret = client_secret
         self._access_token: str | None = None
         self._expires_at: float = 0.0
+        self._session = requests.Session()
 
     def _fetch_token(self) -> None:
-        import requests
         auth = base64.b64encode(
             f"{self._client_id}:{self._client_secret}".encode()
         ).decode()
-        resp = requests.post(
+        resp = self._session.post(
             _GLOO_TOKEN_URL,
             headers={
                 "Content-Type": "application/x-www-form-urlencoded",
@@ -205,7 +206,7 @@ class _GlooAuth:
         }
         if extra_headers:
             headers.update(extra_headers)
-        resp = requests.post(
+        resp = self._session.post(
             _GLOO_COMPLETIONS_URL,
             headers=headers,
             json=payload,
@@ -750,6 +751,7 @@ class LLMClient:
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_message},
         ]
+        _original_messages = list(messages)
         tool_schema = [_openai_tool_schema(_NEUTRAL_TOOL_SCHEMA)]
         tool_choice = {"type": "function", "function": {"name": TOOL_NAME}}
 
@@ -794,6 +796,9 @@ class LLMClient:
             if self.provider == "openrouter":
                 self._track_openrouter_cost(response)
 
+            if response.usage:
+                print(f"  tokens: in={response.usage.prompt_tokens}, out={response.usage.completion_tokens}")
+
             choice = response.choices[0]
             if choice.finish_reason == "length":
                 print(
@@ -804,9 +809,14 @@ class LLMClient:
             tool_calls = assistant_msg.tool_calls or []
 
             if not tool_calls:
+                _content = assistant_msg.content or ""
+                print(
+                    f"  DEBUG no-tool-call: finish_reason={choice.finish_reason!r}, "
+                    f"content={_content[:200]!r}"
+                )
                 if attempt < max_retries:
                     print("  NOTE: model returned no tool call — nudging to retry")
-                    messages.append({"role": "assistant", "content": assistant_msg.content or ""})
+                    messages = list(_original_messages)
                     messages.append({"role": "user", "content": "You did not call the alignment tool. You must call it now to provide the verse alignments."})
                     continue
                 else:
@@ -1000,6 +1010,9 @@ class LLMClient:
 
             response = _api_call_with_backoff(_do_anthropic, self.max_api_retries, "Anthropic")
 
+            if response.usage:
+                print(f"  tokens: in={response.usage.input_tokens}, out={response.usage.output_tokens}")
+
             if response.stop_reason == "max_tokens":
                 print(
                     f"  WARNING: response truncated (stop_reason=max_tokens, "
@@ -1008,6 +1021,12 @@ class LLMClient:
                 )
 
             tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
+            if not tool_use_blocks:
+                text = "".join(b.text for b in response.content if b.type == "text")
+                print(
+                    f"  DEBUG no-tool-call: stop_reason={response.stop_reason!r}, "
+                    f"content={text[:200]!r}"
+                )
             verse_errors: dict[str, list[str]] = {}
             tool_results: list[dict] = []
 
@@ -1097,6 +1116,10 @@ class LLMClient:
                 "Google",
             )
 
+            if getattr(response, "usage_metadata", None):
+                um = response.usage_metadata
+                print(f"  tokens: in={um.prompt_token_count}, out={um.candidates_token_count}")
+
             candidate = response.candidates[0]
             finish_reason = getattr(candidate, "finish_reason", None)
             if finish_reason is not None and "MAX_TOKENS" in str(finish_reason):
@@ -1110,7 +1133,14 @@ class LLMClient:
                 for part in candidate.content.parts
                 if getattr(part, "function_call", None)
             ]
-
+            if not function_calls:
+                text = "".join(
+                    p.text for p in candidate.content.parts if getattr(p, "text", None)
+                )
+                print(
+                    f"  DEBUG no-tool-call: finish_reason={finish_reason!r}, "
+                    f"content={text[:200]!r}"
+                )
             verse_errors: dict[str, list[str]] = {}
             response_parts: list = []
 
@@ -1175,39 +1205,56 @@ class LLMClient:
         tool_call_id = ""
         tool_call_name = ""
         accumulated_args = ""
+        accumulated_text = ""
         finish_reason: str | None = None
         response_id = ""
+        usage: dict | None = None
+        gloo_error: dict | None = None
 
-        for line in resp.iter_lines():
-            if not line:
-                continue
-            if isinstance(line, bytes):
-                line = line.decode("utf-8")
-            if line == "data: [DONE]":
-                break
-            if not line.startswith("data: "):
-                continue
-            try:
-                chunk = json.loads(line[6:])
-            except json.JSONDecodeError:
-                continue
+        try:
+            for line in resp.iter_lines():
+                if not line:
+                    continue
+                if isinstance(line, bytes):
+                    line = line.decode("utf-8")
+                if line == "data: [DONE]":
+                    break
+                if not line.startswith("data: "):
+                    continue
+                try:
+                    chunk = json.loads(line[6:])
+                except json.JSONDecodeError:
+                    continue
 
-            if not response_id:
-                response_id = chunk.get("id", "")
-            choices = chunk.get("choices", [])
-            if not choices:
-                continue
-            choice = choices[0]
-            if choice.get("finish_reason"):
-                finish_reason = choice["finish_reason"]
-            delta = choice.get("delta", {})
-            for tc in delta.get("tool_calls") or []:
-                if not tool_call_id and tc.get("id"):
-                    tool_call_id = tc["id"]
-                fn = tc.get("function", {})
-                if not tool_call_name and fn.get("name"):
-                    tool_call_name = fn["name"]
-                accumulated_args += fn.get("arguments", "")
+                if not response_id:
+                    response_id = chunk.get("id", "")
+                if chunk.get("usage"):
+                    usage = chunk["usage"]
+                if chunk.get("error"):
+                    gloo_error = chunk["error"]
+                choices = chunk.get("choices", [])
+                if not choices:
+                    continue
+                choice = choices[0]
+                if choice.get("finish_reason"):
+                    finish_reason = choice["finish_reason"]
+                delta = choice.get("delta", {})
+                if delta.get("content"):
+                    accumulated_text += delta["content"]
+                for tc in delta.get("tool_calls") or []:
+                    if not tool_call_id and tc.get("id"):
+                        tool_call_id = tc["id"]
+                    fn = tc.get("function", {})
+                    if not tool_call_name and fn.get("name"):
+                        tool_call_name = fn["name"]
+                    accumulated_args += fn.get("arguments", "")
+        except requests.exceptions.ChunkedEncodingError:
+            print(
+                f"  DEBUG stream-drop: tool_call_name={tool_call_name!r}, "
+                f"args_chars={len(accumulated_args)}, finish_reason={finish_reason!r}, "
+                f"text={accumulated_text[:100]!r}"
+            )
+            raise
 
         tool_calls = (
             [{"id": tool_call_id, "type": "function",
@@ -1218,8 +1265,14 @@ class LLMClient:
             "id": response_id,
             "choices": [{
                 "finish_reason": finish_reason,
-                "message": {"role": "assistant", "content": None, "tool_calls": tool_calls},
+                "message": {
+                    "role": "assistant",
+                    "content": accumulated_text or None,
+                    "tool_calls": tool_calls,
+                },
             }],
+            "usage": usage,
+            "error": gloo_error,
         }
 
     def _call_gloo(
@@ -1236,8 +1289,9 @@ class LLMClient:
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_message},
         ]
+        _original_messages = list(messages)
         tool_schema = [_openai_tool_schema(_NEUTRAL_TOOL_SCHEMA)]
-        tool_choice = {"type": "function", "function": {"name": TOOL_NAME}}
+        tool_choice = "required"
 
         results: dict[str, list[dict]] = {}
         all_errors: list[str] = []
@@ -1262,6 +1316,8 @@ class LLMClient:
                 payload["temperature"] = self.temperature
             if self.max_output_tokens is not None:
                 payload["max_tokens"] = self.max_output_tokens
+            if "deepseek" in self.model.lower():
+                payload["enable_thinking"] = False
 
             try:
                 response = _api_call_with_backoff(
@@ -1279,8 +1335,31 @@ class LLMClient:
                     continue
                 raise
 
+            if response.get("usage"):
+                u = response["usage"]
+                print(f"  tokens: in={u.get('prompt_tokens')}, out={u.get('completion_tokens')}")
+
             choice = response["choices"][0]
-            if choice.get("finish_reason") == "length":
+            _finish_reason = choice.get("finish_reason")
+            if _finish_reason == "content_filter":
+                all_errors.append("Gloo content_filter — response blocked by content moderation")
+                print("  NOTE: Gloo content_filter — not retrying")
+                break
+            if _finish_reason == "error":
+                err = response.get("error") or {}
+                err_name = err.get("name") or err.get("code") or "unknown"
+                err_retryable = err.get("retryable")
+                print(f"  NOTE: Gloo error — name={err_name!r}, retryable={err_retryable!r}")
+                if err_retryable is False:
+                    all_errors.append(f"Gloo non-retryable error: {err_name}")
+                    break
+                if attempt < max_retries:
+                    time.sleep(random.random() * min(30, 2 ** attempt))
+                    continue
+                else:
+                    all_errors.append(f"Gloo error after all retries: {err_name}")
+                    break
+            if _finish_reason == "length":
                 print(
                     "  WARNING: response truncated (finish_reason=length) — "
                     "some verses may be missing. Reduce --batch-size."
@@ -1290,9 +1369,23 @@ class LLMClient:
             tool_calls = assistant_msg.get("tool_calls") or []
 
             if not tool_calls:
+                _content = assistant_msg.get("content") or ""
+                print(
+                    f"  DEBUG no-tool-call: finish_reason={_finish_reason!r}, "
+                    f"content={_content[:200]!r}"
+                )
+                if _finish_reason is None and not _content:
+                    # Empty stream with no finish_reason — treat as retryable server error
+                    if attempt < max_retries:
+                        print("  NOTE: empty response (no finish_reason, no content) — retrying")
+                        time.sleep(random.random() * min(30, 2 ** attempt))
+                        continue
+                    else:
+                        all_errors.append("empty response after all retries")
+                        break
                 if attempt < max_retries:
                     print("  NOTE: model returned no tool call — nudging to retry")
-                    messages.append({"role": "assistant", "content": assistant_msg.get("content") or ""})
+                    messages = list(_original_messages)
                     messages.append({"role": "user", "content": "You did not call the alignment tool. You must call it now to provide the verse alignments."})
                     continue
                 else:

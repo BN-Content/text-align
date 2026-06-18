@@ -916,9 +916,6 @@ def main() -> None:
 
         # ── build AlignmentToken dict ────────────────────────────────────
         alignments: dict[str, list[AlignmentToken]] = {}
-        # Track which translation verse BCVs have alignment records so the
-        # unaligned-targets pass (below) only covers those verses.
-        aligned_tgt_verse_bcvs: set[str] = set()
 
         for record_id, record in mgr.bcv["records"].items():
             tgt_vid = _src_to_tgt_verse.get(record_id, record_id)
@@ -929,11 +926,19 @@ def main() -> None:
             if targets_source is None:
                 print(f"  No target_sourceverses for {record_id}, skipping")
                 continue
-            aligned_tgt_verse_bcvs.add(tgt_vid)
 
             for alignment in record:
                 al_sources = get_alignment_sources(alignment.source_selectors, sources)
                 al_targets = get_alignment_targets(alignment.target_selectors, targets_source)
+                if not al_targets and alignment.target_selectors:
+                    # Fallback for tokens whose source_verse in the TSV defaults to their
+                    # own BCV (e.g. title verse tokens with no source_verse set), making
+                    # them invisible to target_sourceverses[record_id].
+                    al_targets = {
+                        tid: mgr.targetitems[tid].text
+                        for tid in alignment.target_selectors
+                        if tid in mgr.targetitems
+                    }
                 if not al_targets:
                     continue
 
@@ -957,8 +962,17 @@ def main() -> None:
         # empty-source placeholders for the secondary-source-verse targets were
         # inserted before those records were processed, making the placeholder
         # tok_list[0] at render time even after the correct token was appended.
+        #
+        # Derive the set of target verse BCVs from the aligned tokens themselves —
+        # more accurate than tracking one BCV per source verse (which breaks when
+        # a single source verse covers multiple target verses, e.g. Hebrew Ps 130:1
+        # covering both BSB 130:0 and 130:1).  Use mgr.bcv["targets"] (keyed by
+        # the token's own BCV) rather than target_sourceverses (keyed by
+        # source_verse), so tokens whose source_verse defaults to their own BCV
+        # (e.g. title verse tokens with no source_verse in the TSV) are found.
+        aligned_tgt_verse_bcvs = {BCVWPID(tid).to_bcvid for tid in alignments}
         for _tgt_vid in aligned_tgt_verse_bcvs:
-            for target in mgr.bcv["target_sourceverses"].get(_tgt_vid, []):
+            for target in mgr.bcv["targets"].get(_tgt_vid, []):
                 if target.id not in alignments:
                     alignments[target.id] = [AlignmentToken(
                         targets={target.id: target.text},

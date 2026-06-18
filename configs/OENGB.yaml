@@ -23,10 +23,17 @@ from-scratch: true
 batch-size: 2
 max_output_tokens: 4000
 
-# Gloo
-llm_provider: gloo
+# OpenAI
+llm_provider: openai
+#llm_model: gpt-5-mini
+#llm_model: gpt-4.1-mini
+#llm_model: gpt-5.4
+llm_model: gpt-5.4-mini
 reasoning_effort: high
-llm_model: gloo-deepseek-v4-pro # decent (better than not bad)
+# Gloo
+#llm_provider: gloo
+#reasoning_effort: high
+#llm_model: gloo-deepseek-v4-pro # decent (better than not bad)
 
 # ---------------------------------------------------------------------------
 # retry-alignment settings

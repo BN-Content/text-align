@@ -601,7 +601,7 @@ strategy: stage the minimum data in, run GHA, copy results back out.
 3. Patches `alignments_root:` in `configs/<edition>.yaml` to `./data/alignments`
 
 After running: `git add` the TSV(s), any staged JSONs, and the patched YAML, commit,
-push, then trigger the GHA `align-nt` workflow.
+push, then trigger the appropriate GHA workflow (`align-nt` or `align-ot`).
 
 **`copy-from-gha.py`** — run after `git pull` brings GHA-committed results into the repo:
 1. Copies `./data/alignments/alignments-<lang>/exp/<edition>/<alignment_suffix>/*.json`
@@ -623,6 +623,47 @@ python scripts/copy-to-gha.py  --config JFA11
 # ... git pull after GHA completes ...
 python scripts/copy-from-gha.py --config JFA11
 ```
+
+## OT GHA workflow (`scripts/ot_chapters.py`, `.github/workflows/align-ot.yml`)
+
+The OT has 929 chapters (books 01–39), exceeding the 256-job GHA matrix limit. It is
+split into four canonical sections, each triggered as a separate `workflow_dispatch` run:
+
+| Section | Books | Chapters |
+|---------|-------|----------|
+| law | Gen–Deut (01–05) | 187 |
+| history | Josh–Esth (06–17) | 249 |
+| poetry | Job–Song (18–22) | 243 |
+| prophets | Isa–Mal (23–39) | 250 |
+
+All four sections fit under 256 with zero chapter bundling — every chapter gets its own
+job (one-to-one with NT approach).
+
+**`scripts/ot_chapters.py`** — parallel to `nt_chapters.py`:
+- `--json --section <law|history|poetry|prophets>` — emit GHA matrix JSON for that section
+- `--json --chapter BBCCC` or `--book BB` — single-chapter or single-book override
+- `--status --config <NAME>` — per-chapter DONE/PENDING report
+- `--table` — human-readable chapter list (omit `--section` to see all 929)
+
+**`align-ot.yml`** workflow inputs:
+- `config` (required) — edition config name, e.g. `BSB`
+- `section` (required) — `law` / `history` / `poetry` / `prophets`
+- `chapter` / `book` — optional single-chapter or single-book override
+- `model`, `batch-mode`, `max-retry-passes` — same as `align-nt.yml`
+
+Workflows can be triggered from the CLI without going to github.com:
+
+```bash
+gh workflow run align-ot.yml \
+  --field config=BSB \
+  --field section=law
+
+gh workflow run align-nt.yml \
+  --field config=BSB
+```
+
+**`scripts/alignment_summary.py`** now supports `--corpus ot --section <section>` to
+produce a section-scoped step summary at the end of each `align-ot` run.
 
 ## OT versification handling (`refine/refine.py`, `refine/retry.py`)
 

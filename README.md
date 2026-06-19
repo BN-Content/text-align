@@ -226,7 +226,17 @@ The YAML config supports separate model keys for the retry pass (`retry_llm_prov
 
 Use `--dry-run` with `retry-alignment` to inspect which verses would be flagged before committing to any LLM spend. Use `--batch-mode async` with any of the three frontier providers (Anthropic, OpenAI, Google) for ~50% cost reduction on `refine-alignment` and `retry-alignment`.
 
-A GitHub Actions workflow (`.github/workflows/align-nt.yml`) is provided for running the full NT pipeline in parallel — one job per chapter — with automatic LaBSE cache warm-up and result collection back to the repository.
+Two GitHub Actions workflows run the alignment pipeline in parallel — one job per chapter — with automatic LaBSE cache warm-up and result collection back to the repository:
+
+- **`.github/workflows/align-nt.yml`** — full NT pipeline (27 books, ~260 chapters). Inputs: `config`, `model`, `batch-mode`, `max-retry-passes`. Chapter matrix is built by `scripts/nt_chapters.py`.
+- **`.github/workflows/align-ot.yml`** — OT pipeline, split into four canonical sections to stay under the 256-job matrix limit. Required inputs: `config`, `section` (`law` / `history` / `poetry` / `prophets`). Chapter matrix is built by `scripts/ot_chapters.py --section <section>`. Section sizes: law 187ch, history 249ch, poetry 243ch, prophets 250ch.
+
+Workflows can be triggered from the command line without going to github.com:
+
+```bash
+gh workflow run align-nt.yml --field config=BSB
+gh workflow run align-ot.yml --field config=BSB --field section=law
+```
 
 Two helper scripts support a transitory data strategy for GHA runs, where only the minimum data needed for a given config is staged into this repo, the GHA run executes, and results are copied back out to the source alignments repo:
 

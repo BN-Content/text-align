@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """copy-from-gha.py -- Copy GHA alignment results back to the Clear alignments repo.
 
-After a GHA align-nt run completes:
+After a GHA alignment run (align-nt or align-ot) completes:
   1. git pull   (to get GHA-committed JSON files into this repo)
   2. Run this script
 

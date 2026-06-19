@@ -163,7 +163,7 @@ def main() -> None:
         print(f"  git add configs/{args.config}.yaml")
         print(f"  git commit -m 'chore: stage {lang}/{edition} data for GHA alignment'")
         print( "  git push")
-        print(f"  # Trigger GHA align-nt workflow: config={args.config}  lang={lang}")
+        print(f"  # Trigger GHA align-nt or align-ot workflow: config={args.config}  lang={lang}")
 
 
 if __name__ == "__main__":

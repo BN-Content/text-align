@@ -36,9 +36,32 @@ _NT_BOOK_NAMES: dict[str, str] = {
     "64": "3 John",  "65": "Jude",    "66": "Rev",
 }
 
+_OT_BOOK_NAMES: dict[str, str] = {
+    "01": "Gen",   "02": "Exod",  "03": "Lev",   "04": "Num",   "05": "Deut",
+    "06": "Josh",  "07": "Judg",  "08": "Ruth",  "09": "1 Sam", "10": "2 Sam",
+    "11": "1 Kgs", "12": "2 Kgs", "13": "1 Chr", "14": "2 Chr", "15": "Ezra",
+    "16": "Neh",   "17": "Esth",  "18": "Job",   "19": "Ps",    "20": "Prov",
+    "21": "Eccl",  "22": "Song",  "23": "Isa",   "24": "Jer",   "25": "Lam",
+    "26": "Ezek",  "27": "Dan",   "28": "Hos",   "29": "Joel",  "30": "Amos",
+    "31": "Obad",  "32": "Jonah", "33": "Mic",   "34": "Nah",   "35": "Hab",
+    "36": "Zeph",  "37": "Hag",   "38": "Zech",  "39": "Mal",
+}
+
+_OT_SECTIONS: dict[str, tuple[str, str]] = {
+    "law":      ("01", "05"),
+    "history":  ("06", "17"),
+    "poetry":   ("18", "22"),
+    "prophets": ("23", "39"),
+}
+
 
 def _chapter_name(chapter_id: str) -> str:
-    book = _NT_BOOK_NAMES.get(chapter_id[:2], chapter_id[:2])
+    book_num = chapter_id[:2]
+    book = (
+        _NT_BOOK_NAMES.get(book_num)
+        or _OT_BOOK_NAMES.get(book_num)
+        or book_num
+    )
     return f"{book} {int(chapter_id[2:])}"
 
 
@@ -236,14 +259,17 @@ def parse_args() -> argparse.Namespace:
     )
     p.add_argument("--config", metavar="NAME",
                    help="Load defaults from configs/<NAME>.yaml")
-    p.add_argument("--corpus", default="nt", choices=["nt"],
+    p.add_argument("--corpus", default="nt", choices=["nt", "ot"],
                    help="Corpus to summarise (default: nt)")
+    p.add_argument("--section", choices=list(_OT_SECTIONS), default=None,
+                   help="OT canonical section (law/history/poetry/prophets); "
+                        "limits summary to that section when provided")
     p.add_argument("--edition", default=None,
                    help="Target edition ID, e.g. BSB")
     p.add_argument("--output-dir", default=None, type=Path,
                    help="Directory containing LLM-REFINED chapter JSON files")
     p.add_argument("--sources-dir", default=_SOURCES_DIR, type=Path,
-                   help=f"Directory containing SBLGNT.tsv (default: {_SOURCES_DIR})")
+                   help=f"Directory containing source TSV files (default: {_SOURCES_DIR})")
     p.add_argument("--markdown", action="store_true",
                    help="Emit GitHub-flavoured markdown (for $GITHUB_STEP_SUMMARY)")
     return p.parse_args()
@@ -252,7 +278,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
-    corpus_id = "SBLGNT"  # only NT supported
+    corpus_id = "WLCM" if args.corpus == "ot" else "SBLGNT"
     edition = args.edition
     output_dir = args.output_dir
 
@@ -272,6 +298,12 @@ def main() -> None:
         raise SystemExit(f"error: output-dir does not exist: {output_dir}")
 
     source_chapters = _load_source_chapters(args.sources_dir, corpus_id)
+    if args.corpus == "ot" and args.section:
+        lo, hi = _OT_SECTIONS[args.section]
+        source_chapters = {
+            ch: vids for ch, vids in source_chapters.items()
+            if lo <= ch[:2] <= hi
+        }
     summary = compute_summary(source_chapters, output_dir, corpus_id, edition)
 
     if args.markdown:

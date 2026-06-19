@@ -68,6 +68,10 @@ Common secondary cases:
 
 - Case-implied preposition — θεοῦ → "de Dieu": "Dieu" primary; "de" secondary (contracted form: see ARTICLES)
 
+- Periphrastic rendering — when a single Greek token is rendered by multiple French words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+  κυριεύει → "exerce son pouvoir sur": "exerce", "pouvoir" primary; "son", "sur" secondary
+  γινώσκουσιν (dative substantive participle) → "à des gens qui connaissent": "connaissent" primary; "à", "des", "gens", "qui" secondary
+
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.

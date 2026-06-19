@@ -43,6 +43,10 @@ Common secondary cases:
   source=[τοῖς], target=["the"] — primary 1:1
   source=[σάββασιν], target=["on", "Sabbath"] — primary: "Sabbath"; secondary: "on"
 
+- Periphrastic rendering — when a single Greek token is rendered by multiple English words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+  κυριεύει → "exercises authority over": "exercises", "authority" primary; "over" secondary
+  γινώσκουσιν (dative substantive participle) → "those who know": "know" primary; "those", "who" secondary
+
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.

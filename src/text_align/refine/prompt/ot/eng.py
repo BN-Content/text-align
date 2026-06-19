@@ -44,6 +44,10 @@ Common secondary cases:
 - Preposition+article merged (בַּ/לַ/כַּ) — English preposition primary; "the" secondary, both to that merged token.
 - Auxiliary verbs for participles ("was sitting") — main verb primary; auxiliary secondary.
 
+- Periphrastic rendering — when a single Hebrew token is rendered by multiple English words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+  מָשַׁל → "exercises dominion over": "exercises", "dominion" primary; "over" secondary
+  שֹׁמֵר (substantive participle) → "the one who keeps": "keeps" primary; "the", "one", "who" secondary
+
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.

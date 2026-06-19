@@ -66,6 +66,10 @@ Common secondary cases:
 
 - Case-implied preposition — θεοῦ → "de Dios": "Dios" primary; "de" secondary (contracted form "del": see ARTICLES)
 
+- Periphrastic rendering — when a single Greek token is rendered by multiple Spanish words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+  κυριεύει → "ejerce dominio sobre": "ejerce", "dominio" primary; "sobre" secondary
+  γινώσκουσιν (dative substantive participle) → "a los que conocen": "conocen" primary; "a", "los", "que" secondary
+
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.

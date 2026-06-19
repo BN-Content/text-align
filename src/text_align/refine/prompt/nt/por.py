@@ -63,6 +63,10 @@ Common secondary cases:
 
 - Case-implied preposition — θεοῦ → "de Deus": "Deus" primary; "de" secondary (contracted form: see ARTICLES)
 
+- Periphrastic rendering — when a single Greek token is rendered by multiple Portuguese words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+  κυριεύει → "exerce domínio sobre": "exerce", "domínio" primary; "sobre" secondary
+  γινώσκουσιν (dative substantive participle) → "aos que conhecem": "conhecem" primary; "aos", "que" secondary
+
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.

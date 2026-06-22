@@ -63,9 +63,11 @@ Common secondary cases:
 
 - Case-implied preposition — θεοῦ → "de Deus": "Deus" primary; "de" secondary (contracted form: see ARTICLES)
 
-- Periphrastic rendering — when a single Greek token is rendered by multiple Portuguese words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+- Periphrastic rendering — when a single Greek token is rendered by multiple Portuguese words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token. This includes any source word encoding multiple semantic components — compound verbs, compound nouns, or morphologically rich stems. Never NEQ a target word that expresses a component of the source word's meaning.
   κυριεύει → "exerce domínio sobre": "exerce", "domínio" primary; "sobre" secondary
   γινώσκουσιν (dative substantive participle) → "aos que conhecem": "conhecem" primary; "aos", "que" secondary
+  καρποφορέω → "dar fruto": "dar", "fruto" both primary
+  φιλαδελφία → "amor fraternal": "amor", "fraternal" both primary
 
 ## NEQ (NON-EQUIVALENT)
 

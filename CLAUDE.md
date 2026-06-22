@@ -77,11 +77,11 @@ compressed. Approximate token budget (all blocks assembled):
 
 | Config | ~tokens |
 |--------|---------|
-| NT eng | 2,993 |
-| NT por | 3,333 |
-| NT spa | 3,318 |
-| NT fra | 4,116 |
-| OT eng | 2,236 |
+| NT eng | 3,274 |
+| NT por | 3,614 |
+| NT spa | 3,599 |
+| NT fra | 4,488 |
+| OT eng | 2,560 |
 
 Current languages: eng, por, spa, fra.
 Planned: Arabic, Chinese Simplified, Chinese Traditional, Hindi, Gujarati,

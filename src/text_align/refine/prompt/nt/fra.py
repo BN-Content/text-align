@@ -68,9 +68,11 @@ Common secondary cases:
 
 - Case-implied preposition — θεοῦ → "de Dieu": "Dieu" primary; "de" secondary (contracted form: see ARTICLES)
 
-- Periphrastic rendering — when a single Greek token is rendered by multiple French words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token.
+- Periphrastic rendering — when a single Greek token is rendered by multiple French words, all words carrying lexical content are primary; purely grammatical connectors (prepositions, relativizers, determiners) are secondary to the same token. This includes any source word encoding multiple semantic components — compound verbs, compound nouns, or morphologically rich stems. Never NEQ a target word that expresses a component of the source word's meaning.
   κυριεύει → "exerce son pouvoir sur": "exerce", "pouvoir" primary; "son", "sur" secondary
   γινώσκουσιν (dative substantive participle) → "à des gens qui connaissent": "connaissent" primary; "à", "des", "gens", "qui" secondary
+  καρποφορέω → "porter du fruit": "porter", "fruit" primary; "du" secondary
+  φιλαδελφία → "amour fraternel": "amour", "fraternel" both primary
 
 ## NEQ (NON-EQUIVALENT)
 
@@ -241,27 +243,27 @@ NEGATION_BLOCK = """\
 ### Standard French negation (ne…X)
 French negation is a discontinuous two-part structure: **ne** (pre-verbal) + a post-verbal negative word (**pas**, **jamais**, **plus**, **rien**, etc.). Together they correspond to a single Greek negation particle (οὐ, οὐκ, οὐχ, μή).
 
-- Both "ne" and the post-verbal word are **primary** to the Greek negation particle — they form a single negation record together.
+- "ne" is **primary** to the Greek negation particle; the post-verbal word (**pas**, **plus**, **jamais**, **rien**, etc.) is **secondary** in the same record — required by French grammar but not a separate Greek correspondent. Never NEQ the post-verbal word.
 - The negated verb gets its own record with auxiliaries and subject pronoun; **do not include "ne" or "pas" in the verb record**.
 - The verb record is discontiguous: "ne" precedes and "pas" follows the verb, but both stay in the negation record.
 - In compound tenses ("il ne l'a pas vu"), "ne" and "pas" are discontiguous across the auxiliary and object clitic — both remain in the negation record.
 
   οὐκ ἔρχεται → "il ne vient pas":
-    source=[οὐκ],     target=["ne", "pas"]  — both primary
+    source=[οὐκ],     target=["ne", "pas"]  — primary: "ne"; secondary.target: ["pas"]
     source=[ἔρχεται], target=["il", "vient"] — primary: "vient"; secondary: "il"
 
 ### Emphatic negation (οὐ μή)
-Both Greek particles + both French words primary in a single record.
+Both Greek particles + both French words primary in a single record (two source tokens justify two primary targets).
   οὐ μή + subjunctive → "ne…jamais [verb]":
     source=[οὐ, μή], target=["ne", "jamais"] — both particles, both words primary
 
-### Compound negation tokens (single Greek token → all French words primary)
-- οὐκέτι/μηκέτι ("no longer") → "ne…plus": both primary
-- οὔπω/μήπω ("not yet") → "ne…pas encore": all primary
-- οὐδέ/μηδέ ("and not"/"neither"/"nor") → "ni" (primary) or "et ne…pas" (all primary)
+### Compound negation tokens (single Greek token → "ne" primary, post-verbal word secondary)
+- οὐκέτι/μηκέτι ("no longer") → "ne…plus": "ne" primary; "plus" secondary
+- οὔπω/μήπω ("not yet") → "ne…pas encore": "ne" primary; "pas", "encore" secondary
+- οὐδέ/μηδέ ("and not"/"neither"/"nor") → "ni" (primary) or "et ne…pas" ("ne" primary, "pas" secondary)
 - οὔτε ("neither…nor") → "ni"
 - οὐδείς/μηδείς ("nobody"/"no one"/"nothing") → "personne"/"rien"/"nul" — primary
-  source=[οὐκέτι], target=["ne", "plus"] — both primary
+  source=[οὐκέτι], target=["ne", "plus"] — primary: "ne"; secondary.target: ["plus"]
 
 ### Negation with negative pronouns
 Negative pronoun (οὐδείς → "personne"/"nul", μηδείς → "rien") primary to its Greek token. "ne" before the verb is retained; "pas" is typically omitted when a strong post-verbal negative is already present.

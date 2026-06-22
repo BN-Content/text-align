@@ -237,80 +237,95 @@ def main() -> None:
             f"{dropped} record(s) dropped, {repaired} record(s) repaired."
         )
 
-    scoring_config = ScoringConfig(
-        retry_threshold=args.score_retry_threshold,
-        semantic_model=args.semantic_model,
-        semantic_threshold=args.semantic_threshold,
-    )
-
-    # Verse-level force-include: these verses are retried regardless of score.
-    forced_verse: str | None = getattr(args, "verse", None)
-    forced_verse_range: list[str] | None = getattr(args, "verse_range", None)
-
-    def _is_forced(vid: str) -> bool:
-        if forced_verse:
-            return vid == forced_verse
-        if forced_verse_range:
-            return forced_verse_range[0] <= vid <= forced_verse_range[1]
-        if forced_verse_set:
-            return vid in forced_verse_set
-        return False
-
-    # Score each chapter file and collect verses that need retry
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]] = {}
     chapter_paths: dict[str, Path] = {}
-    total_verse_count = 0
 
-    for cf in chapter_files:
-        chapter_id = _chapter_id_from_path(cf)
-        verse_scores = score_chapter_file(
-            cf, source_verses, args.target_language, scoring_config,
-            target_verses=target_verses,
+    if forced_verse_set:
+        # Exclusive mode: skip scoring and retry exactly the listed verses.
+        chapter_file_by_id = {_chapter_id_from_path(cf): cf for cf in chapter_files}
+        for vid in sorted(forced_verse_set):
+            cid = vid[:5]
+            if cid in chapter_file_by_id:
+                retry_specs_by_chapter.setdefault(cid, []).append(
+                    VerseRetrySpec(verse_id=vid, chapter_id=cid, uncovered_src_ids=[], uncovered_count=0)
+                )
+                chapter_paths[cid] = chapter_file_by_id[cid]
+            else:
+                print(f"  Warning: no chapter file for verse {vid} (chapter {cid}) — skipped")
+        total_flagged = sum(len(s) for s in retry_specs_by_chapter.values())
+        print(f"  Exclusive verse-list mode: {total_flagged} verse(s) — skipping scoring")
+        used_fallback = False
+    else:
+        scoring_config = ScoringConfig(
+            retry_threshold=args.score_retry_threshold,
+            semantic_model=args.semantic_model,
+            semantic_threshold=args.semantic_threshold,
         )
-        total_verse_count += len(verse_scores)
-        coverage_flagged = {
-            spec.verse_id
-            for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src,
-                                                  target_verses=target_verses)
-        }
-        specs = [
-            VerseRetrySpec(
-                verse_id=vs.verse_id,
-                chapter_id=chapter_id,
-                uncovered_src_ids=[],
-                uncovered_count=0,
-            )
-            for vs in verse_scores
-            if vs.needs_retry or vs.verse_id in coverage_flagged or _is_forced(vs.verse_id)
-        ]
-        if specs:
-            retry_specs_by_chapter[chapter_id] = specs
-            chapter_paths[chapter_id] = cf
 
-    total_flagged = sum(len(s) for s in retry_specs_by_chapter.values())
+        # Verse-level force-include: these verses are retried regardless of score.
+        forced_verse: str | None = getattr(args, "verse", None)
+        forced_verse_range: list[str] | None = getattr(args, "verse_range", None)
+
+        def _is_forced(vid: str) -> bool:
+            if forced_verse:
+                return vid == forced_verse
+            if forced_verse_range:
+                return forced_verse_range[0] <= vid <= forced_verse_range[1]
+            return False
+
+        total_verse_count = 0
+
+        for cf in chapter_files:
+            chapter_id = _chapter_id_from_path(cf)
+            verse_scores = score_chapter_file(
+                cf, source_verses, args.target_language, scoring_config,
+                target_verses=target_verses,
+            )
+            total_verse_count += len(verse_scores)
+            coverage_flagged = {
+                spec.verse_id
+                for spec in find_low_coverage_verses(cf, source_verses, args.min_unaligned_src,
+                                                      target_verses=target_verses)
+            }
+            specs = [
+                VerseRetrySpec(
+                    verse_id=vs.verse_id,
+                    chapter_id=chapter_id,
+                    uncovered_src_ids=[],
+                    uncovered_count=0,
+                )
+                for vs in verse_scores
+                if vs.needs_retry or vs.verse_id in coverage_flagged or _is_forced(vs.verse_id)
+            ]
+            if specs:
+                retry_specs_by_chapter[chapter_id] = specs
+                chapter_paths[chapter_id] = cf
+
+        total_flagged = sum(len(s) for s in retry_specs_by_chapter.values())
+
+        # Fallback to refine model when flagged rate is high enough that targeted
+        # retry with the expensive model is not warranted.
+        flagged_rate = total_flagged / total_verse_count if total_verse_count else 0.0
+        retry_differs = (
+            args.llm_model != args._refine_llm_model
+            or args.llm_provider != args._refine_llm_provider
+        )
+        used_fallback = False
+        if retry_differs and flagged_rate >= args.fallback_threshold:
+            args.llm_provider      = args._refine_llm_provider
+            args.llm_model         = args._refine_llm_model
+            args.reasoning_effort  = args._refine_reasoning_effort
+            args.max_output_tokens = args._refine_max_output_tokens
+            used_fallback = True
+            print(
+                f"\n  Flagged rate {flagged_rate:.1%} >= {args.fallback_threshold:.0%} — "
+                f"falling back to refine model"
+            )
 
     if not retry_specs_by_chapter:
         print("\n  No verses flagged — nothing to retry.")
         return
 
-    # Fallback to refine model when flagged rate is high enough that targeted
-    # retry with the expensive model is not warranted.
-    flagged_rate = total_flagged / total_verse_count if total_verse_count else 0.0
-    retry_differs = (
-        args.llm_model != args._refine_llm_model
-        or args.llm_provider != args._refine_llm_provider
-    )
-    used_fallback = False
-    if retry_differs and flagged_rate >= args.fallback_threshold:
-        args.llm_provider      = args._refine_llm_provider
-        args.llm_model         = args._refine_llm_model
-        args.reasoning_effort  = args._refine_reasoning_effort
-        args.max_output_tokens = args._refine_max_output_tokens
-        used_fallback = True
-        print(
-            f"\n  Flagged rate {flagged_rate:.1%} >= {args.fallback_threshold:.0%} — "
-            f"falling back to refine model"
-        )
     print(
         f"  Using: {args.llm_provider} / {args.llm_model}"
         f"{_effort_str(args.reasoning_effort)}"

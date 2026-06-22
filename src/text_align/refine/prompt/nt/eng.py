@@ -69,8 +69,8 @@ Automated suggestions — no secondary classification, no idiom flags, some wron
 ## ARTICLES
 
 For every Greek article (POS T-*): does it have a direct English correspondent?
-YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ).
-A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition.
+YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ, never omitted).
+A Greek article is NEVER NEQ and NEVER omitted — it never gets its own record; it is always secondary to the noun, adjective, participle, or proper name it modifies. A Greek article NEVER corresponds to a preposition.
 
 ### Branch A — article has an English correspondent
 
@@ -95,6 +95,7 @@ A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition
 
 ### Branch B — no English correspondent → secondary to head
 
+Apply to each article independently; the head is always the word it grammatically modifies.
 - Articular noun, no "the": source=[τήν, χεῖρα], target=["hand"] — primary: "hand"; secondary.source: [τήν]
 - Attributive adjective: secondary to adjective (not noun), each article separately.
   τὴν γῆν τὴν καλήν → "good soil":
@@ -119,7 +120,14 @@ Last resort — always prefer standard records. Function-word-only source record
 
   Wrong:  source=[καὶ, ἐγένετο], target=["Now","it","came","to","pass"], meta.is_idiom: true
   Better: source=[καὶ], target=["Now"] — primary 1:1
-          source=[ἐγένετο], target=["it","came","to","pass"] — primary: "came"; secondary: "it", "to", "pass"\
+          source=[ἐγένετο], target=["it","came","to","pass"] — primary: "came"; secondary: "it", "to", "pass"
+
+  μὴ γένοιτο — optative negation ("God forbid!" / "Certainly not!" / "By no means!"):
+    When no token-level mapping is possible: is_idiom: true.
+      source=[μή, γένοιτο], target=["God","forbid"] — is_idiom: true
+    When the rendering allows granular alignment ("May it never be!"):
+      source=[μή],      target=["never"]         — primary 1:1
+      source=[γένοιτο], target=["may","it","be"] — primary: "be"; secondary: "may","it"\
 """
 
 PASSIVE_BLOCK = """\

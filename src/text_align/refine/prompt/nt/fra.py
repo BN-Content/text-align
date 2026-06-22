@@ -94,8 +94,8 @@ Automated suggestions — no secondary classification, no idiom flags, some wron
 ## ARTICLES
 
 For every Greek article (POS T-*): does it have a specific French word or contracted form as its direct correspondent?
-YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ).
-A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition.
+YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ, never omitted).
+A Greek article is NEVER NEQ and NEVER omitted — it never gets its own record; it is always secondary to the noun, adjective, participle, or proper name it modifies. A Greek article NEVER corresponds to a preposition.
 
 ### Branch A — article has a French correspondent
 
@@ -133,6 +133,7 @@ A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition
 
 ### Branch B — no French correspondent → secondary to head
 
+Apply to each article independently; the head is always the word it grammatically modifies.
 French Bible translations (LS 1910 and modern) omit the article before proper names.
 
 - Articular noun, no article: source=[τήν, χεῖρα], target=["main"] — primary: "main"; secondary.source: [τήν]
@@ -166,7 +167,11 @@ Last resort — always prefer standard records. Function-word-only source record
   καὶ ἐγένετο → "Et il arriva que":
     Wrong:  source=[καὶ, ἐγένετο], target=["Et","il","arriva","que"], meta.is_idiom: true
     Better: source=[καὶ], target=["Et"] — primary 1:1
-            source=[ἐγένετο], target=["il","arriva","que"] — primary: "arriva"; secondary: "il", "que"\
+            source=[ἐγένετο], target=["il","arriva","que"] — primary: "arriva"; secondary: "il", "que"
+
+  μὴ γένοιτο — optative negation ("Loin de là !" / "Certes non !" / "À Dieu ne plaise !"):
+    French translations typically render this as a fixed idiom with no token-level mapping — use is_idiom: true. Only prefer standard records if the translation is literal enough to allow granular alignment (μή → negation; γένοιτο → verb).
+      source=[μή, γένοιτο], target=["Loin","de","là"] — is_idiom: true\
 """
 
 PASSIVE_BLOCK = """\

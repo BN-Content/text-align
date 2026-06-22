@@ -92,8 +92,8 @@ Automated suggestions — no secondary classification, no idiom flags, some wron
 ## ARTICLES
 
 For every Greek article (POS T-*): does it have a specific Spanish word or contracted form as its direct correspondent?
-YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ).
-A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition.
+YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ, never omitted).
+A Greek article is NEVER NEQ and NEVER omitted — it never gets its own record; it is always secondary to the noun, adjective, participle, or proper name it modifies. A Greek article NEVER corresponds to a preposition.
 
 ### Branch A — article has a Spanish correspondent
 
@@ -127,6 +127,7 @@ A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition
 
 ### Branch B — no Spanish correspondent → secondary to head
 
+Apply to each article independently; the head is always the word it grammatically modifies.
 Latin American Spanish Bible translations omit the definite article before proper names (Jesús, Pablo, Pedro). Greek articles before proper names are always secondary to the name — never NEQ.
 
 - Articular noun, no article: source=[τήν, χεῖρα], target=["mano"] — primary: "mano"; secondary.source: [τήN]
@@ -151,7 +152,12 @@ source=[ἄνθρωπος], target=["un", "hombre"] — primary: "hombre"; secon
 
 ## IDIOMS
 meta.is_idiom: true when phrase-level correspondence has no token-level equivalent. All tokens implicitly primary; meta.secondary does not apply.
-Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.\
+Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
+
+  μὴ γένοιτο — optative negation ("¡De ninguna manera!" / "¡Jamás!" / "¡En absoluto!"):
+    When no token-level mapping is possible: is_idiom: true.
+      source=[μή, γένοιτο], target=["De","ninguna","manera"] — is_idiom: true
+    When the rendering permits, prefer granular alignment: μή → negation words; γένοιτο → verb "ser/estar".\
 """
 
 PASSIVE_BLOCK = """\

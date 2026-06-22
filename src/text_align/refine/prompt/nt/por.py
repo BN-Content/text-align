@@ -89,8 +89,8 @@ Automated suggestions — no secondary classification, no idiom flags, some wron
 ## ARTICLES
 
 For every Greek article (POS T-*): does it have a specific Portuguese word or contracted form as its direct correspondent?
-YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ).
-A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition.
+YES → Branch A (primary 1:1). NO → Branch B (secondary to head — never NEQ, never omitted).
+A Greek article is NEVER NEQ and NEVER omitted — it never gets its own record; it is always secondary to the noun, adjective, participle, or proper name it modifies. A Greek article NEVER corresponds to a preposition.
 
 ### Branch A — article has a Portuguese correspondent
 
@@ -130,6 +130,7 @@ A Greek article is NEVER NEQ. A Greek article NEVER corresponds to a preposition
 
 ### Branch B — no Portuguese correspondent → secondary to head
 
+Apply to each article independently; the head is always the word it grammatically modifies.
 - Articular noun, no article: source=[τήν, χεῖρα], target=["mão"] — primary: "mão"; secondary.source: [τήν]
 - Attributive adjective: secondary to adjective (not noun), each article separately.
   τὴν γῆν τὴν καλήν → "boa terra":
@@ -149,7 +150,12 @@ source=[ἄνθρωπος], target=["um", "homem"] — primary: "homem"; seconda
 
 ## IDIOMS
 meta.is_idiom: true when phrase-level correspondence has no token-level equivalent. All tokens implicitly primary; meta.secondary does not apply.
-Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.\
+Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
+
+  μὴ γένοιτο — optative negation ("De modo algum!" / "Nunca!" / "Longe disso!"):
+    When no token-level mapping is possible: is_idiom: true.
+      source=[μή, γένοιτο], target=["De","modo","algum"] — is_idiom: true
+    When the rendering permits, prefer granular alignment: μή → negation words; γένοιτο → verb "ser/estar".\
 """
 
 PASSIVE_BLOCK = """\

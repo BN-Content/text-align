@@ -22,7 +22,7 @@ from-scratch: true
 
 # smaller chunks?
 batch-size: 4
-max-output-tokens: 32000
+max_output_tokens: 32000
 
 # Anthropic
 #llm_provider: anthropic

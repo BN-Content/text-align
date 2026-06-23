@@ -24,7 +24,7 @@ src/text_align/
 ├── align/         # acai-align CLI
 ├── refine/        # refine-alignment + fetch-batch + retry-alignment + score-alignment + clean-alignments CLIs
 │   ├── prompt/          # language-aware prompt system (see below)
-│   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter / Gloo (sync)
+│   ├── llm.py           # LLMClient: OpenAI / Anthropic / Google / OpenRouter / Gloo / Ollama (sync)
 │   ├── async_batch.py   # provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # legacy per-verse source-token coverage evaluation
 │   ├── scoring.py       # composite alignment quality scorer (five signals)
@@ -89,7 +89,7 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 
 ## LLM providers (`refine/llm.py`)
 
-`LLMClient` supports five providers, selected by the `provider` argument:
+`LLMClient` supports six providers, selected by the `provider` argument:
 
 | Provider | Env var | Notes |
 |----------|---------|-------|
@@ -98,10 +98,14 @@ Nepali, Tok Pisin, Bislama, Lingala, Swahili.
 | `google` | `GEMINI_API_KEY` | Gemini 3+ `thinkingLevel` via `ThinkingConfig` |
 | `openrouter` | `OPENROUTER_API_KEY` | OpenAI-compatible proxy to 200+ models (Qwen, Kimi, GLM, …); sync-only; per-call cost tracked in `LLMClient.session_cost` |
 | `gloo` | `GLOO_CLIENT_ID`, `GLOO_CLIENT_SECRET` | Gloo AI Studio; OAuth2 bearer token (1-hr TTL, auto-refreshed); SSE streaming via `requests`; routes to Anthropic/OpenAI/Google; sync-only; no reasoning_effort; model IDs like `gloo-anthropic-claude-sonnet-4.5` |
+| `ollama` | `OLLAMA_BASE_URL` (optional) | Local inference via Ollama's OpenAI-compatible API; default base URL `http://localhost:11434/v1`; sync-only; no reasoning_effort; no async batch |
 
 `reasoning_effort` (none/minimal/low/medium/high) maps to `reasoning_effort` for OpenAI
 and `thinkingLevel` for Google. Omitting it sends no thinking config. Ignored for
-`openrouter` and `gloo` (always use the chat completions path).
+`openrouter`, `gloo`, and `ollama` (always use the chat completions path).
+
+`OLLAMA_BASE_URL` can be set in `.env` to point at any OpenAI-compatible local endpoint
+(e.g. `http://localhost:8080/v1` for `mlx_lm.server`) without code changes.
 
 ## OpenRouter cost tracking (`refine/llm.py`)
 

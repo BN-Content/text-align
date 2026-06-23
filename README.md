@@ -27,7 +27,7 @@ target_language: eng          # ISO 639-3 code
 target_edition: MYBIBLE
 alignments_root: /path/to/alignments-repo   # parent of alignments-eng/, alignments-spa/, etc.
 from_scratch: true            # align without pre-existing candidates
-llm_provider: gloo            # or openai / anthropic / google / openrouter
+llm_provider: gloo            # or openai / anthropic / google / openrouter / ollama
 llm_model: gloo-anthropic-claude-sonnet-4.5
 ```
 
@@ -181,7 +181,7 @@ src/text_align/
 │   │   │   ├── core.py  #     Registry, phenomenon detection, OT prompt assembly
 │   │   │   └── eng.py   #     English (auto-registered)
 │   │   └── __init__.py  #   Public API re-export
-│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter / Gloo)
+│   ├── llm.py           # Provider-agnostic LLM call layer (OpenAI / Anthropic / Google / OpenRouter / Gloo / Ollama)
 │   ├── async_batch.py   # Provider batch-API helpers (Google, OpenAI, Anthropic)
 │   ├── coverage.py      # Per-verse source-token coverage evaluation (legacy)
 │   ├── scoring.py       # Composite alignment quality scorer (five signals + semantic flag)
@@ -251,7 +251,7 @@ Two helper scripts support a transitory data strategy for GHA runs, where only t
 
 #### `refine-alignment`
 
-Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, OpenRouter, or Gloo). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
+Refine alignment candidates using an LLM (OpenAI, Anthropic, Google, OpenRouter, Gloo, or Ollama). Reads candidate files from the `exp/` directory, assembles a structured prompt with source and target tokens, and writes refined SB 0.4 alignment JSON applying the alignment-principles guidelines (primary/secondary, idiom flags, NEQ).
 
 Output is **one file per chapter**: `SBLGNT-<edition>-<BB>-<CCC>-manual.json` (NT) or `WLCM-<edition>-<BB>-<CCC>-manual.json` (OT). For example, Mark 3 produces `SBLGNT-OENGB-41-003-manual.json`.
 
@@ -261,6 +261,7 @@ Requires the appropriate credentials in the environment:
 - `GEMINI_API_KEY` for Google Gemini models
 - `OPENROUTER_API_KEY` for OpenRouter (access to Qwen, Kimi, GLM, Mistral, and 200+ other models via a single account)
 - `GLOO_CLIENT_ID` + `GLOO_CLIENT_SECRET` for Gloo AI Studio (routes to Anthropic/OpenAI/Google)
+- No credentials required for Ollama (local); set `OLLAMA_BASE_URL` to override the default `http://localhost:11434/v1`
 
 ```
 refine-alignment \
@@ -271,13 +272,14 @@ refine-alignment \
   [--alignment-sources ACAI SIM-MIGRATED DIFF-MIGRATED MERGED FASTALIGN] \
   [--from-scratch]               # align without candidates
   [--corpora ot nt] \            # --corpus is accepted as an alias
-  [--llm-provider openai]        # openai | anthropic | google | openrouter | gloo
+  [--llm-provider openai]        # openai | anthropic | google | openrouter | gloo | ollama
   [--llm-model gpt-5.4-mini] \  #   openrouter: any model slug, e.g. qwen/qwen3-235b-a22b
                                  #   gloo: model ID, e.g. gloo-anthropic-claude-sonnet-4.5
+                                 #   ollama: any model tag installed locally, e.g. qwen3:30b-a3b
   [--reasoning-effort high]      # none/minimal/low/medium/high
                                  #   OpenAI gpt-5.x → reasoning_effort (Responses API)
                                  #   Google gemini-3+ → thinkingLevel (ThinkingConfig)
-                                 #   ignored for openrouter and gloo (always uses chat completions)
+                                 #   ignored for openrouter, gloo, and ollama (always uses chat completions)
   [--batch-size 5] \
   [--max-retries 2] \
   [--max-api-retries 4]          # retries on 429/503/ChunkedEncodingError with exponential backoff
@@ -361,11 +363,30 @@ refine-alignment --config OENGB --chapter 41003 \
 
 Credentials are available from the [Gloo AI Studio dashboard](https://studio.ai.gloo.com).
 
+##### Ollama (local, sync only)
+
+[Ollama](https://ollama.com) runs models locally and exposes an OpenAI-compatible API. No API credentials are required. Install Ollama, pull a model, and pass `--llm-provider ollama` with the model tag.
+
+The default base URL is `http://localhost:11434/v1`. To point at a different OpenAI-compatible local server (e.g. `mlx_lm.server` for faster Apple Silicon inference), set `OLLAMA_BASE_URL` in your `.env` file — no code changes needed.
+
+Validate tool-call reliability with a single-verse smoke test before committing to a full chapter run:
+
+```bash
+# Pull a model (one-time setup)
+ollama pull qwen3.6:35b
+
+# Smoke test: Mark 4:3
+refine-alignment --config OENGB --verse 41004003 \
+  --llm-provider ollama --llm-model qwen3.6:35b
+```
+
+Async batch mode is not supported for Ollama — use `--batch-mode sync` (the default).
+
 ##### Async batch mode
 
 Pass `--batch-mode async` to submit all LLM calls to the provider's Batch API (~50% cost reduction, up to 24h turnaround) instead of making synchronous requests. The job is submitted and a metadata file is written to `--jobs-dir` (default `jobs/{provider}/`); the process then exits. Retrieve results with `fetch-batch`.
 
-Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter` or `gloo`** — use `--batch-mode sync` with those providers.
+Supported for: `google`, `openai`, `anthropic`. **Not supported for `openrouter`, `gloo`, or `ollama`** — use `--batch-mode sync` with those providers.
 
 ```bash
 # Submit (Google)
@@ -486,7 +507,7 @@ retry-alignment \
   --target-edition OENGB \
   --target-tsv-dir path/to/alignments-eng/data/targets/OENGB \
   [--sources-dir data/sources/] \
-  [--llm-provider anthropic]          # openai | anthropic | google | openrouter | gloo (default: anthropic)
+  [--llm-provider anthropic]          # openai | anthropic | google | openrouter | gloo | ollama (default: anthropic)
   [--llm-model claude-opus-4-7] \
   [--reasoning-effort high] \
   [--score-retry-threshold 0.25] \    # composite penalty threshold (default: 0.25)
@@ -622,7 +643,7 @@ Group-level extensions (in `meta` on the group, alongside `creator` and `conform
 |-------|------|---------|
 | `meta.nonEquivalent.source` | `string[]` | Source token IDs positively determined to have no translation equivalent |
 | `meta.nonEquivalent.target` | `string[]` | Target token IDs positively determined to have no source correspondent |
-| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`, `gloo`) |
+| `meta.llm.provider` | `string` | LLM provider used by `refine-alignment` (`openai`, `anthropic`, `google`, `openrouter`, `gloo`, `ollama`) |
 | `meta.llm.model` | `string` | Model name, e.g. `gpt-5.4-mini` |
 | `meta.llm.reasoning_effort` | `string` | Reasoning effort level if set, e.g. `high` |
 | `meta.retry_llm.provider` | `string` | Provider used by `retry-alignment` (only present when a retry pass has run) |

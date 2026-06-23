@@ -1,8 +1,8 @@
 """Provider-agnostic LLM call layer for refine-alignment.
 
-Supports OpenAI, Anthropic, Google (Gemini), OpenRouter, and Gloo.  Provider
-packages are imported lazily so only the package for the active provider needs
-to be installed.
+Supports OpenAI, Anthropic, Google (Gemini), OpenRouter, Gloo, and Ollama.
+Provider packages are imported lazily so only the package for the active
+provider needs to be installed.
 
 Environment variables:
     OPENAI_API_KEY        — required when provider is "openai"
@@ -11,6 +11,7 @@ Environment variables:
     OPENROUTER_API_KEY    — required when provider is "openrouter"
     GLOO_CLIENT_ID        — required when provider is "gloo"
     GLOO_CLIENT_SECRET    — required when provider is "gloo"
+    OLLAMA_BASE_URL       — base URL for provider "ollama" (default: http://localhost:11434/v1)
 """
 
 import base64
@@ -604,10 +605,10 @@ class LLMClient:
         temperature: float = 1,
         max_output_tokens: int = 4000,
     ) -> None:
-        if provider not in ("openai", "anthropic", "google", "openrouter", "gloo"):
+        if provider not in ("openai", "anthropic", "google", "openrouter", "gloo", "ollama"):
             raise ValueError(
                 f"Unknown provider {provider!r}. "
-                f"Use 'openai', 'anthropic', 'google', 'openrouter', or 'gloo'."
+                f"Use 'openai', 'anthropic', 'google', 'openrouter', 'gloo', or 'ollama'."
             )
         self.provider = provider
         self.model = model
@@ -652,6 +653,13 @@ class LLMClient:
                     "GLOO_CLIENT_ID and GLOO_CLIENT_SECRET must be set for provider 'gloo'."
                 )
             return _GlooAuth(client_id, client_secret)
+        elif self.provider == "ollama":
+            try:
+                import openai
+            except ImportError:
+                raise ImportError("Install the openai package: poetry add openai")
+            base_url = os.environ.get("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            return openai.OpenAI(base_url=base_url, api_key="ollama")
         else:
             try:
                 from google import genai
@@ -707,7 +715,7 @@ class LLMClient:
             that remained after all retries, and ``san_details`` is a list of
             human-readable strings describing each sanitization event.
         """
-        if self.provider in ("openai", "openrouter"):
+        if self.provider in ("openai", "openrouter", "ollama"):
             return self._call_openai(
                 system_prompt, user_message, verse_source_ids, verse_target_ids,
                 verse_token_maps, max_retries
@@ -741,7 +749,7 @@ class LLMClient:
         verse_token_maps: dict[str, tuple[dict[int, str], dict[int, str]]] | None,
         max_retries: int,
     ) -> tuple[dict[str, list[dict]], list[str], list[str]]:
-        if self.reasoning_effort is not None and self.provider != "openrouter":
+        if self.reasoning_effort is not None and self.provider not in ("openrouter", "ollama"):
             return self._call_openai_responses(
                 system_prompt, user_message, verse_source_ids, verse_target_ids,
                 verse_token_maps, max_retries

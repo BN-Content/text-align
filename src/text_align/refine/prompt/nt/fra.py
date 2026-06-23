@@ -52,7 +52,7 @@ primary — direct lexical or semantic connection to the Greek token
 secondary — exists only because of grammatical features in the Greek token's morphology (person, number, case, aspect, voice); no separate Greek word
 other Greek token → separate record
 
-Structural constraints: every record ≥1 primary per populated side; each target token ID in exactly one record per verse.
+Structural constraints: every record ≥1 primary per populated side; a lone token on a side cannot be secondary; each target token ID in exactly one record per verse.
 
 Common secondary cases:
 
@@ -77,7 +77,7 @@ Common secondary cases:
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.
-Unrecorded = correspondence undetermined. NEQ records must not include meta.secondary.
+Unrecorded = correspondence not determined (normal). NEQ records must not include meta.secondary.
 
 - Certain no correspondent → NEQ (source or target empty, meta.rel: "NEQ")
 - Uncertain → leave unrecorded
@@ -162,7 +162,7 @@ No Greek article token exists. Two cases:
 
 ## IDIOMS
 meta.is_idiom: true when phrase-level correspondence has no token-level equivalent. All tokens implicitly primary; meta.secondary does not apply.
-Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
+Last resort — always prefer standard records, even with loose primary matches. Use idiom only when no plausible token-level decomposition exists. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
 
   καὶ ἐγένετο → "Et il arriva que":
     Wrong:  source=[καὶ, ἐγένετο], target=["Et","il","arriva","que"], meta.is_idiom: true
@@ -216,7 +216,7 @@ When rendered as "en" + present participle: "en" primary to governing prepositio
     source=[τῷ, σπείρειν], target=["semant"] — primary: "semant"; secondary.source: [τῷ]
 
 ### Indirect discourse
-Supplied "que" → secondary to governing verb.
+Supplied "que" → secondary to governing verb — not to the infinitive.
   λέγει αὐτὸν εἶναι → "dit qu'il est":
     source=[λέγει],  target=["dit"]
     source=[αὐτόν], target=["il"]

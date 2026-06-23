@@ -466,25 +466,24 @@ NEGATION_BLOCK = """\
 
 French negation is a discontinuous two-part structure: **ne** (placed before the verb
 or auxiliary) + a post-verbal negative word (**pas**, **jamais**, **plus**, **rien**,
-etc.). Together they form the French negation unit corresponding to a single Greek
-negation particle.
+etc.). Together they correspond to a single Greek negation particle (οὐ, οὐκ, οὐχ, μή).
 
-When a Greek negation particle (οὐ, οὐκ, οὐχ, μή) is rendered as "ne…pas":
-- Both **"ne"** and **"pas"** are **primary** to the Greek negation particle — together
-  they constitute the French negation equivalent.
-- The negated verb aligns to its French correspondent (main verb + auxiliaries)
-  **without** "ne" or "pas".
-- The verb record is **discontiguous**: "ne" precedes the verb and "pas" follows it,
-  so the verb record spans non-adjacent tokens. Both "ne" and "pas" belong to the
-  negation record, not the verb record.
-- In compound tenses ("il ne l'a pas vu"), "ne" and "pas" are themselves discontiguous
-  across the auxiliary and object clitic — both remain in the negation record.
+**"ne"** is **primary** to the Greek negation particle — it is the etymological negator
+and the direct correspondent of the Greek particle. The post-verbal word (**pas**, etc.)
+is **secondary** in the same record: French grammar requires it, but it has no separate
+Greek source token and carries no independent lexical content beyond marking the negation
+already expressed by "ne" and the Greek particle. Never NEQ the post-verbal word.
 
-Do not include "ne" or "pas" as secondary tokens in the verb record. They have their
-own source token and belong in the negation record.
+The negated verb aligns to its French correspondent (main verb + auxiliaries) without
+"ne" or "pas". The verb record is **discontiguous**: "ne" precedes the verb and "pas"
+follows it, but both stay in the negation record — do not include either in the verb
+record.
+
+In compound tenses ("il ne l'a pas vu"), "ne" and "pas" are themselves discontiguous
+across the auxiliary and object clitic; both remain in the negation record.
 
 Example — οὐκ ἔρχεται → "il ne vient pas":
-  source=[οὐκ],     target=["ne", "pas"]   — both primary
+  source=[οὐκ],     target=["ne", "pas"]  — primary: "ne"; secondary.target: ["pas"]
   source=[ἔρχεται], target=["il", "vient"]
     primary: "vient";  secondary: "il"
     (discontiguous — "ne" and "pas" bracket "vient" but belong to the negation record)
@@ -492,8 +491,10 @@ Example — οὐκ ἔρχεται → "il ne vient pas":
 ### Emphatic negation
 
 οὐ μή + subjunctive expresses strong emphatic negation. French renders it as
-"ne…jamais", "ne…point", or "absolument pas". Both Greek particles and both French
-words are **primary** in a single record.
+"ne…jamais", "ne…point", or similar. Here there are **two** Greek source tokens, which
+justifies **two** primary French targets: both "ne" and the post-verbal word are primary.
+This differs from simple negation (one source token) where the post-verbal word is
+secondary.
 
 Example — οὐ μή + subjunctive verb → "ne…jamais [verb]":
   source=[οὐ, μή],  target=["ne", "jamais"] — both particles, both words primary
@@ -503,17 +504,18 @@ Example — οὐ μή + subjunctive verb → "ne…jamais [verb]":
 ### Compound negation tokens
 
 Some Greek forms are single tokens encoding negation together with another element.
-All French words in the rendered phrase are **primary** to the single Greek token:
+Because there is only one source token, align "ne" as primary and the post-verbal
+word as secondary — the same pattern as simple negation:
 
-- οὐκέτι/μηκέτι ("no longer") → "ne…plus": both "ne" and "plus" primary
-- οὔπω/μήπω ("not yet") → "ne…pas encore": all words primary
-- οὐδέ/μηδέ ("and not", "neither", "nor") → "ni" (single token, primary) or
-  "et ne…pas" (all primary)
+- οὐκέτι/μηκέτι ("no longer") → "ne…plus": "ne" primary; "plus" secondary
+- οὔπω/μήπω ("not yet") → "ne…pas encore": "ne" primary; "pas", "encore" secondary
+- οὐδέ/μηδέ ("and not", "neither", "nor") → "ni" (primary) or "et ne…pas"
+  ("ne" primary, "pas" secondary)
 - οὔτε ("neither…nor", correlative) → "ni"
 - οὐδείς/μηδείς ("nobody", "no one", "nothing") → "personne"/"rien"/"nul" — primary
 
 Example — οὐκέτι → "ne…plus":
-  source=[οὐκέτι], target=["ne", "plus"] — both primary
+  source=[οὐκέτι], target=["ne", "plus"] — primary: "ne"; secondary.target: ["plus"]
 
 ### Negation with negative pronouns
 

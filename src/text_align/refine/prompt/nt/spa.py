@@ -51,7 +51,7 @@ primary — direct lexical or semantic connection to the Greek token
 secondary — exists only because of grammatical features in the Greek token's morphology (person, number, case, aspect, voice); no separate Greek word
 other Greek token → separate record
 
-Structural constraints: every record ≥1 primary per populated side; each target token ID in exactly one record per verse.
+Structural constraints: every record ≥1 primary per populated side; a lone token on a side cannot be secondary; each target token ID in exactly one record per verse.
 
 Common secondary cases:
 
@@ -75,7 +75,7 @@ Common secondary cases:
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.
-Unrecorded = correspondence undetermined. NEQ records must not include meta.secondary.
+Unrecorded = correspondence not determined (normal). NEQ records must not include meta.secondary.
 
 - Certain no correspondent → NEQ (source or target empty, meta.rel: "NEQ")
 - Uncertain → leave unrecorded
@@ -152,7 +152,7 @@ source=[ἄνθρωπος], target=["un", "hombre"] — primary: "hombre"; secon
 
 ## IDIOMS
 meta.is_idiom: true when phrase-level correspondence has no token-level equivalent. All tokens implicitly primary; meta.secondary does not apply.
-Last resort — always prefer standard records. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
+Last resort — always prefer standard records, even with loose primary matches. Use idiom only when no plausible token-level decomposition exists. Function-word-only source records (POS C-*, X-*, prepositions) are never idioms.
 
   μὴ γένοιτο — optative negation ("¡De ninguna manera!" / "¡Jamás!" / "¡En absoluto!"):
     When no token-level mapping is possible: is_idiom: true.
@@ -194,7 +194,7 @@ Article secondary to infinitive (never NEQ); absorbed into "al" when applicable 
     source=[σπείρειν], target=["sembrar"] — primary 1:1
 
 ### Indirect discourse
-Supplied "que" introducing indirect statement → secondary to governing verb.
+Supplied "que" introducing indirect statement → secondary to governing verb — not to the infinitive.
   λέγει αὐτὸν εἶναι → "dice que él es":
     source=[λέγει],  target=["dice"]
     source=[αὐτόν], target=["él"]

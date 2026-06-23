@@ -34,7 +34,7 @@ primary — direct lexical or semantic connection to the Hebrew token
 secondary — exists because of Hebrew grammar with no separate source token (construct relation, verbal morphology, merged definiteness)
 other Hebrew token → separate record
 
-Structural constraints: every record ≥1 primary per populated side; each target token ID in exactly one record per verse.
+Structural constraints: every record ≥1 primary per populated side; a lone token on a side cannot be secondary; each target token ID in exactly one record per verse.
 
 Common secondary cases:
 - Supplied subject pronoun — no Hebrew pronoun token; person/gender/number encoded in verb ending.
@@ -53,7 +53,7 @@ Common secondary cases:
 ## NEQ (NON-EQUIVALENT)
 
 NEQ = positive claim that no correspondence exists. Never use as fallback for uncertainty.
-Unrecorded = correspondence undetermined. NEQ records must not include meta.secondary.
+Unrecorded = correspondence not determined (normal). NEQ records must not include meta.secondary.
 
 - Certain no correspondent → NEQ (source or target empty, meta.rel: "NEQ")
 - Uncertain → leave unrecorded
@@ -72,6 +72,7 @@ Tense, voice, number, aspect, and verbal stem (binyan) differences do not preven
 
 ## GRANULARITY
 Prefer one record per source token — split rather than group. Create separate records whenever source tokens (or word-parts) can each independently map to distinct target tokens. Combine into N:M records only when tokens form an inseparable semantic unit (idiom) or target words cannot be individually assigned to separate source tokens. When in doubt, split.
+Leaving tokens unrecorded when no genuine correspondence exists is deliberate — not a failure.
 Grammar-required translation words (pronominal suffix, construct-chain particle ["of"], modal helpers for verbal morphology ["could," "might," "would"], implied article) are secondary to the source token or word-part whose grammar requires them — not NEQ. NEQ is for words with no source-language grammatical anchor.
 
 ## ARTICLES
@@ -104,7 +105,7 @@ Align content words first; conjunctions and particles are residual.
 
 ## IDIOMS
 meta.is_idiom: true when phrase-level correspondence has no token-level equivalent. All tokens implicitly primary; meta.secondary does not apply.
-Last resort — always prefer standard records. Function-word-only source units are never idioms.\
+Last resort — always prefer standard records, even with loose primary matches. Use idiom only when no plausible token-level decomposition exists. Function-word-only source units are never idioms — they have individual correspondences or NEQ determinations.\
 """
 
 PRONOMINAL_SUFFIX_BLOCK = """\

@@ -178,15 +178,15 @@ jobs:
           mkdir -p /tmp/job-output
           LANG="${{ needs.plan.outputs.lang }}"
           SRC="data/alignments/alignments-${LANG}/exp/${{ inputs.config }}/LLM-REFINED"
-          START=${{ matrix.start }}
-          END=${{ matrix.end }}
+          START=$(( 10#${{ matrix.start }} ))
+          END=$(( 10#${{ matrix.end }} ))
           for f in "$SRC"/WLCM-*.json; do
             [[ -f "$f" ]] || continue
             base=$(basename "$f")
             book=$(echo "$base" | cut -d- -f3)
             chap=$(echo "$base" | cut -d- -f4)
-            chap_id="${book}${chap}"
-            [[ "$chap_id" -ge "$START" && "$chap_id" -le "$END" ]] && cp "$f" /tmp/job-output/
+            chap_num=$(( 10#${book}${chap} ))
+            [[ chap_num -ge START && chap_num -le END ]] && cp "$f" /tmp/job-output/
           done
           echo "Collected $(ls /tmp/job-output | wc -l) file(s)"
       - name: Upload chapter artifacts

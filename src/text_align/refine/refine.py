@@ -12,6 +12,7 @@ CLI entry point: refine-alignment
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
 from typing import Any
 
@@ -773,6 +774,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    _start = time.time()
 
     # output_dir = exp_dir / output_suffix; recover exp_dir for candidate lookup
     exp_dir = args.output_dir.parent
@@ -835,6 +837,8 @@ def main() -> None:
 
     if args.llm_provider == "openrouter" and llm_client.session_cost:
         print(f"\nOpenRouter session cost: ${llm_client.session_cost:.4f}")
+    elapsed = time.time() - _start
+    print(f"  Elapsed:   {elapsed // 3600:.0f}h {elapsed % 3600 // 60:.0f}m {elapsed % 60:.0f}s")
 
 
 if __name__ == "__main__":

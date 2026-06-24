@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 
 from text_align import ROOT
@@ -194,6 +195,7 @@ def _write_retry_sidecars(
 
 def main() -> None:
     args = parse_args()
+    _start = time.time()
     corpus_id = _CORPUS_ID[args.corpus]
 
     print(f"retry-alignment: {args.target_edition} ({args.target_language})")
@@ -363,6 +365,8 @@ def main() -> None:
 
     if args.llm_provider == "openrouter" and llm_client.session_cost:
         print(f"\nOpenRouter session cost: ${llm_client.session_cost:.4f}")
+    elapsed = time.time() - _start
+    print(f"  Elapsed:   {elapsed // 3600:.0f}h {elapsed % 3600 // 60:.0f}m {elapsed % 60:.0f}s")
 
     if used_fallback:
         sys.exit(2)

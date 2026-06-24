@@ -66,10 +66,12 @@ _NEUTRAL_TOOL_SCHEMA: dict = {
                                     "source": {
                                         "type": "array",
                                         "items": {"type": "integer"},
+                                        "description": "Source token IDs (integers from the token list — not word strings).",
                                     },
                                     "target": {
                                         "type": "array",
                                         "items": {"type": "integer"},
+                                        "description": "Target token IDs (integers from the token list — not word strings).",
                                     },
                                     "meta": {
                                         "type": "object",
@@ -80,10 +82,12 @@ _NEUTRAL_TOOL_SCHEMA: dict = {
                                                     "source": {
                                                         "type": "array",
                                                         "items": {"type": "integer"},
+                                                        "description": "Source token IDs (integers — not word strings).",
                                                     },
                                                     "target": {
                                                         "type": "array",
                                                         "items": {"type": "integer"},
+                                                        "description": "Target token IDs (integers — not word strings).",
                                                     },
                                                 },
                                             },
@@ -755,6 +759,8 @@ class LLMClient:
                 verse_token_maps, max_retries
             )
 
+        if self.provider == "ollama":
+            user_message = "/no_think\n" + user_message
         messages: list[dict] = [
             {"role": "system", "content": system_prompt},
             {"role": "user",   "content": user_message},

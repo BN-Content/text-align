@@ -24,16 +24,27 @@ batch-size: 4
 max_output_tokens: 32000
 
 # OpenAI
-llm_provider: openai
-llm_model: gpt-5-mini
+#llm_provider: openai
+#llm_model: gpt-5-mini
 #llm_model: gpt-4.1-mini
 #llm_model: gpt-5.4
 #llm_model: gpt-5.4-mini
-reasoning_effort: high
-# Gloo
-#llm_provider: gloo
 #reasoning_effort: high
+# Gloo
+llm_provider: gloo
+reasoning_effort: high
+llm_model: gloo-google-gemini-2.5-flash # decent?
 #llm_model: gloo-deepseek-v4-pro # decent (better than not bad)
+#reasoning_effort: high
+#llm_model: gloo-openai-gpt-5-mini
+#max_output_tokens: 32000
+
+# Ollama (local)
+#llm_provider: ollama
+#llm_model: qwen3.6:35b
+#llm_model: qwen2.5:32b
+#llm_model: deepseek-r1:32b
+#reasoning_effort: high
 
 # ---------------------------------------------------------------------------
 # retry-alignment settings
@@ -46,9 +57,11 @@ fallback_threshold: 0.30
 # reasoning_effort values above. Set these to use a different (typically better)
 # model for the retry pass than the initial refine pass.
 retry_reasoning_effort: high
-retry_llm_provider: gloo
-retry_llm_model: gloo-anthropic-claude-opus-4.7
+#retry_llm_provider: gloo
+#retry_llm_model: gloo-anthropic-claude-opus-4.7
 retry_max_output_tokens: 32000
+retry_llm_provider: gloo
+retry_llm_model: gloo-google-gemini-3.5-flash # decent?
 
 # Alignment quality scoring threshold for retry-alignment and score-alignment.
 # Verses with a composite penalty score above this value are flagged for retry.

@@ -108,8 +108,8 @@ fallback_threshold: 0.30
 #retry_llm_model: gpt-5.5
 #retry_reasoning_effort: high
 retry_llm_provider: gloo
-#retry_llm_model: gloo-google-gemini-3.1-pro
-retry_llm_model: gloo-anthropic-claude-opus-4.7
+retry_llm_model: gloo-google-gemini-3.1-pro
+#retry_llm_model: gloo-anthropic-claude-opus-4.7
 #retry_llm_model: gloo-google-gemini-3.5-flash # decent (better than not bad)
 retry_max_output_tokens: 32000
 # Alignment quality scoring threshold for retry-alignment and score-alignment.

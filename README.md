@@ -463,10 +463,13 @@ Range filtering (`--book`, `--book-range`, `--chapter`, `--chapter-range`) works
 
 Scores alignment quality for existing chapter JSON files and writes a per-verse TSV report. Does **not** call the LLM — use this between `refine-alignment` and `retry-alignment` to inspect quality and tune the retry threshold before committing to API spend.
 
-Each verse receives a composite penalty score (0–1, higher = worse) from five signals: weighted source-token coverage, translation content-word coverage, NEQ overuse, token smearing (N:M records where both sides have multiple primary tokens), and per-verse deviation from chapter mean.
+Each verse receives a composite penalty score (0–1, higher = worse) from five signals: weighted source-token coverage, translation content-word coverage, NEQ overuse, token smearing, and per-verse deviation from chapter mean.
 
-In addition to the composite score, two post-hoc checks flag verses unconditionally:
+**Token smearing (signal 4):** flags N:M records where both sides have more than one *independent* primary token and no `is_idiom` marker. Articles, conjunctions, particles, and Hebrew pronominal suffixes are excluded from the independent-primary count — grouping a determiner with its noun is expected, but grouping a preposition with a noun (or two nouns together) is not. A `prep`+`det`+`noun` record still fires because the preposition and noun remain independent after the determiner is excluded.
+
+In addition to the composite score, three post-hoc checks flag verses unconditionally:
 - **`article_neq`** — articles (Greek definite article, Hebrew article) that appear in the NEQ list are always a mistake and force `needs_retry=True`.
+- **`smear_forced_retry`** — when signal 4 exceeds `--smear-forced-retry-threshold` (default 0.22), the verse is forced `needs_retry=True` regardless of composite score. This catches verses where smearing is the only quality problem and coverage is otherwise clean.
 - **`semantic_low_sim`** — for content-word (noun/verb/adjective) alignment records, embeds the source English gloss and target word text using LaBSE and flags records below `--semantic-threshold` (default 0.35). Any verse with at least one such record is forced `needs_retry=True`. Requires `--target-tsv-dir`.
 
 Flagging uses the same dual logic as `retry-alignment`: a verse is marked `needs_retry=True` when either (a) composite score > `--score-retry-threshold`, or (b) the verse has ≥ `--min-unaligned-src` uncovered source tokens. The `coverage_flagged` column distinguishes which verses were caught by condition (b).

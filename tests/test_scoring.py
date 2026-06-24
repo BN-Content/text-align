@@ -229,6 +229,57 @@ class TestSignal4:
         vs_gap = score_verse(VID, rec_gap, set(), set(), src, set(), None, "eng", CONFIG)
         assert vs_adj.signal_4 > vs_gap.signal_4
 
+    # -- POS-aware bound-morpheme exclusions ----------------------------------
+
+    def test_det_noun_not_smearing(self):
+        """NT article (det) + noun grouped together is legitimate — not smearing."""
+        records = [_rec(["40001001001", "40001001002"], ["40001001001", "40001001002"])]
+        src = [_src("40001001001", "det"), _src("40001001002", "noun")]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 == 0.0
+
+    def test_conj_noun_not_smearing(self):
+        """NT conjunction + noun grouped together is not smearing."""
+        records = [_rec(["40001001001", "40001001002"], ["40001001001", "40001001002"])]
+        src = [_src("40001001001", "conj"), _src("40001001002", "noun")]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 == 0.0
+
+    def test_prep_noun_still_smearing(self):
+        """NT prep + noun grouped together is smearing — prepositions are independent."""
+        records = [_rec(["40001001001", "40001001002"], ["40001001001", "40001001002"])]
+        src = [_src("40001001001", "prep"), _src("40001001002", "noun")]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 > 0.0
+
+    def test_prep_det_noun_still_smearing(self):
+        """NT prep+det+noun: det is excluded but prep+noun remain — still smearing."""
+        records = [_rec(
+            ["40001001001", "40001001002", "40001001003"],
+            ["40001001001", "40001001002"],
+        )]
+        src = [
+            _src("40001001001", "prep"),
+            _src("40001001002", "det"),
+            _src("40001001003", "noun"),
+        ]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 > 0.0
+
+    def test_ot_particle_not_smearing(self):
+        """OT particle (full-word POS code) + noun is not smearing."""
+        records = [_rec(["40001001001", "40001001002"], ["40001001001", "40001001002"])]
+        src = [_src("40001001001", "particle"), _src("40001001002", "noun")]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 == 0.0
+
+    def test_ot_suffix_not_smearing(self):
+        """OT pronominal suffix grouped with its host noun is not smearing."""
+        records = [_rec(["40001001001", "40001001002"], ["40001001001", "40001001002"])]
+        src = [_src("40001001001", "noun"), _src("40001001002", "suffix")]
+        vs = score_verse(VID, records, set(), set(), src, set(), None, "eng", CONFIG)
+        assert vs.signal_4 == 0.0
+
 
 # ---------------------------------------------------------------------------
 # Article NEQ flag
@@ -260,6 +311,19 @@ class TestScoreChapter:
         vs = VerseScore(verse_id=VID, signal_1=1.0, signal_2=0.0, signal_3=0.0, signal_4=0.0)
         score_chapter([vs], CONFIG)
         assert vs.composite == pytest.approx(CONFIG.w1 * 1.0)
+
+    def test_high_smearing_forces_retry_below_composite_threshold(self):
+        """signal_4 above smear_forced_retry_threshold triggers retry even if composite is low."""
+        vs = VerseScore(verse_id=VID, signal_4=0.30)  # composite = w4*0.30 = 0.12, below 0.25
+        score_chapter([vs], CONFIG)
+        assert vs.composite < CONFIG.retry_threshold
+        assert vs.needs_retry
+
+    def test_low_smearing_does_not_force_retry(self):
+        """signal_4 below smear_forced_retry_threshold does not force retry on its own."""
+        vs = VerseScore(verse_id=VID, signal_4=0.20)
+        score_chapter([vs], CONFIG)
+        assert not vs.needs_retry
 
     def test_needs_retry_when_composite_above_threshold(self):
         config = ScoringConfig(w1=1.0, w2=0.0, w3=0.0, w4=0.0, retry_threshold=0.5)

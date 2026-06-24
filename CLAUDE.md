@@ -395,16 +395,29 @@ have `needs_retry=True`.
 | 1 | Weighted source coverage | Unaligned source tokens, weighted by POS (verb/noun=1.0 … article=0.1) |
 | 2 | Translation content-word coverage | Target words not in any record and not NEQ (stop-words excluded) |
 | 3 | NEQ overuse | NEQ rate above a per-language baseline (default 10%) |
-| 4 | Token smearing | N:M records where both sides have >1 primary and no `is_idiom` flag |
+| 4 | Token smearing | N:M records where both sides have >1 independent primary and no `is_idiom` flag |
 | 5 | Per-verse deviation | Verses anomalously worse than the chapter mean (second pass) |
 
 Signals 1–4 are computed per verse; signal 5 requires a second pass over all verses in the
 chapter. `score_chapter()` handles the two-pass logic and sets `needs_retry`.
 
 **Signal 4 (smearing):** catches the cheap-model failure mode where tokens that should be
-separate records (e.g. adjective + noun) are grouped into one N:M record. Weighted by
-`primary_src × primary_tgt`; a 1.5× adjacency boost applies when source and target token
-IDs are both consecutive, which is the strongest indicator of over-grouping.
+separate records (e.g. two nouns, or a preposition + noun) are grouped into one N:M record.
+Weighted by `independent_p_src × p_tgt`; a 1.5× adjacency boost applies when source and
+target token IDs are both consecutive, which is the strongest indicator of over-grouping.
+
+*Bound-morpheme exclusion:* articles, conjunctions, particles, and Hebrew pronominal suffixes
+(`_BOUND_SRC_POS`) are excluded from the independent-primary count. A `det`+noun grouping
+is legitimate; a `prep`+noun grouping is not. A `prep`+`det`+noun record still fires because
+`prep` and `noun` both count as independent (the `det` is dropped from the count but the two
+remaining tokens keep `independent_p_src = 2`). This removes systematic false positives from
+article+noun and conjunction-phrase groupings while preserving the signal for preposition+noun
+over-grouping.
+
+*Standalone retry gate:* `signal_4 > config.smear_forced_retry_threshold` (default 0.22)
+forces `needs_retry=True` regardless of composite score. This catches verses where smearing
+is the only quality problem (coverage is clean, no NEQ issues) — in those cases the composite
+alone cannot reach the retry threshold even with a high signal_4 value.
 
 **Stop-word lists (`scoring_stopwords.py`):** uses `stopwordsiso` (already a project
 dependency) intersected with a small curated core per language to keep lists minimal.
@@ -412,10 +425,11 @@ Languages without coverage (Tok Pisin, Bislama, Lingala, …) return an empty fr
 the safe direction is to penalise gaps rather than suppress content words.
 
 **`ScoringConfig`** holds signal weights (w1–w5), NEQ baseline, adjacency multiplier,
-deviation k, and retry threshold. All overridable; defaults work for NT English.
+smear forced-retry threshold, deviation k, and retry threshold. All overridable; defaults
+work for NT English. Default weights: w1=0.25, w2=0.20, w3=0.15, w4=0.40, w5=0.00.
 
-YAML config keys: `score_retry_threshold` (default 0.25). Weights are code defaults;
-adjust via `ScoringConfig` if needed.
+YAML config keys: `score_retry_threshold` (default 0.25), `smear_forced_retry_threshold`
+(default 0.22). Weights are code defaults; adjust via `ScoringConfig` if needed.
 
 ## clean-alignments (`refine/clean.py`, `refine/clean_cli.py`)
 

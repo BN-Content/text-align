@@ -47,6 +47,19 @@ _POS_WEIGHTS: dict[str, float] = {
 }
 _DEFAULT_WEIGHT = 0.6
 
+# Source-side POS codes that are bound morphemes: they travel with a head word
+# and should not be counted as independent primaries when detecting smearing.
+# Prepositions are intentionally absent — prep+noun combos should be split.
+_BOUND_SRC_POS: frozenset[str] = frozenset({
+    "det",          # NT article (ὁ, ἡ, τό)
+    "art",          # alias kept for safety
+    "conj",         # NT conjunction
+    "ptcl",         # NT particle
+    "conjunction",  # OT conjunction
+    "particle",     # OT particle
+    "suffix",       # OT pronominal suffix (bound to host)
+})
+
 
 def _pos_weight(token: Source) -> float:
     return _POS_WEIGHTS.get(token.pos, _DEFAULT_WEIGHT)
@@ -80,15 +93,17 @@ def _is_adjacent(token_ids: list[str]) -> bool:
 @dataclass
 class ScoringConfig:
     # Signal weights (must sum to 1.0)
-    w1: float = 0.35   # weighted source coverage
+    w1: float = 0.25   # weighted source coverage
     w2: float = 0.20   # translation content coverage
     w3: float = 0.15   # NEQ overuse
-    w4: float = 0.30   # token smearing
+    w4: float = 0.40   # token smearing
     w5: float = 0.00   # per-verse deviation (informational only; 0 = no retry influence)
     # Signal 3: NEQ baseline rate (expected natural NEQ rate for this corpus/lang)
     neq_baseline: float = 0.10
     # Signal 4: adjacency boost for same-verse consecutive-token smearing
     adjacency_multiplier: float = 1.5
+    # Signal 4: standalone retry gate — forces needs_retry regardless of composite
+    smear_forced_retry_threshold: float = 0.22
     # Signal 5: standard deviation multiplier for the outlier threshold
     deviation_k: float = 1.5
     # Retry gate
@@ -217,12 +232,22 @@ def score_verse(
         if not src_ids or not tgt_ids:
             continue
         sec = rec.get("meta", {}).get("secondary", {})
-        p_src = len(src_ids) - len(sec.get("source", []))
+        sec_src_set = set(sec.get("source", []))
         p_tgt = len(tgt_ids) - len(sec.get("target", []))
         is_idiom = bool(rec.get("meta", {}).get("is_idiom"))
         total_mass += len(src_ids) * len(tgt_ids)
-        if p_src > 1 and p_tgt > 1 and not is_idiom:
-            mass = float(p_src * p_tgt)
+        # Count only primary source tokens that are independent content units.
+        # Articles, conjunctions, particles, and suffixes travel with a head
+        # word and don't constitute a separate alignment record on their own,
+        # so grouping them with their head is not smearing.
+        primary_src_ids = [sid for sid in src_ids if sid not in sec_src_set]
+        independent_p_src = sum(
+            1 for sid in primary_src_ids
+            if src_by_id.get(sid) is None
+            or src_by_id[sid].pos not in _BOUND_SRC_POS
+        )
+        if independent_p_src > 1 and p_tgt > 1 and not is_idiom:
+            mass = float(independent_p_src * p_tgt)
             if _is_adjacent(src_ids) and _is_adjacent(tgt_ids):
                 mass *= config.adjacency_multiplier
             smear_mass += mass
@@ -268,7 +293,11 @@ def score_chapter(verse_scores: list[VerseScore], config: ScoringConfig) -> list
             + config.w4 * vs.signal_4
             + config.w5 * vs.signal_5
         )
-        vs.needs_retry = vs.composite > config.retry_threshold or vs.article_neq_count > 0
+        vs.needs_retry = (
+            vs.composite > config.retry_threshold
+            or vs.article_neq_count > 0
+            or vs.signal_4 > config.smear_forced_retry_threshold
+        )
 
     return verse_scores
 

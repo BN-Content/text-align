@@ -1,4 +1,4 @@
-{"format": "alignment", "version": "0.4", "groups": [{"type": "translation", "meta": {"creator": "text-align", "conformsTo": "0.4", "llm": {"provider": "gloo", "model": "gloo-openai-gpt-5-mini", "reasoning_effort": "high"}, "retry_llm": {"provider": "gloo", "model": "gloo-google-gemini-3.1-pro", "reasoning_effort": "high"}, "nonEquivalent": {"source": ["190060020052", "190060040011", "190060040051", "190060040052", "190060060081", "190060090091", "190060110071", "190060110031", "190060070041"], "target": ["19006001001", "19006002006", "19006002011", "19006002017", "19006003010", "19006008006", "19006009007", "19006009008", "19006006013", "19006006014", "19006006015"]}}, "documents": [{"scheme": "BCVWP", "docid": "WLCM"},
+{"format": "alignment", "version": "0.4", "groups": [{"type": "translation", "meta": {"creator": "text-align", "conformsTo": "0.4", "llm": {"provider": "gloo", "model": "gloo-openai-gpt-5-mini", "reasoning_effort": "high"}, "retry_llm": {"provider": "gloo", "model": "gloo-google-gemini-3.1-pro", "reasoning_effort": "high"}, "nonEquivalent": {"source": ["190060020052", "190060040011", "190060040051", "190060040052", "190060060081", "190060090091", "190060110071", "190060110031", "190060070023", "190060070041", "190060070073"], "target": ["19006001001", "19006002006", "19006002011", "19006002017", "19006003010", "19006008006", "19006009007", "19006009008", "19006006015"]}}, "documents": [{"scheme": "BCVWP", "docid": "WLCM"},
 {"scheme": "BCVWP", "docid": "BSB"}], "roles": ["source", "target"], 
 "records": [{"source": ["190060010011"], "target": ["19006000001"]},
 {"source": ["190060010012"], "target": ["19006000002", "19006000003"], "meta": {"secondary": {"target": ["19006000002"]}}},
@@ -109,8 +109,8 @@
 {"source": ["190060070051"], "target": ["19006006008"]},
 {"source": ["190060070061"], "target": ["19006006012"]},
 {"source": ["190060070062"], "target": ["19006006011"]},
-{"source": ["190060070071"], "target": ["19006006019"]},
-{"source": ["190060070072"], "target": ["19006006020"]},
+{"source": ["190060070071"], "target": ["19006006013", "19006006019"]},
+{"source": ["190060070072"], "target": ["19006006014", "19006006020"]},
 {"source": ["190060070081"], "target": ["19006006018"]},
 {"source": ["190060070082"], "target": ["19006006017"]},
 {"source": ["190060070091"], "target": ["19006006016"]}]}]}

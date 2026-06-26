@@ -119,12 +119,24 @@ def parse_args() -> argparse.Namespace:
     range_group.add_argument("--chapter-range", default=None, nargs=2, metavar=("START", "END"),
                              help="Limit to a chapter range, e.g. --chapter-range 66001 66022")
 
+    p.add_argument("--retry-failed", action="store_true", default=False,
+                   help="Retry verses with no alignment records in --alignment-dir "
+                        "(skips scoring; combine with --book/--chapter/etc. to limit scope)")
+
     p.add_argument("--fallback-threshold", type=float, default=0.25,
                    help="If flagged verses / total verses >= this value, use the refine model "
                         "instead of the retry model (default: 0.25)")
 
     p.set_defaults(**config_defaults)
     args = p.parse_args()
+
+    if args.retry_failed and any([
+        getattr(args, "verse", None),
+        getattr(args, "verse_range", None),
+        getattr(args, "verse_list", None),
+        getattr(args, "verse_list_file", None),
+    ]):
+        p.error("--retry-failed cannot be combined with --verse, --verse-range, --verse-list, or --verse-list-file")
 
     # Save refine-phase model settings before retry overrides are applied.
     args._refine_llm_provider    = args.llm_provider
@@ -152,6 +164,37 @@ def parse_args() -> argparse.Namespace:
 
 def _effort_str(effort: str | None) -> str:
     return f" (reasoning_effort={effort})" if effort else ""
+
+
+def _aligned_verse_ids(chapter_path: Path) -> set[str]:
+    try:
+        data = json.loads(chapter_path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError):
+        return set()
+    verse_ids: set[str] = set()
+    for group in data.get("groups", []):
+        for rec in group.get("records", []):
+            for src_id in rec.get("source", []):
+                if len(src_id) >= 8:
+                    verse_ids.add(src_id[:8])
+        neq_src = (group.get("meta") or {}).get("nonEquivalent", {}).get("source", [])
+        for src_id in neq_src:
+            if len(src_id) >= 8:
+                verse_ids.add(src_id[:8])
+    return verse_ids
+
+
+def _collect_failed_verses(
+    chapter_files: list[Path],
+    source_verses: dict,
+) -> frozenset[str]:
+    failed: set[str] = set()
+    for cf in chapter_files:
+        chapter_id = _chapter_id_from_path(cf)
+        src_verse_ids = {vid for vid in source_verses if vid[:5] == chapter_id}
+        aligned = _aligned_verse_ids(cf)
+        failed.update(src_verse_ids - aligned)
+    return frozenset(failed)
 
 
 def _write_retry_sidecars(
@@ -204,10 +247,11 @@ def main() -> None:
     if not args.dry_run:
         print(f"  Mode:            {args.batch_mode}")
 
-    # Build forced-verse set from --verse-list or --verse-list-file
+    # Build forced-verse set from --verse-list, --verse-list-file, or --retry-failed
     forced_verse_set: frozenset[str] | None = None
     verse_list_arg: str | None = getattr(args, "verse_list", None)
     verse_list_file: Path | None = getattr(args, "verse_list_file", None)
+    retry_failed: bool = getattr(args, "retry_failed", False)
     if verse_list_arg:
         forced_verse_set = frozenset(v.strip() for v in verse_list_arg.split(",") if v.strip())
         print(f"  Force-retry list: {len(forced_verse_set)} verse(s) (--verse-list)")
@@ -238,6 +282,13 @@ def main() -> None:
             f"  Cleaned {files_changed} file(s): "
             f"{dropped} record(s) dropped, {repaired} record(s) repaired."
         )
+
+    if retry_failed:
+        forced_verse_set = _collect_failed_verses(chapter_files, source_verses)
+        print(f"  Retry-failed mode: {len(forced_verse_set)} verse(s) with no records — skipping scoring")
+        if not forced_verse_set:
+            print("  No failed verses found — nothing to retry.")
+            return
 
     retry_specs_by_chapter: dict[str, list[VerseRetrySpec]] = {}
     chapter_paths: dict[str, Path] = {}

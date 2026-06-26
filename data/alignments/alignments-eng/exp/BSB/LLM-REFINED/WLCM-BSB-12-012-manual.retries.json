@@ -1,8 +1,9 @@
 {
   "edition": "BSB",
   "chapter_id": "12012",
-  "passes": 2,
+  "passes": 3,
   "retried_verses": [
+    "12012001",
     "12012003",
     "12012004",
     "12012005",

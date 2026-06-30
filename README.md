@@ -1,5 +1,7 @@
 # text-align
 
+**NOTE:** As of June 30, 2026 this repo has been archived. It is superceded by [BibleAquifer/text-align](https://github.com/BibleAquifer/text-align).
+
 Tools to create and improve word-level textual alignments of Bible translations.
 
 Alignments map tokens in a translation to tokens in the source text (Greek NT or Hebrew OT). The direction is always **translation → source**. The format is [Scripture Burrito alignment spec v0.4](https://github.com/bible-technology/alignment-spec/blob/main/spec.md) with project-specific extensions documented in [docs/alignment-principles-nt.md](docs/alignment-principles-nt.md) (NT/Greek) and [docs/alignment-principles-ot.md](docs/alignment-principles-ot.md) (OT/Hebrew).
